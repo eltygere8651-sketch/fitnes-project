@@ -1,0 +1,39 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "Public and private user data",
+      "type": "object",
+      "properties": {
+        "email": { "type": "string" },
+        "displayName": { "type": "string" },
+        "photoURL": { "type": "string" },
+        "lastLogin": { "type": "string", "format": "date-time" }
+      },
+      "required": ["email", "lastLogin"]
+    },
+    "Playlist": {
+      "title": "User Playlist",
+      "description": "SoundCloud tracks and folders",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "ownerId": { "type": "string" },
+        "tracks": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "ownerId", "tracks", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles"
+    },
+    "/users/{userId}/playlists/{playlistId}": {
+      "schema": "Playlist",
+      "description": "User playlists and tracks"
+    }
+  }
+}

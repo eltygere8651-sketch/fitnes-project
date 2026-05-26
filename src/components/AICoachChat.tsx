@@ -109,21 +109,16 @@ export default function AICoachChat({
       {/* Header */}
       <div className="flex justify-between items-center border-b border-slate-100 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-md shadow-indigo-100">
-            <Bot className="w-5 h-5" />
+          <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white">
+            <Bot className="w-4 h-4" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-800 flex items-center gap-1">
-              Asistente de Técnica IA <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-            </h3>
-            <span className="text-[10px] text-indigo-640 flex items-center gap-1 font-mono font-bold uppercase">
-              <span className="w-1.5 h-1.5 bg-indigo-600 rounded-full animate-ping" /> KINESIÓLOGO DEPORTIVO ACTIVO
-            </span>
+            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest">Coach IA</h3>
           </div>
         </div>
 
-        <span className="text-[10px] bg-slate-50 text-slate-500 border border-slate-200 px-2.5 py-1 rounded-lg font-semibold">
-          Nivel: Amateur Amigable
+        <span className="text-[10px] bg-slate-50 text-slate-400 border border-slate-200 px-2.5 py-1 rounded-lg font-bold uppercase tracking-tight">
+          Asesoría Técnica
         </span>
       </div>
 

@@ -96,10 +96,9 @@ function AppContent() {
             </svg>
           </div>
           <div>
-            <span className="text-xl font-bold tracking-tight text-slate-800 flex items-center gap-1">
-              AI.TRAIN <span className="text-indigo-600 font-semibold text-xs tracking-wider bg-indigo-50 px-2 py-0.5 rounded">BETA</span>
+            <span className="text-xl font-black tracking-tight text-slate-900">
+              AI.TRAIN
             </span>
-            <p className="text-[10px] text-slate-400 font-medium tracking-tight">Asistencia Antilesiones & Rutinas a Medida</p>
           </div>
         </div>
 
@@ -110,7 +109,7 @@ function AppContent() {
             { id: "chat", label: "Coach", icon: <MessageSquare className="w-3.5 h-3.5" /> },
             { id: "progress", label: "Log", icon: <TrendingUp className="w-3.5 h-3.5" /> },
             { id: "notifications", label: "Alertas", icon: <Bell className="w-3.5 h-3.5" /> },
-            { id: "music", label: "Focus HUD", icon: <Music className="w-3.5 h-3.5" /> },
+            { id: "music", label: "Bienve Music", icon: <Music className="w-3.5 h-3.5" /> },
           ].map((tab) => {
             const isSelected = activeTab === tab.id;
             return (
@@ -163,7 +162,7 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         
         {activeTab !== "music" && (
           <aside className="lg:col-span-3 flex flex-col gap-6">
@@ -204,25 +203,38 @@ function AppContent() {
           </aside>
         )}
 
-        <section className={`${activeTab === "music" ? "lg:col-span-12" : "lg:col-span-6"} flex flex-col gap-6`}>
-          <div className="bg-white rounded-[32px] overflow-hidden flex-1 shadow-xs border border-slate-200 p-6 flex flex-col justify-between">
-            <div className="flex-1">
+        <section className={`${activeTab === "music" ? "lg:col-span-12" : "lg:col-span-6"} flex flex-col gap-6 min-h-[500px]`}>
+          <div className="bg-white rounded-[32px] overflow-hidden flex-1 shadow-xs border border-slate-200 p-6 flex flex-col">
+            <div className="flex-1 relative">
               {activeTab === "routine" && <AIPersonalizedRoutine onAskCoachExercise={handleAskCoachForExerciseName} onWorkoutSuccess={handleExerciseCompletedSimulated} />}
               {activeTab === "guide" && <TechGuide onAskCoach={handleAskCoachForExerciseName} />}
               {activeTab === "chat" && <AICoachChat prefilledExercise={chatPrefilledExercise} onClosePrefill={() => setChatPrefilledExercise(null)} />}
               {activeTab === "progress" && <ProgressTracker onStreakUpdate={handleStreakUpdate} onWorkoutLogged={() => handleExerciseCompletedSimulated(75)} />}
               {activeTab === "notifications" && <MotivationalNotifications activeStreak={activeStreak} />}
-              {activeTab === "music" && <GymMusicPlayer />}
+              
+              <div className={activeTab === "music" ? "h-full" : "pointer-events-none absolute inset-0 opacity-0 -z-10"}>
+                <GymMusicPlayer />
+              </div>
             </div>
           </div>
+          
           {activeTab !== "music" && (
-            <div className="bg-indigo-50 border border-indigo-150 p-4.5 rounded-3xl flex items-center gap-4">
-              <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 shrink-0"><Sparkles className="w-5 h-5" /></div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-semibold text-indigo-950 leading-relaxed">
-                  <strong>Coach IA:</strong> {user ? `¡Sincronizado como ${user.displayName || user.email}! Tus playlists ya están en la nube.` : "¡Modo Invitado activo! Puedes reproducir música y seguir rutinas libremente."}
-                </p>
+            <div className="bg-emerald-50 rounded-2xl p-3 border border-emerald-100 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 bg-emerald-500 rounded-full flex items-center justify-center text-white animate-pulse">
+                  <Music className="w-4 h-4" />
+                </div>
+                <div className="flex flex-col">
+                  <span className="text-[10px] font-black uppercase text-emerald-600">Bienve Music Activo</span>
+                  <p className="text-[10px] text-emerald-800 font-bold truncate max-w-[150px]">Pulsa en la pestaña Focus para controlar</p>
+                </div>
               </div>
+              <button 
+                onClick={() => setActiveTab("music")}
+                className="text-[9px] font-black bg-white border border-emerald-200 px-3 py-1.5 rounded-lg hover:bg-emerald-500 hover:text-white transition"
+              >
+                ABRIR PLAYER
+              </button>
             </div>
           )}
         </section>
@@ -256,20 +268,16 @@ function AppContent() {
         )}
       </main>
 
-      <footer className="border-t border-slate-200 bg-white py-4 text-center mt-6">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-tight">
-          <p>© 2026 AI.TRAIN • BIOMECÁNICA & SOUND HUD CLOUD</p>
-          <div className="flex items-center gap-3 font-mono">
-            <span>Powered by Gemini Cloud DB</span>
-            <span className="text-slate-200">|</span>
+      <footer className="py-8 text-center mt-auto">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em]">
+          <p>© 2026 AI.TRAIN • BIENVE MUSIC ENGINE</p>
+          <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
-              <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]'}`} />
-              <span className={isOnline ? 'text-emerald-600' : 'text-red-600'}>
-                {isOnline ? 'En Línea' : 'Desconectado'}
-              </span>
+              <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-red-500'}`} />
+              <span>{isOnline ? 'ONLINE' : 'OFFLINE'}</span>
             </div>
-            <span className="text-slate-200">|</span>
-            <span className="text-indigo-600">{user ? `Sincronizado: ${user.email}` : "Cloud Sync Disponible"}</span>
+            <span className="text-slate-250">|</span>
+            <span className="text-indigo-600">{user ? user.email : "GUEST MODE"}</span>
           </div>
         </div>
       </footer>

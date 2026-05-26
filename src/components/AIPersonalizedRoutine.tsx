@@ -103,8 +103,8 @@ export default function AIPersonalizedRoutine({
               <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-sans font-bold text-slate-800">Generador de Rutinas con Inteligencia Artificial</h2>
-              <p className="text-xs text-slate-400">Diseñado idealmente para amateurs. Consigue postura perfecta y distribución saludable.</p>
+              <h2 className="text-lg font-sans font-black text-slate-800">Generador de Rutinas</h2>
+              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-tight">Postura perfecta y biomecánica segura</p>
             </div>
           </div>
 
@@ -221,17 +221,13 @@ export default function AIPersonalizedRoutine({
         </div>
       )}
 
-      {/* Loading Spinner with reassuring texts */}
       {isLoading && (
-        <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm flex flex-col justify-center items-center text-center gap-4 py-16 animate-pulse">
+        <div className="bg-white border border-slate-200 rounded-3xl p-10 shadow-sm flex flex-col justify-center items-center text-center gap-4 py-16">
           <div className="w-12 h-12 rounded-full border-4 border-indigo-600 border-t-transparent animate-spin" />
-          <h3 className="text-lg font-bold text-slate-800 mt-1">Nuestra IA está diseñando tu rutina de élite...</h3>
-          <p className="text-xs text-slate-400 max-w-sm leading-relaxed">
-            Estamos seleccionando los mejores ejercicios biomecánicamente seguros, calculando descansos exactos y adaptándolos a tu nivel amateur.
+          <h3 className="text-sm font-bold text-slate-800 mt-1 uppercase tracking-widest leading-none">Generando Plan Optimo</h3>
+          <p className="text-[11px] text-slate-500 max-w-sm leading-relaxed">
+            Analizando biomecánica y descansos para un entrenamiento seguro.
           </p>
-          <div className="text-[10px] bg-indigo-50 text-indigo-600 font-mono px-3 py-1.5 rounded-md mt-2 border border-indigo-100">
-            [Fase 1: Analizando perfil corporal y nivel de fuerza de {age} años]
-          </div>
         </div>
       )}
 

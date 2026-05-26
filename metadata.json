@@ -1,0 +1,6 @@
+{
+  "name": "Rutinas y Guías de Gimnasio con IA",
+  "description": "Entrena tu cuerpo con rutinas adaptativas generadas por IA, guías de técnica interactiva, videos correctivos paso a paso, seguimiento de progreso personalizado, notificaciones motivacionales diarias y listas de música para entrenar.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

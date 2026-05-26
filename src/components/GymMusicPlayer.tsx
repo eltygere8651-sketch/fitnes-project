@@ -549,8 +549,11 @@ export default function GymMusicPlayer() {
             </div>
         </div>
 
+        {/* CONTAINER PLAYER + TRACKLIST */}
+        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+            
         {/* LEFT: COMPACT PLAYER ENGINE */}
-        <div className="flex-none lg:flex-[1] flex flex-col min-w-0 bg-[#080808] border-b lg:border-b-0 lg:border-r border-white/5 pb-6 lg:pb-0 shrink-0">
+        <div className="flex-none flex flex-col min-w-0 bg-[#080808] border-b border-white/5 pb-6 shrink-0">
           {selectedPlaylist ? (
             <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide relative">
               <div className="flex-1 flex flex-col p-6 lg:px-8">
@@ -717,7 +720,7 @@ export default function GymMusicPlayer() {
 
         {/* RIGHT: PERMANENT TRACK LIST (Optimized for Visibility) */}
         <div
-          className={`flex-none lg:flex-[0.4] h-[400px] lg:h-auto bg-black/40 flex flex-col ${
+          className={`flex-1 w-full bg-black/40 flex flex-col ${
             !selectedPlaylist ? "hidden" : ""
           }`}
         >
@@ -795,6 +798,8 @@ export default function GymMusicPlayer() {
             </div>
           </div>
         </div>
+        </div>
+
       </div>
 
       {/* OVERLAY: LIBRARY MODAL */}

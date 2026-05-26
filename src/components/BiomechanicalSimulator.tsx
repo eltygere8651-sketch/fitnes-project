@@ -1,5 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Play, Pause, RefreshCw, AlertCircle, ShieldCheck, ZapOff, Activity, Dumbbell, Sparkles } from "lucide-react";
+import {
+  Play,
+  Pause,
+  RefreshCw,
+  AlertCircle,
+  ShieldCheck,
+  ZapOff,
+  Activity,
+  Dumbbell,
+  Sparkles,
+} from "lucide-react";
 
 // Safe polyfill for older browsers and sandboxed environments
 const safeRoundRect = (
@@ -8,7 +18,7 @@ const safeRoundRect = (
   y: number,
   w: number,
   h: number,
-  r: number
+  r: number,
 ) => {
   if (typeof (ctx as any).roundRect === "function") {
     (ctx as any).roundRect(x, y, w, h, r);
@@ -31,16 +41,23 @@ const drawHumanCharacterHead = (
   center: { x: number; y: number },
   skinColor: string,
   isCorrect: boolean,
-  facingLeft: boolean = true
+  facingLeft: boolean = true,
 ) => {
   ctx.save();
-  
+
   // Real skin tone gradient with 3D volume
-  const faceGrad = ctx.createRadialGradient(center.x, center.y, 2, center.x, center.y, 11);
+  const faceGrad = ctx.createRadialGradient(
+    center.x,
+    center.y,
+    2,
+    center.x,
+    center.y,
+    11,
+  );
   faceGrad.addColorStop(0, skinColor);
   faceGrad.addColorStop(0.7, skinColor);
   faceGrad.addColorStop(1, isCorrect ? "#d49b72" : "#f87171");
-  
+
   ctx.fillStyle = faceGrad;
   ctx.beginPath();
   ctx.arc(center.x, center.y, 11, 0, Math.PI * 2);
@@ -51,14 +68,24 @@ const drawHumanCharacterHead = (
   ctx.beginPath();
   ctx.arc(center.x, center.y - 4, 11, Math.PI, Math.PI * 2);
   ctx.fill();
-  
+
   // Dynamic swinging athletic ponytail/cap details for human hair realism
   ctx.fillStyle = "#1e293b";
   ctx.beginPath();
   const dir = facingLeft ? 1 : -1;
   ctx.moveTo(center.x + dir * 6, center.y - 6);
-  ctx.quadraticCurveTo(center.x + dir * 16, center.y + 3, center.x + dir * 18, center.y + 1);
-  ctx.quadraticCurveTo(center.x + dir * 10, center.y - 4, center.x + dir * 4, center.y - 8);
+  ctx.quadraticCurveTo(
+    center.x + dir * 16,
+    center.y + 3,
+    center.x + dir * 18,
+    center.y + 1,
+  );
+  ctx.quadraticCurveTo(
+    center.x + dir * 10,
+    center.y - 4,
+    center.x + dir * 4,
+    center.y - 8,
+  );
   ctx.fill();
 
   // Focused determined eye line
@@ -87,10 +114,19 @@ const drawHumanCharacterHead = (
   ctx.stroke();
 
   // Determined / exhaling mouth
-  ctx.strokeStyle = isCorrect ? "rgba(16, 185, 129, 0.85)" : "rgba(239, 68, 68, 0.85)";
+  ctx.strokeStyle = isCorrect
+    ? "rgba(16, 185, 129, 0.85)"
+    : "rgba(239, 68, 68, 0.85)";
   ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.arc(center.x + (facingLeft ? -3 : 3), center.y + 4, 3, 0.2, Math.PI - 0.2, false);
+  ctx.arc(
+    center.x + (facingLeft ? -3 : 3),
+    center.y + 4,
+    3,
+    0.2,
+    Math.PI - 0.2,
+    false,
+  );
   ctx.stroke();
 
   // Stylish DJ Gym headphones
@@ -117,7 +153,10 @@ interface BiomechanicalSimulatorProps {
   isCorrect: boolean;
 }
 
-export default function BiomechanicalSimulator({ exerciseId, isCorrect }: BiomechanicalSimulatorProps) {
+export default function BiomechanicalSimulator({
+  exerciseId,
+  isCorrect,
+}: BiomechanicalSimulatorProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isPlaying, setIsPlaying] = useState(true);
   const [scrubValue, setScrubValue] = useState(0); // 0 to 100
@@ -128,9 +167,20 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
   const requestRef = useRef<number | null>(null);
   const lastTimeRef = useRef<number>(0);
   const progressRef = useRef<number>(0); // 0 to 1 path
-  
+
   // High energy particle emitters array for contraction peaks
-  const particlesRef = useRef<Array<{ x: number; y: number; vx: number; vy: number; color: string; size: number; alpha: number; life: number }>>([]);
+  const particlesRef = useRef<
+    Array<{
+      x: number;
+      y: number;
+      vx: number;
+      vy: number;
+      color: string;
+      size: number;
+      alpha: number;
+      life: number;
+    }>
+  >([]);
 
   useEffect(() => {
     progressRef.current = 0;
@@ -146,7 +196,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       lastTimeRef.current = time;
 
       if (isPlaying) {
-        const cycleSpeed = (0.0004 * speed);
+        const cycleSpeed = 0.0004 * speed;
         progressRef.current = (progressRef.current + delta * cycleSpeed) % 1;
         setScrubValue(Math.round(progressRef.current * 100));
       }
@@ -180,7 +230,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     muscleGirth: number,
     skinColor: string,
     gearColor: string | null,
-    highlightColor: string | null
+    highlightColor: string | null,
   ) => {
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
@@ -193,10 +243,10 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     const ny = ux;
 
     ctx.save();
-    
+
     // Draw thick muscle body shape with bulging midsection
     ctx.beginPath();
-    
+
     // Joint start rounded curve
     const startLeftX = p1.x + nx * baseWidth;
     const startLeftY = p1.y + ny * baseWidth;
@@ -225,7 +275,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     ctx.closePath();
 
     // Create 3D skin tone lighting gradient
-    const grad = ctx.createLinearGradient(p1.x - nx * baseWidth, p1.y - ny * baseWidth, p1.x + nx * baseWidth, p1.y + ny * baseWidth);
+    const grad = ctx.createLinearGradient(
+      p1.x - nx * baseWidth,
+      p1.y - ny * baseWidth,
+      p1.x + nx * baseWidth,
+      p1.y + ny * baseWidth,
+    );
     grad.addColorStop(0, "rgba(30, 41, 59, 0.95)"); // Deep athletic shadow
     grad.addColorStop(0.3, skinColor);
     grad.addColorStop(0.7, skinColor);
@@ -240,25 +295,46 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       ctx.beginPath();
       ctx.moveTo(startLeftX, startLeftY);
       // Cover half leg/arm with sporty wear
-      const apparelMidLeftX = p1.x + dx * 0.45 + nx * (baseWidth + muscleGirth * 0.9);
-      const apparelMidLeftY = p1.y + dy * 0.45 + ny * (baseWidth + muscleGirth * 0.9);
-      const apparelMidRightX = p1.x + dx * 0.45 - nx * (baseWidth + muscleGirth * 0.9);
-      const apparelMidRightY = p1.y + dy * 0.45 - ny * (baseWidth + muscleGirth * 0.9);
-      
-      ctx.quadraticCurveTo(apparelMidLeftX, apparelMidLeftY, p1.x + dx * 0.45, p1.y + dy * 0.45);
+      const apparelMidLeftX =
+        p1.x + dx * 0.45 + nx * (baseWidth + muscleGirth * 0.9);
+      const apparelMidLeftY =
+        p1.y + dy * 0.45 + ny * (baseWidth + muscleGirth * 0.9);
+      const apparelMidRightX =
+        p1.x + dx * 0.45 - nx * (baseWidth + muscleGirth * 0.9);
+      const apparelMidRightY =
+        p1.y + dy * 0.45 - ny * (baseWidth + muscleGirth * 0.9);
+
+      ctx.quadraticCurveTo(
+        apparelMidLeftX,
+        apparelMidLeftY,
+        p1.x + dx * 0.45,
+        p1.y + dy * 0.45,
+      );
       ctx.lineTo(p1.x + dx * 0.45, p1.y + dy * 0.45);
-      ctx.quadraticCurveTo(apparelMidRightX, apparelMidRightY, startRightX, startRightY);
+      ctx.quadraticCurveTo(
+        apparelMidRightX,
+        apparelMidRightY,
+        startRightX,
+        startRightY,
+      );
       ctx.closePath();
       ctx.fill();
     }
 
     // Active muscle overlay heat-map showing physical contraction
     if (highlightColor) {
-      const activeGrad = ctx.createRadialGradient(midX, midY, 1, midX, midY, baseWidth + muscleGirth * 1.5);
+      const activeGrad = ctx.createRadialGradient(
+        midX,
+        midY,
+        1,
+        midX,
+        midY,
+        baseWidth + muscleGirth * 1.5,
+      );
       activeGrad.addColorStop(0, highlightColor);
       activeGrad.addColorStop(0.5, highlightColor.replace("1)", "0.55)"));
       activeGrad.addColorStop(1, "rgba(239, 68, 68, 0)");
-      
+
       ctx.fillStyle = activeGrad;
       ctx.beginPath();
       ctx.moveTo(startLeftX, startLeftY);
@@ -270,7 +346,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     }
 
     // High quality musculature contour outline
-    ctx.strokeStyle = highlightColor ? highlightColor : "rgba(168, 85, 247, 0.25)";
+    ctx.strokeStyle = highlightColor
+      ? highlightColor
+      : "rgba(168, 85, 247, 0.25)";
     ctx.lineWidth = highlightColor ? 2 : 1;
     ctx.stroke();
 
@@ -357,7 +435,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     ctx.shadowBlur = 12;
     // Glow depends on correctness (Green Motivation vs Hot Red Danger Warning)
     ctx.shadowColor = isCorrect ? "#10b981" : "#ef4444";
-    ctx.strokeStyle = isCorrect ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)";
+    ctx.strokeStyle = isCorrect
+      ? "rgba(16, 185, 129, 0.25)"
+      : "rgba(239, 68, 68, 0.25)";
     ctx.lineWidth = 3;
     ctx.strokeRect(40, 30, width - 80, height - 75);
 
@@ -390,7 +470,10 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     ctx.beginPath();
     ctx.ellipse(200, 215, 65, 15, 0, 0, Math.PI * 2);
     const floorGlow = ctx.createRadialGradient(200, 215, 5, 200, 215, 70);
-    floorGlow.addColorStop(0, isCorrect ? "rgba(52, 211, 153, 0.22)" : "rgba(248, 113, 113, 0.18)");
+    floorGlow.addColorStop(
+      0,
+      isCorrect ? "rgba(52, 211, 153, 0.22)" : "rgba(248, 113, 113, 0.18)",
+    );
     floorGlow.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = floorGlow;
     ctx.fill();
@@ -401,7 +484,10 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     const cycle = (Math.sin(t * Math.PI * 2 - Math.PI / 2) + 1) / 2;
 
     // Coordinates mapping
-    interface Point { x: number; y: number }
+    interface Point {
+      x: number;
+      y: number;
+    }
     let joints: { [key: string]: Point } = {};
     let angleVal = 0;
     let angleLabel = "";
@@ -411,9 +497,15 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     // Body skins color & Gear visual styles selection
     const skinColor = isCorrect ? "#fbcfe8" : "#fca5a5"; // Healthy glowing tone vs strained flushed red tone
     const shortsColor = "rgba(59, 130, 246, 0.9)"; // Sports rich blue spandex shorts
-    const shirtColor = isCorrect ? "rgba(99, 102, 241, 0.85)" : "rgba(127, 29, 29, 0.85)"; // High tech compression armor blue vs red
-    const muscleGlow = isCorrect ? "rgba(16, 185, 129, 0.85)" : "rgba(239, 68, 68, 0.8)"; // Green optimal effort vs bad strain
-    const skeletonLineColor = isCorrect ? "rgba(16, 185, 129, 0.45)" : "rgba(239, 68, 68, 0.5)";
+    const shirtColor = isCorrect
+      ? "rgba(99, 102, 241, 0.85)"
+      : "rgba(127, 29, 29, 0.85)"; // High tech compression armor blue vs red
+    const muscleGlow = isCorrect
+      ? "rgba(16, 185, 129, 0.85)"
+      : "rgba(239, 68, 68, 0.8)"; // Green optimal effort vs bad strain
+    const skeletonLineColor = isCorrect
+      ? "rgba(16, 185, 129, 0.45)"
+      : "rgba(239, 68, 68, 0.5)";
 
     // SPECIFIC SENSORS AND COORDINATES FOR ALL EXERCISES
     if (exerciseId === "squat") {
@@ -438,7 +530,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         shoulderY = 125 - (125 - 60) * (1 - cycle);
         headX = 214 - (214 - 200) * (1 - cycle);
         headY = 105 - (105 - 40) * (1 - cycle);
-        
+
         angleVal = Math.round(75 + cycle * 105);
         angleLabel = "Ángulo Rodilla";
         forceMeter = Math.round(25 + cycle * 60);
@@ -450,12 +542,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         }
       } else {
         // Heel lifts up (faulty posture!), knees shoot forward too far, lower spine rounds heavily
-        const heelYOffset = cycle * 14; 
-        kneeX = 165 + (200 - 165) * (1 - cycle); 
+        const heelYOffset = cycle * 14;
+        kneeX = 165 + (200 - 165) * (1 - cycle);
         kneeY = 184 - (184 - 160) * (1 - cycle) - heelYOffset;
-        hipX = 210 - (210 - 200) * (1 - cycle); 
+        hipX = 210 - (210 - 200) * (1 - cycle);
         hipY = 175 - (175 - 110) * (1 - cycle) - heelYOffset;
-        shoulderX = 172 + (200 - 172) * (1 - cycle); 
+        shoulderX = 172 + (200 - 172) * (1 - cycle);
         shoulderY = 142 - (142 - 60) * (1 - cycle) - heelYOffset;
         headX = 178 + (200 - 178) * (1 - cycle);
         headY = 122 - (122 - 40) * (1 - cycle) - heelYOffset;
@@ -471,9 +563,14 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         }
       }
 
-      joints = { ankle: { x: ankleX, y: isCorrect ? ankleY : ankleY - cycle * 14 }, knee: { x: kneeX, y: kneeY }, hip: { x: hipX, y: hipY }, shoulder: { x: shoulderX, y: shoulderY }, head: { x: headX, y: headY } };
-    } 
-    else if (exerciseId === "pushup") {
+      joints = {
+        ankle: { x: ankleX, y: isCorrect ? ankleY : ankleY - cycle * 14 },
+        knee: { x: kneeX, y: kneeY },
+        hip: { x: hipX, y: hipY },
+        shoulder: { x: shoulderX, y: shoulderY },
+        head: { x: headX, y: headY },
+      };
+    } else if (exerciseId === "pushup") {
       const feetX = 295;
       const feetY = 205;
       let wristX = 120;
@@ -510,8 +607,8 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         // Sagging back core, hips touch the ground too early, putting heavy load list
         const descent = cycle * 45;
         shoulderX = 145;
-        shoulderY = 130 + descent * 0.7; 
-        elbowX = 100 - cycle * 10; 
+        shoulderY = 130 + descent * 0.7;
+        elbowX = 100 - cycle * 10;
         elbowY = 150 + descent * 0.4;
         hipX = 220;
         hipY = 165 + descent * 1.38; // dips too fast
@@ -524,9 +621,15 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         safetyStatus = Math.round(48 - cycle * 28);
       }
 
-      joints = { feet: { x: feetX, y: feetY }, hip: { x: hipX, y: hipY }, shoulder: { x: shoulderX, y: shoulderY }, elbow: { x: elbowX, y: elbowY }, wrist: { x: wristX, y: wristY }, head: { x: headX, y: headY } };
-    } 
-    else if (exerciseId === "row") {
+      joints = {
+        feet: { x: feetX, y: feetY },
+        hip: { x: hipX, y: hipY },
+        shoulder: { x: shoulderX, y: shoulderY },
+        elbow: { x: elbowX, y: elbowY },
+        wrist: { x: wristX, y: wristY },
+        head: { x: headX, y: headY },
+      };
+    } else if (exerciseId === "row") {
       // Horizontal row support details
       const handBenchX = 130;
       const handBenchY = 160;
@@ -538,7 +641,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       let shoulderY = 110;
       let headX = 110;
       let headY = 95;
-      
+
       let weightX = 175;
       let weightY = 185;
       let elbowX = 175;
@@ -551,8 +654,10 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       ctx.strokeRect(110, 155, 130, 15);
       // Bench feet
       ctx.beginPath();
-      ctx.moveTo(125, 170); ctx.lineTo(125, 215);
-      ctx.moveTo(225, 170); ctx.lineTo(225, 215);
+      ctx.moveTo(125, 170);
+      ctx.lineTo(125, 215);
+      ctx.moveTo(225, 170);
+      ctx.lineTo(225, 215);
       ctx.stroke();
 
       if (isCorrect) {
@@ -572,7 +677,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         }
       } else {
         // Hump spine, shoulder hunching, pulling too vertical with arms
-        weightX = 175 + cycle * 10; 
+        weightX = 175 + cycle * 10;
         weightY = 185 - cycle * 55;
         elbowX = 175;
         elbowY = 135 - cycle * 35;
@@ -583,17 +688,16 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         safetyStatus = Math.round(38 - cycle * 15);
       }
 
-      joints = { 
-        handBench: { x: handBenchX, y: handBenchY }, 
+      joints = {
+        handBench: { x: handBenchX, y: handBenchY },
         footFloor: { x: footFloorX, y: footFloorY },
         hip: { x: hipX, y: hipY },
         shoulder: { x: shoulderX, y: shoulderY },
         head: { x: headX, y: headY },
         weight: { x: weightX, y: weightY },
-        elbow: { x: elbowX, y: elbowY }
+        elbow: { x: elbowX, y: elbowY },
       };
-    } 
-    else if (exerciseId === "deadlift") {
+    } else if (exerciseId === "deadlift") {
       // RDL Romanian deadlift coordinates
       const ankleX = 180;
       const ankleY = 210;
@@ -613,17 +717,17 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         // Flat back, barbell scrapes thighs, hip hinge pushed backward
         kneeX = 192 - cycle * 8;
         kneeY = 165;
-        hipX = 240 - (240 - 180) * (1 - cycle); 
-        hipY = 145 - (145 - 110) * (1 - cycle); 
-        shoulderX = 160 + (180 - 160) * (1 - cycle); 
+        hipX = 240 - (240 - 180) * (1 - cycle);
+        hipY = 145 - (145 - 110) * (1 - cycle);
+        shoulderX = 160 + (180 - 160) * (1 - cycle);
         shoulderY = 125 - (125 - 60) * (1 - cycle);
-        headX = 145 + (180 - 145) * (1 - cycle); 
+        headX = 145 + (180 - 145) * (1 - cycle);
         headY = 108 - (108 - 40) * (1 - cycle);
 
-        barlX = shoulderX; 
+        barlX = shoulderX;
         barY = shoulderY + 55;
 
-        angleVal = Math.round(175 - cycle * 95); 
+        angleVal = Math.round(175 - cycle * 95);
         angleLabel = "Bisagra Cadera";
         forceMeter = Math.round(25 + cycle * 70);
 
@@ -634,14 +738,14 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         // Spine rounded horribly like a dome, bar drops far out away from shins
         kneeX = 180;
         kneeY = 165;
-        hipX = 212 - (212 - 180) * (1 - cycle); 
+        hipX = 212 - (212 - 180) * (1 - cycle);
         hipY = 135 - (135 - 110) * (1 - cycle);
-        shoulderX = 158 + (180 - 158) * (1 - cycle); 
+        shoulderX = 158 + (180 - 158) * (1 - cycle);
         shoulderY = 138 - (138 - 60) * (1 - cycle);
-        headX = 160 + (180 - 160) * (1 - cycle); 
+        headX = 160 + (180 - 160) * (1 - cycle);
         headY = 115 - (115 - 40) * (1 - cycle);
 
-        barlX = shoulderX - 25 * cycle; 
+        barlX = shoulderX - 25 * cycle;
         barY = shoulderY + 50;
 
         angleVal = Math.round(135 - cycle * 30);
@@ -650,9 +754,15 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         safetyStatus = Math.round(40 - cycle * 28);
       }
 
-      joints = { ankle: { x: ankleX, y: ankleY }, knee: { x: kneeX, y: kneeY }, hip: { x: hipX, y: hipY }, shoulder: { x: shoulderX, y: shoulderY }, head: { x: headX, y: headY }, bar: { x: barlX, y: barY } };
-    } 
-    else if (exerciseId === "arnold") {
+      joints = {
+        ankle: { x: ankleX, y: ankleY },
+        knee: { x: kneeX, y: kneeY },
+        hip: { x: hipX, y: hipY },
+        shoulder: { x: shoulderX, y: shoulderY },
+        head: { x: headX, y: headY },
+        bar: { x: barlX, y: barY },
+      };
+    } else if (exerciseId === "arnold") {
       // Seated overhead shoulder press
       const seatBottomY = 180;
       const seatLeft = 140;
@@ -692,9 +802,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         // Back glued to upright, smooth vertical line
         shoulderX = 180;
         shoulderY = 100;
-        
-        wristRX = 160 - cycle * 20; 
-        wristRY = 105 - cycle * 65; 
+
+        wristRX = 160 - cycle * 20;
+        wristRY = 105 - cycle * 65;
         elbowRX = 160 - cycle * 20;
         elbowRY = 135 - cycle * 35;
 
@@ -714,7 +824,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       } else {
         // Slump far forward on hips, lower spine curves in massive hyperlordosis
         const slideForward = cycle * 28;
-        
+
         wristRX = 150 - cycle * 12;
         wristRY = 110 - cycle * 45;
         elbowRX = 130 - cycle * 5;
@@ -731,17 +841,16 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         safetyStatus = Math.round(38 - cycle * 18);
       }
 
-      joints = { 
-        hip: { x: isCorrect ? hipX : hipX - cycle * 25, y: hipY }, 
-        shoulder: { x: shoulderX, y: shoulderY }, 
+      joints = {
+        hip: { x: isCorrect ? hipX : hipX - cycle * 25, y: hipY },
+        shoulder: { x: shoulderX, y: shoulderY },
         head: { x: headX, y: headY },
         wristR: { x: wristRX, y: wristRY },
         wristL: { x: wristLX, y: wristLY },
         elbowR: { x: elbowRX, y: elbowRY },
-        elbowL: { x: elbowLX, y: elbowLY }
+        elbowL: { x: elbowLX, y: elbowLY },
       };
-    } 
-    else if (exerciseId === "deadbug") {
+    } else if (exerciseId === "deadbug") {
       // Horizontal floor bug exercise
       const bodyY = 175;
       const headX = 120;
@@ -757,13 +866,13 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       let footLY = bodyY - 70;
 
       if (isCorrect) {
-        armRX = 165 - cycle * 65; 
-        armRY = (bodyY - 60) + cycle * 55; 
-        
-        legLX = 250 + cycle * 55; 
-        legLY = (bodyY - 70) + cycle * 55; 
+        armRX = 165 - cycle * 65;
+        armRY = bodyY - 60 + cycle * 55;
+
+        legLX = 250 + cycle * 55;
+        legLY = bodyY - 70 + cycle * 55;
         footLX = 295 + cycle * 60;
-        footLY = (bodyY - 70) + cycle * 62;
+        footLY = bodyY - 70 + cycle * 62;
 
         angleVal = Math.round(180);
         angleLabel = "Estabilización Core";
@@ -775,12 +884,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       } else {
         // High core lumbar arching gap
         armRX = 165 - cycle * 55;
-        armRY = (bodyY - 60) + cycle * 35;
-        
+        armRY = bodyY - 60 + cycle * 35;
+
         legLX = 250 + cycle * 45;
-        legLY = (bodyY - 70) + cycle * 35;
+        legLY = bodyY - 70 + cycle * 35;
         footLX = 290 + cycle * 50;
-        footLY = (bodyY - 70) + cycle * 40;
+        footLY = bodyY - 70 + cycle * 40;
 
         angleVal = Math.round(180 - cycle * 42);
         angleLabel = "Separación Lumbar Peligrosa";
@@ -788,26 +897,26 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         safetyStatus = Math.round(48 - cycle * 25);
       }
 
-      joints = { 
-        head: { x: headX, y: bodyY - 5 }, 
-        hip: { x: hipX, y: bodyY - 5 }, 
+      joints = {
+        head: { x: headX, y: bodyY - 5 },
+        hip: { x: hipX, y: bodyY - 5 },
         shoulder: { x: shoulderX, y: shoulderY },
         wrist: { x: armRX, y: armRY },
         knee: { x: legLX, y: legLY },
-        foot: { x: footLX, y: footLY }
+        foot: { x: footLX, y: footLY },
       };
     }
 
     // 3. DRAW HIGH FIDELITY REAL ATHLETE BODY LAYERS
     // Hide the plain wireframe stick figure! Build real muscles.
     if (!showSkeleton) {
-      
       // Determine what muscles are contracting to trigger active color highlights
-      const contractingLegs = (exerciseId === "squat" || exerciseId === "deadlift") ? muscleGlow : null;
-      const contractingChest = (exerciseId === "pushup") ? muscleGlow : null;
-      const contractingLats = (exerciseId === "row") ? muscleGlow : null;
-      const contractingShoulders = (exerciseId === "arnold") ? muscleGlow : null;
-      const contractingCore = (exerciseId === "deadbug") ? muscleGlow : null;
+      const contractingLegs =
+        exerciseId === "squat" || exerciseId === "deadlift" ? muscleGlow : null;
+      const contractingChest = exerciseId === "pushup" ? muscleGlow : null;
+      const contractingLats = exerciseId === "row" ? muscleGlow : null;
+      const contractingShoulders = exerciseId === "arnold" ? muscleGlow : null;
+      const contractingCore = exerciseId === "deadbug" ? muscleGlow : null;
 
       if (exerciseId === "squat" || exerciseId === "deadlift") {
         // Athlete Head and Neck with human characteristics
@@ -822,10 +931,28 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.stroke();
 
         // Draw upper leg (Thigh with powerful contracting quads)
-        drawMuscleLimb(ctx, joints.hip, joints.knee, 12, 11, skinColor, shortsColor, contractingLegs);
+        drawMuscleLimb(
+          ctx,
+          joints.hip,
+          joints.knee,
+          12,
+          11,
+          skinColor,
+          shortsColor,
+          contractingLegs,
+        );
 
         // Draw lower leg (defined calves)
-        drawMuscleLimb(ctx, joints.knee, joints.ankle, 9, 7, skinColor, null, contractingLegs);
+        drawMuscleLimb(
+          ctx,
+          joints.knee,
+          joints.ankle,
+          9,
+          7,
+          skinColor,
+          null,
+          contractingLegs,
+        );
 
         // Shoes
         ctx.fillStyle = "#ffffff";
@@ -845,8 +972,13 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.lineTo(joints.hip.x + chestWidth * 0.8, joints.hip.y);
         ctx.lineTo(joints.hip.x - chestWidth * 0.8, joints.hip.y);
         ctx.closePath();
-        
-        const vestGrad = ctx.createLinearGradient(joints.shoulder.x, joints.shoulder.y, joints.hip.x, joints.hip.y);
+
+        const vestGrad = ctx.createLinearGradient(
+          joints.shoulder.x,
+          joints.shoulder.y,
+          joints.hip.x,
+          joints.hip.y,
+        );
         vestGrad.addColorStop(0, shirtColor);
         vestGrad.addColorStop(1, "rgba(30, 41, 59, 0.95)");
         ctx.fillStyle = vestGrad;
@@ -862,7 +994,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           // show rounded hump line
           const midX = (joints.hip.x + joints.shoulder.x) / 2 - 12;
           const midY = (joints.hip.y + joints.shoulder.y) / 2 - 6;
-          ctx.quadraticCurveTo(midX, midY, joints.shoulder.x - 5, joints.shoulder.y);
+          ctx.quadraticCurveTo(
+            midX,
+            midY,
+            joints.shoulder.x - 5,
+            joints.shoulder.y,
+          );
           ctx.stroke();
         }
         ctx.restore();
@@ -872,14 +1009,23 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           // Copa goblet press hold
           const dumbbellX = joints.shoulder.x - 12;
           const dumbbellY = joints.shoulder.y + 12;
-          
+
           ctx.fillStyle = skinColor;
           ctx.beginPath();
           ctx.arc(dumbbellX, dumbbellY, 4, 0, Math.PI * 2);
           ctx.fill();
 
           // Hand arms limbs
-          drawMuscleLimb(ctx, joints.shoulder, { x: dumbbellX, y: dumbbellY }, 6, 3, skinColor, shirtColor, null);
+          drawMuscleLimb(
+            ctx,
+            joints.shoulder,
+            { x: dumbbellX, y: dumbbellY },
+            6,
+            3,
+            skinColor,
+            shirtColor,
+            null,
+          );
 
           // Render high level goblet dumbbell plate model
           ctx.fillStyle = "#4b5563";
@@ -893,7 +1039,16 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           const bY = joints.bar.y;
 
           // Arms pulling bar standard vertical
-          drawMuscleLimb(ctx, joints.shoulder, { x: bX, y: bY }, 7, 4, skinColor, shirtColor, contractingLegs);
+          drawMuscleLimb(
+            ctx,
+            joints.shoulder,
+            { x: bX, y: bY },
+            7,
+            4,
+            skinColor,
+            shirtColor,
+            contractingLegs,
+          );
 
           // Bar and Heavy weight disks
           ctx.lineWidth = 4;
@@ -914,15 +1069,23 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           ctx.fillRect(bX - 70, bY - 22, 7, 44);
           ctx.fillRect(bX + 63, bY - 22, 7, 44);
         }
-      } 
-      else if (exerciseId === "pushup") {
+      } else if (exerciseId === "pushup") {
         // Horizontal pushup athlete body
         // Feet
         ctx.fillStyle = "#1e293b";
         ctx.fillRect(joints.feet.x - 6, joints.feet.y - 4, 12, 8);
 
         // Lower Leg and Upper leg combined (thick tight sports pants)
-        drawMuscleLimb(ctx, joints.feet, joints.hip, 11, 8, skinColor, shortsColor, contractingChest);
+        drawMuscleLimb(
+          ctx,
+          joints.feet,
+          joints.hip,
+          11,
+          8,
+          skinColor,
+          shortsColor,
+          contractingChest,
+        );
 
         // Trunk
         ctx.save();
@@ -936,20 +1099,46 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.restore();
 
         // Arms: Shoulder -> Elbow -> Wrist
-        drawMuscleLimb(ctx, joints.shoulder, joints.elbow, 8, 6, skinColor, shirtColor, contractingChest);
-        drawMuscleLimb(ctx, joints.elbow, joints.wrist, 7, 5, skinColor, null, contractingChest);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.elbow,
+          8,
+          6,
+          skinColor,
+          shirtColor,
+          contractingChest,
+        );
+        drawMuscleLimb(
+          ctx,
+          joints.elbow,
+          joints.wrist,
+          7,
+          5,
+          skinColor,
+          null,
+          contractingChest,
+        );
 
         // Head looking down slightly forward with human characteristics
         drawHumanCharacterHead(ctx, joints.head, skinColor, isCorrect, true);
-      } 
-      else if (exerciseId === "row") {
+      } else if (exerciseId === "row") {
         // Feet
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(joints.footFloor.x - 5, joints.footFloor.y - 3, 10, 6);
 
         // Bench support leg
         ctx.fillStyle = skinColor;
-        drawMuscleLimb(ctx, joints.hip, joints.footFloor, 9, 6, skinColor, shortsColor, null);
+        drawMuscleLimb(
+          ctx,
+          joints.hip,
+          joints.footFloor,
+          9,
+          6,
+          skinColor,
+          shortsColor,
+          null,
+        );
 
         // Torso
         ctx.save();
@@ -963,11 +1152,38 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.restore();
 
         // Passive forearm holding bench down
-        drawMuscleLimb(ctx, joints.shoulder, joints.handBench, 7, 4, skinColor, null, null);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.handBench,
+          7,
+          4,
+          skinColor,
+          null,
+          null,
+        );
 
         // Active arm pulling barbell: Shoulder -> Elbow -> Weight
-        drawMuscleLimb(ctx, joints.shoulder, joints.elbow, 9, 7, skinColor, shirtColor, contractingLats);
-        drawMuscleLimb(ctx, joints.elbow, joints.weight, 7, 5, skinColor, null, contractingLats);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.elbow,
+          9,
+          7,
+          skinColor,
+          shirtColor,
+          contractingLats,
+        );
+        drawMuscleLimb(
+          ctx,
+          joints.elbow,
+          joints.weight,
+          7,
+          5,
+          skinColor,
+          null,
+          contractingLats,
+        );
 
         // Head in horizontal alignment with human characteristics
         drawHumanCharacterHead(ctx, joints.head, skinColor, isCorrect, true);
@@ -980,8 +1196,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.fillStyle = "#fbbf24"; // gold heavy plates highlights
         ctx.fillRect(wX - 22, wY - 10, 6, 20);
         ctx.fillRect(wX + 16, wY - 10, 6, 20);
-      } 
-      else if (exerciseId === "arnold") {
+      } else if (exerciseId === "arnold") {
         // Seated deltoids exercise upright
         // Torso
         ctx.save();
@@ -998,11 +1213,47 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         drawHumanCharacterHead(ctx, joints.head, skinColor, isCorrect, true);
 
         // Active Arms - Right and Left (symmetrical overhead press)
-        drawMuscleLimb(ctx, joints.shoulder, joints.elbowR, 10, 8, skinColor, shirtColor, contractingShoulders);
-        drawMuscleLimb(ctx, joints.elbowR, joints.wristR, 8, 6, skinColor, null, contractingShoulders);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.elbowR,
+          10,
+          8,
+          skinColor,
+          shirtColor,
+          contractingShoulders,
+        );
+        drawMuscleLimb(
+          ctx,
+          joints.elbowR,
+          joints.wristR,
+          8,
+          6,
+          skinColor,
+          null,
+          contractingShoulders,
+        );
 
-        drawMuscleLimb(ctx, joints.shoulder, joints.elbowL, 10, 8, skinColor, shirtColor, contractingShoulders);
-        drawMuscleLimb(ctx, joints.elbowL, joints.wristL, 8, 6, skinColor, null, contractingShoulders);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.elbowL,
+          10,
+          8,
+          skinColor,
+          shirtColor,
+          contractingShoulders,
+        );
+        drawMuscleLimb(
+          ctx,
+          joints.elbowL,
+          joints.wristL,
+          8,
+          6,
+          skinColor,
+          null,
+          contractingShoulders,
+        );
 
         // High contrast dumbbells at wrists
         const dR_X = joints.wristR.x;
@@ -1020,8 +1271,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.fillStyle = "#ec4899";
         ctx.fillRect(dL_X - 22, dL_Y - 14, 6, 28);
         ctx.fillRect(dL_X + 16, dL_Y - 14, 6, 28);
-      } 
-      else if (exerciseId === "deadbug") {
+      } else if (exerciseId === "deadbug") {
         // Horizontal abdominal core focus
         // Head with human characteristics
         drawHumanCharacterHead(ctx, joints.head, skinColor, isCorrect, false); // facing right up
@@ -1035,7 +1285,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.moveTo(joints.head.x + 10, joints.head.y - 2);
         ctx.lineTo(joints.hip.x, joints.hip.y);
         ctx.stroke();
-        
+
         // Dynamic CORE ab contraction workout heatmap!
         if (contractingCore) {
           ctx.strokeStyle = "rgba(59, 130, 246, 0.85)"; // active core neon blue energy
@@ -1048,17 +1298,43 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.restore();
 
         // Active arm
-        drawMuscleLimb(ctx, joints.shoulder, joints.wrist, 7, 5, skinColor, shirtColor, null);
+        drawMuscleLimb(
+          ctx,
+          joints.shoulder,
+          joints.wrist,
+          7,
+          5,
+          skinColor,
+          shirtColor,
+          null,
+        );
 
         // Active leg
-        drawMuscleLimb(ctx, joints.hip, joints.knee, 10, 8, skinColor, shortsColor, contractingCore);
-        drawMuscleLimb(ctx, joints.knee, joints.foot, 8, 6, skinColor, null, contractingCore);
+        drawMuscleLimb(
+          ctx,
+          joints.hip,
+          joints.knee,
+          10,
+          8,
+          skinColor,
+          shortsColor,
+          contractingCore,
+        );
+        drawMuscleLimb(
+          ctx,
+          joints.knee,
+          joints.foot,
+          8,
+          6,
+          skinColor,
+          null,
+          contractingCore,
+        );
 
         // Foot
         ctx.fillStyle = "#ffffff";
         ctx.fillRect(joints.foot.x - 4, joints.foot.y - 4, 11, 8);
       }
-
     } else {
       // 4. FALLBACK ORIGINAL DETAILED BIOMECHANICAL SKELETON
       ctx.lineWidth = 5;
@@ -1078,7 +1354,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         if (!isCorrect) {
           const midX = (joints.hip.x + joints.shoulder.x) / 2 - 18;
           const midY = (joints.hip.y + joints.shoulder.y) / 2 - 12;
-          ctx.quadraticCurveTo(midX, midY, joints.shoulder.x, joints.shoulder.y);
+          ctx.quadraticCurveTo(
+            midX,
+            midY,
+            joints.shoulder.x,
+            joints.shoulder.y,
+          );
         } else {
           ctx.lineTo(joints.shoulder.x, joints.shoulder.y);
         }
@@ -1088,12 +1369,11 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.moveTo(joints.shoulder.x, joints.shoulder.y);
         ctx.lineTo(joints.head.x, joints.head.y);
         ctx.stroke();
-      } 
-      else if (exerciseId === "pushup") {
+      } else if (exerciseId === "pushup") {
         ctx.beginPath();
         ctx.moveTo(joints.head.x, joints.head.y);
         ctx.lineTo(joints.shoulder.x, joints.shoulder.y);
-        
+
         if (!isCorrect) {
           const midX = (joints.shoulder.x + joints.hip.x) / 2;
           const midY = (joints.shoulder.y + joints.hip.y) / 2 + 10;
@@ -1109,14 +1389,18 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.lineTo(joints.elbow.x, joints.elbow.y);
         ctx.lineTo(joints.wrist.x, joints.wrist.y);
         ctx.stroke();
-      } 
-      else if (exerciseId === "row") {
+      } else if (exerciseId === "row") {
         ctx.beginPath();
         ctx.moveTo(joints.hip.x, joints.hip.y);
         if (!isCorrect) {
           const midX = (joints.hip.x + joints.shoulder.x) / 2 - 10;
           const midY = (joints.hip.y + joints.shoulder.y) / 2 - 25 * cycle;
-          ctx.quadraticCurveTo(midX, midY, joints.shoulder.x, joints.shoulder.y);
+          ctx.quadraticCurveTo(
+            midX,
+            midY,
+            joints.shoulder.x,
+            joints.shoulder.y,
+          );
         } else {
           ctx.lineTo(joints.shoulder.x, joints.shoulder.y);
         }
@@ -1126,14 +1410,18 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
         ctx.moveTo(joints.shoulder.x, joints.shoulder.y);
         ctx.lineTo(joints.head.x, joints.head.y);
         ctx.stroke();
-      } 
-      else if (exerciseId === "arnold") {
+      } else if (exerciseId === "arnold") {
         ctx.beginPath();
         ctx.moveTo(joints.hip.x, joints.hip.y);
         if (!isCorrect) {
           const midX = joints.shoulder.x - 24 * cycle;
           const midY = (joints.hip.y + joints.shoulder.y) / 2;
-          ctx.quadraticCurveTo(midX, midY, joints.shoulder.x, joints.shoulder.y);
+          ctx.quadraticCurveTo(
+            midX,
+            midY,
+            joints.shoulder.x,
+            joints.shoulder.y,
+          );
         } else {
           ctx.lineTo(joints.shoulder.x, joints.shoulder.y);
         }
@@ -1148,20 +1436,35 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
     if (showAngles) {
       ctx.fillStyle = "rgba(255, 255, 255, 0.9)";
       ctx.font = "bold 9px monospace";
-      
+
       let angX = 280;
       let angY = 70;
-      if (exerciseId === "squat") { angX = joints.knee.x + 18; angY = joints.knee.y + 4; }
-      else if (exerciseId === "pushup") { angX = joints.hip.x - 12; angY = joints.hip.y - 14; }
-      else if (exerciseId === "row") { angX = joints.hip.x - 22; angY = joints.hip.y - 18; }
-      else if (exerciseId === "deadlift") { angX = joints.hip.x - 30; angY = joints.hip.y - 12; }
-      else if (exerciseId === "arnold") { angX = joints.shoulder.x + 22; angY = joints.shoulder.y - 10; }
-      else if (exerciseId === "deadbug") { angX = (joints.head.x + joints.hip.x) / 2 - 10; angY = joints.hip.y - 25; }
+      if (exerciseId === "squat") {
+        angX = joints.knee.x + 18;
+        angY = joints.knee.y + 4;
+      } else if (exerciseId === "pushup") {
+        angX = joints.hip.x - 12;
+        angY = joints.hip.y - 14;
+      } else if (exerciseId === "row") {
+        angX = joints.hip.x - 22;
+        angY = joints.hip.y - 18;
+      } else if (exerciseId === "deadlift") {
+        angX = joints.hip.x - 30;
+        angY = joints.hip.y - 12;
+      } else if (exerciseId === "arnold") {
+        angX = joints.shoulder.x + 22;
+        angY = joints.shoulder.y - 10;
+      } else if (exerciseId === "deadbug") {
+        angX = (joints.head.x + joints.hip.x) / 2 - 10;
+        angY = joints.hip.y - 25;
+      }
 
       ctx.fillStyle = "rgba(15, 23, 42, 0.95)";
-      ctx.strokeStyle = isCorrect ? "rgba(16, 185, 129, 0.5)" : "rgba(239, 68, 68, 0.5)";
+      ctx.strokeStyle = isCorrect
+        ? "rgba(16, 185, 129, 0.5)"
+        : "rgba(239, 68, 68, 0.5)";
       ctx.lineWidth = 1.5;
-      
+
       const tagText = `${angleLabel}: ${angleVal}°`;
       const textWidth = ctx.measureText(tagText).width;
 
@@ -1176,7 +1479,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
 
     // 6. Sidebar Sensor Telemetry Box (Inside the canvas)
     ctx.fillStyle = "rgba(15, 23, 42, 0.88)";
-    ctx.strokeStyle = isCorrect ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)";
+    ctx.strokeStyle = isCorrect
+      ? "rgba(16, 185, 129, 0.25)"
+      : "rgba(239, 68, 68, 0.25)";
     ctx.lineWidth = 1.5;
     ctx.beginPath();
     safeRoundRect(ctx, 15, 15, 132, 75, 8);
@@ -1189,7 +1494,11 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "bold 9px sans-serif";
-    ctx.fillText(`ESTADO: ${isCorrect ? "POSTURA PERFECTA" : "RANGO LESIVO!"}`, 22, 43);
+    ctx.fillText(
+      `ESTADO: ${isCorrect ? "POSTURA PERFECTA" : "RANGO LESIVO!"}`,
+      22,
+      43,
+    );
 
     ctx.fillStyle = "#64748b";
     ctx.fillText("Fuerza Muscular:", 22, 57);
@@ -1222,10 +1531,12 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
 
       if (motText) {
         ctx.save();
-        ctx.fillStyle = isCorrect ? "rgba(52, 211, 153, 0.95)" : "rgba(248, 113, 113, 0.95)";
+        ctx.fillStyle = isCorrect
+          ? "rgba(52, 211, 153, 0.95)"
+          : "rgba(248, 113, 113, 0.95)";
         ctx.font = "bold 11px sans-serif";
         ctx.textAlign = "center";
-        
+
         // Add dynamic text drop shadow for maximum retro arcade look
         ctx.shadowColor = isCorrect ? "#10b981" : "#ef4444";
         ctx.shadowBlur = 8;
@@ -1240,9 +1551,8 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
 
   return (
     <div className="flex flex-col gap-3">
-      
       {/* 2D Canvas Area */}
-      <div className="relative border border-slate-200/80 rounded-2xl overflow-hidden bg-slate-950 flex justify-center items-center shadow-inner">
+      <div className="relative border border-white/5/80 rounded-2xl overflow-hidden bg-slate-950 flex justify-center items-center shadow-inner">
         <canvas
           ref={canvasRef}
           width={400}
@@ -1252,7 +1562,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
 
         {/* Real-time State Badge floating */}
         <div className="absolute top-4 right-4 z-20 flex items-center gap-1.5 bg-slate-950/80 border border-slate-800 backdrop-blur px-2.5 py-1.5 rounded-xl shadow-md">
-          <span className={`w-2.5 h-2.5 rounded-full ${isCorrect ? "bg-emerald-500 animate-pulse" : "bg-red-500 animate-ping"}`} />
+          <span
+            className={`w-2.5 h-2.5 rounded-full ${isCorrect ? "bg-emerald-500 animate-pulse" : "bg-red-500 animate-ping"}`}
+          />
           <span className="text-[9px] font-mono tracking-wider font-bold uppercase text-white">
             {isCorrect ? "VIDEO: MODELO REAL" : "ZOOM: CORRECCIÓN"}
           </span>
@@ -1266,16 +1578,19 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
       </div>
 
       {/* Control Navigation Rail under canvas */}
-      <div className="bg-slate-50 border border-slate-200 p-2.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-        
+      <div className="bg-white/5 border border-white/5 p-2.5 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
         {/* Play / pause buttons */}
         <div className="flex items-center gap-2">
           <button
             onClick={() => setIsPlaying(!isPlaying)}
-            className="p-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition shrink-0 flex items-center justify-center cursor-pointer shadow-xs"
+            className="p-2 bg-emerald-500 hover:bg-emerald-400 text-black shadow-[0_0_15px_rgba(16,185,129,0.3)] rounded-lg transition shrink-0 flex items-center justify-center cursor-pointer shadow-xs"
             title={isPlaying ? "Pausar Clip" : "Reproducir Clip"}
           >
-            {isPlaying ? <Pause className="w-4 h-4 fill-white" /> : <Play className="w-4 h-4 fill-white" />}
+            {isPlaying ? (
+              <Pause className="w-4 h-4 fill-white" />
+            ) : (
+              <Play className="w-4 h-4 fill-white" />
+            )}
           </button>
 
           <button
@@ -1284,7 +1599,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
               setScrubValue(0);
               drawFrame();
             }}
-            className="p-2 border border-slate-200 hover:bg-slate-100 text-slate-600 rounded-lg transition cursor-pointer"
+            className="p-2 border border-slate-200 hover:bg-slate-100 text-slate-400 rounded-lg transition cursor-pointer"
             title="Reiniciar secuencia"
           >
             <RefreshCw className="w-3.5 h-3.5" />
@@ -1293,7 +1608,7 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           {/* Speed switch button */}
           <button
             onClick={() => setSpeed(speed === 1 ? 0.4 : 1)}
-            className="px-2 py-1.5 border border-slate-200 hover:bg-indigo-50 hover:text-indigo-650 text-slate-600 rounded-lg font-mono text-[9px] font-bold transition cursor-pointer"
+            className="px-2 py-1.5 border border-slate-200 hover:bg-emerald-500/10 hover:text-indigo-650 text-slate-600 rounded-lg font-mono text-[9px] font-bold transition cursor-pointer"
             title="Velocidad del ejercicio"
           >
             CAM: {speed === 1 ? "1.0x (REAL)" : "0.4x (LENTO)"}
@@ -1319,7 +1634,9 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           <button
             onClick={() => setShowSkeleton(!showSkeleton)}
             className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase transition ${
-              !showSkeleton ? "bg-indigo-50 text-indigo-700 border border-indigo-150" : "bg-transparent text-slate-400 border border-transparent"
+              !showSkeleton
+                ? "bg-emerald-500/10 text-indigo-700 border border-indigo-150"
+                : "bg-transparent text-slate-400 border border-transparent"
             }`}
           >
             {showSkeleton ? "Ver Persona" : "Ver Esqueleto"}
@@ -1327,34 +1644,39 @@ export default function BiomechanicalSimulator({ exerciseId, isCorrect }: Biomec
           <button
             onClick={() => setShowAngles(!showAngles)}
             className={`px-2 py-1 rounded-lg text-[9px] font-bold uppercase transition ${
-              showAngles ? "bg-indigo-50 text-indigo-700 border border-indigo-150" : "bg-transparent text-slate-400 border border-transparent"
+              showAngles
+                ? "bg-indigo-50 text-indigo-700 border border-indigo-150"
+                : "bg-transparent text-slate-400 border border-transparent"
             }`}
           >
             Ángulos
           </button>
         </div>
-
       </div>
 
       {/* Clinical warning context descriptive text */}
-      <div className="flex gap-2 items-start bg-slate-500/5 border border-slate-200/50 p-3 rounded-xl text-slate-650">
+      <div className="flex gap-2 items-start bg-white/50/5 border border-slate-200/50 p-3 rounded-xl text-slate-650">
         {isCorrect ? (
           <>
             <ShieldCheck className="w-4 h-4 text-emerald-500 mt-0.5 shrink-0" />
             <p className="text-[10px] leading-relaxed">
-              <strong>Simulador Postura Atleta:</strong> Resalta el recorrido muscular del atleta en verde con palancas biomecánicas perfectas y auras de contracción óptima.
+              <strong>Simulador Postura Atleta:</strong> Resalta el recorrido
+              muscular del atleta en verde con palancas biomecánicas perfectas y
+              auras de contracción óptima.
             </p>
           </>
         ) : (
           <>
             <ZapOff className="w-4 h-4 text-red-400 mt-0.5 shrink-0" />
             <p className="text-[10px] leading-relaxed">
-              <strong>Zonas de Stress Alto en Persona:</strong> Permite ver cómo el cuerpo de la persona sufre un colapso mecánico (como el talón despegado o espina dorsal encorvada en rojo) para prevenir desgarros severos.
+              <strong>Zonas de Stress Alto en Persona:</strong> Permite ver cómo
+              el cuerpo de la persona sufre un colapso mecánico (como el talón
+              despegado o espina dorsal encorvada en rojo) para prevenir
+              desgarros severos.
             </p>
           </>
         )}
       </div>
-
     </div>
   );
 }

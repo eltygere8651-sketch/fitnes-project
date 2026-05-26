@@ -1,7 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-import { auth, db } from '../lib/firebase';
+import React, { createContext, useContext, useEffect, useState } from "react";
+import { onAuthStateChanged, User } from "firebase/auth";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { auth, db } from "../lib/firebase";
 
 interface FirebaseContextType {
   user: User | null;
@@ -9,11 +9,17 @@ interface FirebaseContextType {
   isOnline: boolean;
 }
 
-const FirebaseContext = createContext<FirebaseContextType>({ user: null, loading: true, isOnline: true });
+const FirebaseContext = createContext<FirebaseContextType>({
+  user: null,
+  loading: true,
+  isOnline: true,
+});
 
 export const useFirebase = () => useContext(FirebaseContext);
 
-export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
+  children,
+}) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -21,20 +27,24 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         const syncProfile = async (retryCount = 0) => {
           try {
-            const userRef = doc(db, 'users', u.uid);
-            await setDoc(userRef, {
-              email: u.email,
-              displayName: u.displayName,
-              photoURL: u.photoURL,
-              lastLogin: serverTimestamp()
-            }, { merge: true });
+            const userRef = doc(db, "users", u.uid);
+            await setDoc(
+              userRef,
+              {
+                email: u.email,
+                displayName: u.displayName,
+                photoURL: u.photoURL,
+                lastLogin: serverTimestamp(),
+              },
+              { merge: true },
+            );
           } catch (e) {
             console.error("Profile sync attempt failed", e);
             if (retryCount < 2) {
@@ -48,8 +58,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       setLoading(false);
     });
     return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
       unsubscribe();
     };
   }, []);
@@ -63,12 +73,12 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
 
 // Error handler utility from skill
 export enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
+  CREATE = "create",
+  UPDATE = "update",
+  DELETE = "delete",
+  LIST = "list",
+  GET = "get",
+  WRITE = "write",
 }
 
 interface FirestoreErrorInfo {
@@ -80,10 +90,14 @@ interface FirestoreErrorInfo {
     email?: string | null;
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
-  }
+  };
 }
 
-export function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
+export function handleFirestoreError(
+  error: unknown,
+  operationType: OperationType,
+  path: string | null,
+) {
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
@@ -93,8 +107,8 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
       isAnonymous: auth.currentUser?.isAnonymous,
     },
     operationType,
-    path
+    path,
   };
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
+  console.error("Firestore Error: ", JSON.stringify(errInfo));
   throw new Error(JSON.stringify(errInfo));
 }

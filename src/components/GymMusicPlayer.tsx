@@ -478,7 +478,7 @@ export default function GymMusicPlayer() {
           </motion.div>
           <div className="min-w-0">
             <p className="text-[9px] font-black tracking-[0.3em] uppercase text-emerald-500 mb-0.5 opacity-70">
-              SoundCloud Engine
+              Bienve App Music
             </p>
             <h2 className="text-sm font-black tracking-tight text-white truncate max-w-[200px] sm:max-w-md uppercase">
               {displayTitle}
@@ -536,6 +536,19 @@ export default function GymMusicPlayer() {
 
       {/* 2. MAIN SPLIT STAGE */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative overflow-y-auto lg:overflow-hidden scrollbar-hide">
+        {/* SIDEBAR: LIBRARY (New) */}
+        <div className="flex w-16 lg:w-64 flex-col bg-[#050505] border-r border-white/5 p-2 lg:p-4 shrink-0 overflow-y-auto">
+            <h3 className="hidden lg:block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4 px-2">Playlists</h3>
+            <div className="flex flex-col gap-2">
+                {userPlaylists.map(pl => (
+                    <button key={pl.id} onClick={() => selectPlaylist(pl)} className="text-left text-sm p-3 rounded-lg hover:bg-white/5 transition-colors truncate flex items-center justify-center lg:justify-start gap-2">
+                        <span className="text-xl">{pl.icon}</span>
+                        <span className="hidden lg:inline">{pl.name}</span>
+                    </button>
+                ))}
+            </div>
+        </div>
+
         {/* LEFT: COMPACT PLAYER ENGINE */}
         <div className="flex-none lg:flex-[1] flex flex-col min-w-0 bg-[#080808] border-b lg:border-b-0 lg:border-r border-white/5 pb-6 lg:pb-0 shrink-0">
           {selectedPlaylist ? (
@@ -704,7 +717,9 @@ export default function GymMusicPlayer() {
 
         {/* RIGHT: PERMANENT TRACK LIST (Optimized for Visibility) */}
         <div
-          className={`flex-none lg:flex-[0.7] h-[400px] lg:h-auto bg-black/40 flex flex-col ${!selectedPlaylist ? "hidden" : ""}`}
+          className={`flex-none lg:flex-[0.4] h-[400px] lg:h-auto bg-black/40 flex flex-col ${
+            !selectedPlaylist ? "hidden" : ""
+          }`}
         >
           <div className="p-6 border-b border-white/5 flex items-center justify-between">
             <div className="space-y-0.5">

@@ -456,40 +456,88 @@ export default function GymMusicPlayer() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
+  const displayTitle =
+    engineCurrentSound?.title || currentTrack?.title || "Waiting...";
+  const displayArtist =
+    engineCurrentSound?.user?.username ||
+    engineCurrentSound?.artist ||
+    currentTrack?.artist ||
+    "Original Arch";
+  const displayArtwork =
+    engineCurrentSound?.artwork_url?.replace("large", "t500x500") ||
+    currentTrackMeta?.thumbnail_url?.replace("badge", "t500x500") ||
+    "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+
   // Media Session API Integration for background playback
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
-    if (selectedPlaylist && currentTrack) {
+
+    // Update Metadata
+    if (selectedPlaylist) {
       navigator.mediaSession.metadata = new MediaMetadata({
-        title: currentTrack.title,
-        artist: currentTrack.artist || selectedPlaylist.name,
-        album: "Bienve Music App",
+        title: displayTitle,
+        artist: displayArtist,
+        album: selectedPlaylist.name || "Bienve Music App",
         artwork: [
           {
-            src: "https://cdn-icons-png.flaticon.com/512/3844/3844724.png",
+            src: displayArtwork,
             sizes: "512x512",
-            type: "image/png",
+            type: "image/jpeg",
           },
         ],
       });
+    }
+
+    // Register Action Handlers
+    const actions: [MediaSessionAction, () => void][] = [
+      ["play", togglePlayback],
+      ["pause", togglePlayback],
+      ["previoustrack", handlePrev],
+      ["nexttrack", handleNext],
+    ];
+
+    for (const [action, handler] of actions) {
       try {
-        navigator.mediaSession.setActionHandler("play", togglePlayback);
-        navigator.mediaSession.setActionHandler("pause", togglePlayback);
-        navigator.mediaSession.setActionHandler("previoustrack", handlePrev);
-        navigator.mediaSession.setActionHandler("nexttrack", handleNext);
-      } catch (e) {
-        console.warn("MediaSession Action Handler error", e);
+        navigator.mediaSession.setActionHandler(action, handler);
+      } catch (error) {
+        console.warn(`The media session action "${action}" is not supported yet.`);
       }
     }
+
+    // Add SeekTo Support
+    try {
+      navigator.mediaSession.setActionHandler("seekto", (details) => {
+        if (details.seekTime !== undefined && widgetRef.current) {
+          widgetRef.current.seekTo(details.seekTime * 1000);
+        }
+      });
+    } catch (e) {}
+
     return () => {
       if ("mediaSession" in navigator) {
-        navigator.mediaSession.setActionHandler("play", null);
-        navigator.mediaSession.setActionHandler("pause", null);
-        navigator.mediaSession.setActionHandler("previoustrack", null);
-        navigator.mediaSession.setActionHandler("nexttrack", null);
+        try {
+          navigator.mediaSession.setActionHandler("play", null);
+          navigator.mediaSession.setActionHandler("pause", null);
+          navigator.mediaSession.setActionHandler("previoustrack", null);
+          navigator.mediaSession.setActionHandler("nexttrack", null);
+          navigator.mediaSession.setActionHandler("seekto", null);
+        } catch (e) {}
       }
     };
-  }, [currentTrack, selectedPlaylist, togglePlayback, handleNext, handlePrev]);
+  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist, togglePlayback, handleNext, handlePrev]);
+
+  // Sync Position State with Lock Screen
+  useEffect(() => {
+    if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: (duration || 0) / 1000,
+          playbackRate: 1,
+          position: (position || 0) / 1000,
+        });
+      } catch (e) {}
+    }
+  }, [position, duration]);
 
   useEffect(() => {
     if ("mediaSession" in navigator) {
@@ -523,18 +571,6 @@ export default function GymMusicPlayer() {
       : selectedPlaylist?.tracks || ALL_DATABASE_TRACKS;
   const displayTrackIndex =
     engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
-
-  const displayTitle =
-    engineCurrentSound?.title || currentTrack?.title || "Waiting...";
-  const displayArtist =
-    engineCurrentSound?.user?.username ||
-    engineCurrentSound?.artist ||
-    currentTrack?.artist ||
-    "Original Arch";
-  const displayArtwork =
-    engineCurrentSound?.artwork_url?.replace("large", "t500x500") ||
-    currentTrackMeta?.thumbnail_url?.replace("badge", "t500x500") ||
-    "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 
   return (
     <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full min-h-[85vh] lg:min-h-[620px] lg:h-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
@@ -768,6 +804,25 @@ export default function GymMusicPlayer() {
                     >
                       <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
+
+                    {/* Compact Volume Control */}
+                    <div className="flex items-center gap-2 ml-2 sm:ml-4 group/vol">
+                      <Volume2 className="w-3.5 h-3.5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors shrink-0" />
+                      <div className="w-12 sm:w-20 h-1 bg-white/10 rounded-full relative cursor-pointer">
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={volume}
+                          onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                          className="absolute inset-x-0 -inset-y-2 w-full h-5 opacity-0 cursor-pointer z-40"
+                        />
+                        <div
+                          className="h-full bg-emerald-500/60 group-hover/vol:bg-emerald-500 rounded-full transition-colors"
+                          style={{ width: `${volume}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   {/* Progress Timeline Row */}

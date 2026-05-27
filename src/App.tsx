@@ -108,19 +108,18 @@ function AppContent() {
         <div className="w-full mb-3 px-6 flex items-center justify-between">
           {/* LEFT: Nativo Optimizado (cleaner, smaller) */}
           <div className="flex-1 flex justify-start">
-             <button
-                onClick={handleInstallPress}
-                className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-emerald-500/30 text-white bg-transparent hover:bg-emerald-500/10 transition-colors"
-                title="Instalar App Móvil"
-             >
-                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
-                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider hidden sm:block">
-                  Instalar App Móvil
-                </span>
-                <span className="text-[10px] font-black uppercase tracking-wider block sm:hidden">
-                  Instalar
-                </span>
-             </button>
+             {!isStandalone && (
+               <button
+                  onClick={handleInstallPress}
+                  className="flex items-center gap-2 px-2.5 py-1.5 rounded-full border border-white/5 text-slate-400 bg-white/5 hover:bg-emerald-500/10 hover:text-emerald-500 transition-all duration-300 group cursor-pointer"
+                  title="Instalar App Móvil"
+               >
+                  <Download className="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+                  <span className="text-[9px] font-black uppercase tracking-[0.1em] hidden sm:block">
+                    Get Native App
+                  </span>
+               </button>
+             )}
           </div>
 
           {/* CENTER: LOGO BRAND */}
@@ -131,7 +130,7 @@ function AppContent() {
             >
               <div className="relative">
                 <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
-                  <Music className="w-4.5 h-4.5 text-black" />
+                  <img src="/icon-512.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
                 </div>
               </div>
@@ -301,8 +300,8 @@ function AppContent() {
               {/* Header */}
               <div className="p-6 pb-4 flex justify-between items-start border-b border-white/5 bg-[#0e0e10]/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)]">
-                    <Smartphone className="w-5.5 h-5.5 text-black" />
+                  <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)] overflow-hidden">
+                    <img src="/icon-512.png" alt="App Icon" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <h3 className="text-base font-black uppercase tracking-wider text-white">

@@ -283,7 +283,7 @@ export default function GymMusicPlayer() {
   };
 
   const handleAddPlaylist = async () => {
-    if (!isAdmin) return alert("Solo admin puede añadir playlists");
+    if (!user) return alert("Debes iniciar sesión para añadir playlists");
     const url = customUrl.trim();
     if (!url || !url.includes("soundcloud.com")) {
       alert("Por favor inserta un enlace válido de SoundCloud");
@@ -502,25 +502,30 @@ export default function GymMusicPlayer() {
             <span className="hidden sm:block">Librería</span>
           </button>
 
-          {isAdmin && (
+            {user && (
             <button
               onClick={() => {
                 setIsAdding(!isAdding);
                 setShowLibrary(false);
               }}
-              className={`p-2.5 rounded-xl transition-all border ${isAdding ? "bg-emerald-500 text-black border-emerald-400" : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400"}`}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all border text-[10px] font-black uppercase ${
+                isAdding
+                  ? "bg-emerald-500 text-black border-emerald-400"
+                  : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
+              }`}
             >
               <Plus className="w-4 h-4" />
+              <span className="hidden sm:inline">Añadir</span>
             </button>
           )}
 
           {!user ? (
             <button
               onClick={loginWithGoogle}
-              title="Admin Login"
+              title="Login"
               className="p-2.5 rounded-xl transition-all border bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-emerald-500"
             >
-              <ShieldAlert className="w-4 h-4" />
+              <Sparkles className="w-4 h-4" />
             </button>
           ) : (
             <button
@@ -537,23 +542,33 @@ export default function GymMusicPlayer() {
       {/* 2. MAIN SPLIT STAGE */}
       <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative overflow-y-auto lg:overflow-hidden scrollbar-hide">
         {/* SIDEBAR: LIBRARY (New) */}
-        <div className="flex w-16 lg:w-64 flex-col bg-[#050505] border-r border-white/5 p-2 lg:p-4 shrink-0 overflow-y-auto">
-            <h3 className="hidden lg:block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500 mb-4 px-2">Playlists</h3>
-            <div className="flex flex-col gap-2">
+        <div className="hidden lg:flex w-64 flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-y-auto">
+            <div className="p-4 flex items-center justify-between">
+                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">Canales</h3>
+            </div>
+            <div className="flex flex-col">
                 {userPlaylists.map(pl => (
-                    <button key={pl.id} onClick={() => selectPlaylist(pl)} className="text-left text-sm p-3 rounded-lg hover:bg-white/5 transition-colors truncate flex items-center justify-center lg:justify-start gap-2">
-                        <span className="text-xl">{pl.icon}</span>
-                        <span className="hidden lg:inline">{pl.name}</span>
+                    <button 
+                      key={pl.id} 
+                      onClick={() => selectPlaylist(pl)} 
+                      className={`group w-full flex items-center gap-3 px-4 py-3 transition-all text-left ${selectedPlaylist?.id === pl.id ? 'bg-white/5 border-l-2 border-emerald-500' : 'border-l-2 border-transparent hover:bg-white/[0.02]'}`}
+                    >
+                        <span className="text-sm shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
+                            {pl.icon}
+                        </span>
+                        <div className="min-w-0">
+                            <p className={`text-[12px] font-medium truncate ${selectedPlaylist?.id === pl.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{pl.name}</p>
+                        </div>
                     </button>
                 ))}
             </div>
         </div>
 
         {/* CONTAINER PLAYER + TRACKLIST */}
-        <div className="flex flex-col flex-1 min-w-0 overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
             
-        {/* LEFT: COMPACT PLAYER ENGINE */}
-        <div className="flex-none flex flex-col min-w-0 bg-[#080808] border-b border-white/5 pb-6 shrink-0">
+        {/* PLAYER ENGINE */}
+        <div className="flex-none flex flex-col min-w-0 bg-[#080808] border-b border-white/5 pb-2 shrink-0">
           {selectedPlaylist ? (
             <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide relative">
               <div className="flex-1 flex flex-col p-6 lg:px-8">

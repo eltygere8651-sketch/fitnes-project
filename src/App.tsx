@@ -32,6 +32,8 @@ import GymMusicPlayer from "./components/GymMusicPlayer";
 import MotivationalNotifications from "./components/MotivationalNotifications";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { loginWithGoogle, logout } from "./lib/firebase";
+import { AuthErrorModal } from "./components/AuthErrorModal";
+import { AuthModal } from "./components/AuthModal";
 
 type TabType =
   | "routine"
@@ -42,7 +44,7 @@ type TabType =
   | "music";
 
 function AppContent() {
-  const { user, loading: authLoading, isOnline } = useFirebase();
+  const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
   const [activeTab, setActiveTab] = useState<TabType>("routine");
   const [activeStreak, setActiveStreak] = useState(4);
   const [caloriesBurned, setCaloriesBurned] = useState(300);
@@ -154,7 +156,7 @@ function AppContent() {
       className="min-h-screen bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
     >
       {/* 0. UTILITY TOP BAR */}
-      <div className="bg-black/40 border-b border-white/5 py-1.5 px-6">
+      <div className="bg-black/40 border-b border-white/5 px-6 pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-1.5 sm:py-1.5">
         <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
           {/* PWA Badge Left Side */}
           <div className="flex items-center gap-2">
@@ -204,7 +206,7 @@ function AppContent() {
               </div>
             ) : (
               <button
-                onClick={loginWithGoogle}
+                onClick={() => setAuthModalOpen(true)}
                 disabled={authLoading}
                 className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition-colors py-0.5"
               >
@@ -304,7 +306,7 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
+      <main className={`max-w-7xl w-full mx-auto ${activeTab === "music" ? "px-1 sm:px-4 md:px-6" : "px-4 sm:px-6 lg:px-8"} py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch`}>
         {activeTab !== "music" && (
           <aside className="lg:col-span-3 flex flex-col gap-6">
             <div className="bg-[#111] p-5 rounded-[24px] border border-white/5">
@@ -784,6 +786,8 @@ export default function App() {
   return (
     <FirebaseProvider>
       <AppContent />
+      <AuthErrorModal />
+      <AuthModal />
     </FirebaseProvider>
   );
 }

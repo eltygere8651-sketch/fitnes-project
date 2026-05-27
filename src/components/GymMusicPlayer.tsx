@@ -69,7 +69,7 @@ const getPlaylistGradientClass = (name: string) => {
 };
 
 export default function GymMusicPlayer() {
-  const { user, loading: authLoading } = useFirebase();
+  const { user, loading: authLoading, setAuthModalOpen } = useFirebase();
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
@@ -296,6 +296,15 @@ export default function GymMusicPlayer() {
     return null;
   };
 
+  const handleAddNewCanalClick = () => {
+    if (!user) {
+      setAuthModalOpen(true);
+      return;
+    }
+    setIsAdding(true);
+    setShowLibrary(false);
+  };
+
   const handleAddPlaylist = async () => {
     if (!user) return alert("Debes iniciar sesión para añadir playlists");
     const url = customUrl.trim();
@@ -516,12 +525,8 @@ export default function GymMusicPlayer() {
             <span className="hidden sm:block">Librería</span>
           </button>
 
-            {user && (
             <button
-              onClick={() => {
-                setIsAdding(!isAdding);
-                setShowLibrary(false);
-              }}
+              onClick={handleAddNewCanalClick}
               className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all border text-[10px] font-black uppercase ${
                 isAdding
                   ? "bg-emerald-500 text-black border-emerald-400"
@@ -531,13 +536,12 @@ export default function GymMusicPlayer() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Añadir</span>
             </button>
-          )}
 
           {!user ? (
             <button
-              onClick={loginWithGoogle}
+              onClick={() => setAuthModalOpen(true)}
               title="Login"
-              className="p-2.5 rounded-xl transition-all border bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-emerald-500"
+              className="p-2.5 rounded-xl transition-all border bg-[#10b981]/10 border-[#10b981]/20 text-emerald-400 hover:bg-[#10b981]/20 hover:text-white flex items-center justify-center cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.1)]"
             >
               <Sparkles className="w-4 h-4" />
             </button>
@@ -553,34 +557,26 @@ export default function GymMusicPlayer() {
         </div>
       </div>
 
-      {/* 2. MAIN SPLIT STAGE */}
-      <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
-        {/* SIDEBAR: LIBRARY (Redesigned & High-Performance) */}
-        <div className="flex w-[72px] sm:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-y-auto scrollbar-hide">
-            <div className="p-3 sm:p-5 border-b border-white/[0.03] shrink-0 flex items-center justify-between">
-                <div className="text-center sm:text-left">
-                    <h3 className="hidden sm:block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+         {/* 2. MAIN SPLIT STAGE */}
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 relative overflow-hidden">
+        {/* SIDEBAR: LIBRARY (Responsive layout: Horizontal on mobile, Vertical Column on desktop) */}
+        <div className="flex w-full md:w-[240px] flex-col bg-[#050505] border-b md:border-b-0 md:border-r border-white/5 shrink-0 overflow-hidden">
+            <div className="p-3 md:p-5 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full">
+                <div className="text-left">
+                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
                         Canales
                     </h3>
-                    <h3 className="block sm:hidden text-center text-[8px] font-black uppercase text-slate-500 tracking-[0.05em]">
-                        Canal
-                    </h3>
                 </div>
-                {user && (
-                  <button 
-                    onClick={() => {
-                      setIsAdding(true);
-                      setShowLibrary(false);
-                    }}
-                    title="Añadir Nuevo Canal"
-                    className="p-1.5 sm:p-2 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95"
-                  >
-                    <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3px]" />
-                  </button>
-                )}
+                <button 
+                  onClick={handleAddNewCanalClick}
+                  title="Añadir Nuevo Canal"
+                  className="p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                </button>
             </div>
             
-            <div className="flex-1 flex flex-col p-1.5 sm:p-3 gap-2">
+            <div className="flex flex-row md:flex-col p-2 md:p-3 gap-2 overflow-x-auto md:overflow-y-auto scrollbar-hide shrink-0 min-w-0 w-full">
                 {userPlaylists.map(pl => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
@@ -589,35 +585,35 @@ export default function GymMusicPlayer() {
                         <button 
                           key={pl.id} 
                           onClick={() => selectPlaylist(pl)} 
-                          className={`group w-full flex flex-col sm:flex-row items-center gap-2 sm:gap-3 p-2 sm:px-3 sm:py-2.5 rounded-xl transition-all text-left ${
+                          className={`group flex flex-row items-center gap-2 md:gap-3 p-1.5 md:px-3 md:py-2.5 rounded-xl transition-all text-left shrink-0 ${
                             isSelected 
-                              ? 'bg-emerald-500/10 border-l-[3.5px] border-emerald-500 ring-1 ring-emerald-500/10' 
-                              : 'border-l-[3.5px] border-transparent hover:bg-white/[0.03]'
+                              ? 'bg-emerald-500/10 border-l-2 md:border-l-[3.5px] border-emerald-500 ring-1 ring-emerald-500/10' 
+                              : 'border-l-2 md:border-l-[3.5px] border-transparent hover:bg-white/[0.03]'
                           }`}
                         >
                             {/* Dynamic Premium Cover Art */}
-                            <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-lg sm:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                            <div className={`relative w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-xs md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
                                 {/* Inner Gloss Sheen Overlay */}
                                 <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
                                 
                                 <span className="relative z-10 shrink-0 select-none filter drop-shadow">
                                     {pl.icon && pl.icon !== "📂" && pl.icon !== "🎵" ? pl.icon : "🎧"}
                                 </span>
-
+ 
                                 {/* Hover Play Indicator Overlay */}
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Play className="w-4 h-4 text-white fill-white scale-90 group-hover:scale-100 transition-transform duration-300" />
+                                    <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white fill-white scale-90 group-hover:scale-100 transition-transform duration-300" />
                                 </div>
                             </div>
-
+ 
                             {/* Info */}
-                            <div className="min-w-0 w-full text-center sm:text-left">
-                                <p className={`text-[9px] sm:text-[12px] font-black truncate leading-tight ${
+                            <div className="min-w-0 text-left">
+                                <p className={`text-[10px] md:text-[12px] font-black truncate leading-tight ${
                                   isSelected ? 'text-emerald-400 font-extrabold' : 'text-slate-300 group-hover:text-white'
                                 }`}>
                                     {pl.name}
                                 </p>
-                                <p className="hidden sm:block text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                                <p className="hidden md:block text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
                                     {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'}
                                 </p>
                             </div>

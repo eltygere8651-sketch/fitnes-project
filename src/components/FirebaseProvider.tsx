@@ -1,18 +1,26 @@
 import React, { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
-import { auth, db } from "../lib/firebase";
+import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 interface FirebaseContextType {
   user: User | null;
   loading: boolean;
   isOnline: boolean;
+  authError: any | null;
+  clearAuthError: () => void;
+  isAuthModalOpen: boolean;
+  setAuthModalOpen: (val: boolean) => void;
 }
 
 const FirebaseContext = createContext<FirebaseContextType>({
   user: null,
   loading: true,
   isOnline: true,
+  authError: null,
+  clearAuthError: () => {},
+  isAuthModalOpen: false,
+  setAuthModalOpen: () => {},
 });
 
 export const useFirebase = () => useContext(FirebaseContext);
@@ -23,12 +31,22 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [authError, setAuthError] = useState<any | null>(null);
+  const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+
+  const clearAuthError = () => setAuthError(null);
 
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
     window.addEventListener("online", handleOnline);
     window.addEventListener("offline", handleOffline);
+
+    // Register error handler to catch popup and redirect failures
+    registerAuthErrorHandler((error: any) => {
+      console.warn("Caught authentication error in Provider:", error);
+      setAuthError(error);
+    });
 
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
@@ -65,7 +83,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <FirebaseContext.Provider value={{ user, loading, isOnline }}>
+    <FirebaseContext.Provider value={{ user, loading, isOnline, authError, clearAuthError, isAuthModalOpen, setAuthModalOpen }}>
       {children}
     </FirebaseContext.Provider>
   );

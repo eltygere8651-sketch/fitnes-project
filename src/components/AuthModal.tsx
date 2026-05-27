@@ -24,12 +24,21 @@ export const AuthModal: React.FC = () => {
       setAuthModalOpen(false);
     } catch (err: any) {
       console.error(err);
-      if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
+      const code = err?.code || "";
+      if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") {
         setErrorMsg("Google cerró la ventana.");
         setIsLoading(false);
         return;
       }
-      setErrorMsg(err?.message || "Error al iniciar sesión.");
+      
+      if (code === "auth/unauthorized-domain") {
+        const currentDomain = window.location.hostname;
+        setErrorMsg(
+          `DOMINIO NO AUTORIZADO: Debes añadir "${currentDomain}" a la lista de "Dominios Autorizados" en tu Consola de Firebase (Authentication -> Settings).`
+        );
+      } else {
+        setErrorMsg(err?.message || "Error al iniciar sesión.");
+      }
     } finally {
       setIsLoading(false);
     }

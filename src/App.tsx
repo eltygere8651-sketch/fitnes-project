@@ -45,7 +45,7 @@ type TabType =
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
-  const [activeTab, setActiveTab] = useState<TabType>("routine");
+  const [activeTab, setActiveTab] = useState<TabType>("music");
   const [activeStreak, setActiveStreak] = useState(4);
   const [caloriesBurned, setCaloriesBurned] = useState(300);
   const [exercisesCount, setExercisesCount] = useState(8);
@@ -155,158 +155,109 @@ function AppContent() {
       id="premium-music-app"
       className="min-h-screen bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
     >
-      {/* 0. UTILITY TOP BAR */}
-      <div className="bg-black/40 border-b border-white/5 px-6 pt-[calc(env(safe-area-inset-top,0px)+8px)] pb-1.5 sm:py-1.5">
-        <div className="max-w-7xl mx-auto flex justify-between items-center gap-4">
-          {/* PWA Badge Left Side */}
-          <div className="flex items-center gap-2">
-            {isStandalone ? (
-              <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-black tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase">
-                <Smartphone className="w-3.5 h-3.5 text-emerald-500 animate-pulse" />
-                <span>Nativo Optimizado</span>
-              </div>
-            ) : (
-              <button
-                onClick={handleInstallPress}
-                className="flex items-center gap-1.5 text-[9px] text-slate-300 hover:text-white font-black tracking-widest bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/35 px-3 py-1 rounded-full uppercase cursor-pointer transition-all shadow-[0_0_15px_rgba(16,185,129,0.05)] hover:shadow-[0_0_15px_rgba(16,185,129,0.15)] scale-100 hover:scale-[1.03] active:scale-95"
-              >
-                <Download className="w-3 h-3 text-emerald-400 animate-bounce" />
-                <span>Instalar App Móvil</span>
-              </button>
-            )}
+      {/* PREMIUM STICKY HEADER & NAVIGATION */}
+      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0">
+        
+        {/* TOP STATUS ROW: NATIVO OPTIMIZADO + CONNECT ACCOUNT */}
+        <div className="w-full px-6 pt-3 pb-1.5 flex items-center justify-between gap-4">
+          {/* Status Badge */}
+          <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-extrabold tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase">
+            <Smartphone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
+            <span>Nativo Optimizado</span>
           </div>
 
-          <div className="flex items-center gap-4">
+          {/* Connect Account Action Trigger */}
+          <div className="flex items-center gap-3">
             {user ? (
-              <div className="flex items-center gap-3 group">
-                <div className="text-right">
-                  <p className="text-[8px] font-black uppercase text-emerald-500 tracking-[0.2em] leading-none mb-0.5">
-                    SYNC ACTIVE
-                  </p>
-                  <p className="text-[10px] font-bold text-slate-400">
-                    {user.displayName || user.email?.split("@")[0]}
-                  </p>
-                </div>
-                <div className="relative">
+              <div 
+                onClick={logout}
+                title="Cerrar Sesión"
+                className="flex items-center gap-2 group cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 px-2.5 py-1 rounded-full transition-all"
+              >
+                <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-rose-400 tracking-wider transition-colors max-w-[70px] truncate">
+                  {user.displayName || user.email?.split("@")[0]}
+                </span>
+                <div className="relative w-5 h-5 rounded-full overflow-hidden ring-1 ring-emerald-500/30">
                   <img
-                    src={
-                      user.photoURL ||
-                      `https://ui-avatars.com/api/?name=${user.displayName}&background=10b981&color=fff`
-                    }
-                    className="w-6 h-6 rounded-full ring-1 ring-white/10 object-cover"
+                    src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.email}&background=10b981&color=fff`}
+                    className="w-full h-full object-cover"
                     alt="avatar"
                   />
-                  <button
-                    onClick={logout}
-                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full text-white"
-                  >
-                    <LogOut className="w-3 h-3" />
-                  </button>
                 </div>
+                <LogOut className="w-3 h-3 text-slate-500 group-hover:text-rose-400 transition-colors shrink-0" />
               </div>
             ) : (
               <button
                 onClick={() => setAuthModalOpen(true)}
                 disabled={authLoading}
-                className="flex items-center gap-1.5 text-slate-400 hover:text-emerald-400 transition-colors py-0.5"
+                className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:text-white transition-colors cursor-pointer"
               >
                 <LogIn className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-widest">
-                  Connect Account
-                </span>
+                <span>Connect Account</span>
               </button>
             )}
           </div>
         </div>
-      </div>
 
-      <nav className="flex flex-col md:flex-row items-center justify-between px-6 py-3 bg-black/20 backdrop-blur-3xl border-b border-white/5 sticky top-0 z-50 gap-4">
-        <div className="flex items-center gap-3 group cursor-pointer">
-          <div className="relative">
-            <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_25px_rgba(16,185,129,0.5)] group-hover:scale-110 transition-transform duration-500 overflow-hidden">
-              <Music className="w-6 h-6 text-black" />
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
+        {/* LOGO BRAND: BIENVE MUSIC APP (CENTERED) */}
+        <div className="flex flex-col items-center justify-center py-2 shrink-0">
+          <div 
+            onClick={() => setActiveTab("music")} 
+            className="flex items-center gap-3 group cursor-pointer select-none"
+          >
+            <div className="relative">
+              <div className="w-11 h-11 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
+                <Music className="w-5.5 h-5.5 text-black" />
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
+              </div>
+              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse border border-[#080809]" />
             </div>
-            <div className="absolute -top-1 -right-1 w-3 h-3 bg-white rounded-full animate-ping opacity-20" />
-          </div>
-          <div className="flex flex-col">
-            <span className="text-xl font-black tracking-[0.2em] text-white uppercase italic leading-none">
-              BIENVE
-            </span>
-            <span className="text-[10px] font-black tracking-[0.4em] text-emerald-500 uppercase leading-none mt-1 opacity-80">
-              MUSIC APP
-            </span>
+            <div className="flex flex-col">
+              <span className="text-xl font-black tracking-[0.16em] text-white uppercase italic leading-none">
+                BIENVE
+              </span>
+              <span className="text-[10px] font-black tracking-[0.32em] text-[#10b981] uppercase leading-none mt-1 opacity-90">
+                MUSIC APP
+              </span>
+            </div>
           </div>
         </div>
 
-        <div className="flex bg-white/5 p-1 rounded-2xl items-center gap-1 border border-white/10 shadow-inner">
-          {[
-            {
-              id: "music",
-              label: "MUSIC APP",
-              icon: <Play className="w-3.5 h-3.5" />,
-              special: true,
-            },
-            {
-              id: "routine",
-              label: "IA Rutinas",
-              icon: <Layers className="w-3.5 h-3.5" />,
-            },
-            {
-              id: "guide",
-              label: "Guías",
-              icon: <BookOpen className="w-3.5 h-3.5" />,
-            },
-            {
-              id: "chat",
-              label: "Coach",
-              icon: <MessageSquare className="w-3.5 h-3.5" />,
-            },
-            {
-              id: "progress",
-              label: "Log",
-              icon: <TrendingUp className="w-3.5 h-3.5" />,
-            },
-            {
-              id: "notifications",
-              label: "Alertas",
-              icon: <Bell className="w-3.5 h-3.5" />,
-            },
-          ].map((tab) => {
-            const isSelected = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id as TabType)}
-                className={`py-2 px-3 sm:px-4 rounded-xl text-[10px] font-black tracking-widest whitespace-nowrap transition-all flex items-center gap-2 cursor-pointer relative overflow-hidden group ${
-                  isSelected
-                    ? tab.special
-                      ? "bg-emerald-500 text-black shadow-[0_0_20px_rgba(16,185,129,0.3)] scale-105"
-                      : "bg-white/10 text-white border border-white/10"
-                    : "text-slate-500 hover:text-white bg-transparent"
-                }`}
-              >
-                {tab.icon}
-                <span className="hidden sm:inline uppercase">{tab.label}</span>
-                {tab.special && !isSelected && (
-                  <div className="absolute inset-0 bg-emerald-500/5 group-hover:bg-emerald-500/10 transition-colors" />
-                )}
-              </button>
-            );
-          })}
-        </div>
-
-        <div className="hidden md:flex items-center gap-4 pl-4 border-l border-white/5">
-          <div className="flex items-center gap-1.5 opacity-60">
-            <Activity className="w-3.5 h-3.5 text-emerald-500" />
-            <span className="text-[9px] font-bold text-slate-500 uppercase tracking-tighter">
-              Engine Optimized
-            </span>
+        {/* COMPACT FLOATING NAVIGATION PILL ROW (CENTERED, LABEL-FREE) */}
+        <div className="pb-4 pt-1 flex justify-center w-full px-4">
+          <div className="flex bg-[#111]/80 backdrop-blur-md p-1 rounded-2xl items-center gap-1 border border-white/5 shadow-2xl shrink-0 max-w-full overflow-x-auto scrollbar-none">
+            {[
+              { id: "music", icon: <Play className="w-4 h-4" /> },
+              { id: "routine", icon: <Layers className="w-4 h-4" /> },
+              { id: "guide", icon: <BookOpen className="w-4 h-4" /> },
+              { id: "chat", icon: <MessageSquare className="w-4 h-4" /> },
+              { id: "progress", icon: <TrendingUp className="w-4 h-4" /> },
+              { id: "notifications", icon: <Bell className="w-4 h-4" /> },
+            ].map((tab) => {
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center cursor-pointer relative overflow-hidden group shrink-0 ${
+                    isSelected
+                      ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.45)] scale-102"
+                      : "text-slate-400 hover:text-white bg-transparent hover:bg-white/5"
+                  }`}
+                >
+                  {tab.icon}
+                </button>
+              );
+            })}
           </div>
         </div>
       </nav>
 
-      <main className={`max-w-7xl w-full mx-auto ${activeTab === "music" ? "px-1 sm:px-4 md:px-6" : "px-4 sm:px-6 lg:px-8"} py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch`}>
+      <main className={`max-w-7xl w-full mx-auto ${
+        activeTab === "music"
+          ? "px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[720px] min-h-[500px] overflow-hidden"
+          : "px-4 sm:px-6 lg:px-8"
+      } py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch`}>
         {activeTab !== "music" && (
           <aside className="lg:col-span-3 flex flex-col gap-6">
             <div className="bg-[#111] p-5 rounded-[24px] border border-white/5">
@@ -377,12 +328,12 @@ function AppContent() {
         )}
 
         <section
-          className={`${activeTab === "music" ? "lg:col-span-12" : "lg:col-span-6"} flex flex-col gap-6 min-h-[500px]`}
+          className={`${activeTab === "music" ? "lg:col-span-12 h-full overflow-hidden" : "lg:col-span-6"} flex flex-col gap-6`}
         >
           <div
-            className={`rounded-[32px] overflow-hidden flex-1 ${activeTab === "music" ? "bg-transparent border-transparent" : "bg-[#111] border border-white/5 p-4 sm:p-6"} flex flex-col`}
+            className={`rounded-[32px] overflow-hidden flex-1 ${activeTab === "music" ? "bg-transparent border-transparent h-full" : "bg-[#111] border border-white/5 p-4 sm:p-6"} flex flex-col`}
           >
-            <div className="flex-1 relative">
+            <div className={`flex-1 relative ${activeTab === "music" ? "h-full overflow-hidden" : ""}`}>
               {activeTab === "routine" && (
                 <AIPersonalizedRoutine
                   onAskCoachExercise={handleAskCoachForExerciseName}

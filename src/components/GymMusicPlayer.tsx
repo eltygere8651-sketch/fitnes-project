@@ -18,6 +18,8 @@ import {
   Shuffle,
   ShieldAlert,
   LogOut,
+  LogIn,
+  Headphones,
 } from "lucide-react";
 import {
   collection,
@@ -97,17 +99,40 @@ export default function GymMusicPlayer() {
   const [duration, setDuration] = useState(0);
   const [isShuffle, setIsShuffle] = useState(false);
   const widgetRef = useRef<any>(null);
+  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   const currentTrack =
     selectedPlaylist?.tracks[currentTrackIndex] || ALL_DATABASE_TRACKS[0];
   const currentUrl = currentTrack.url || currentTrack.soundcloudUrl || "";
 
+  // Keep background JS context alive on iOS/Android via silent loop ambient audio synchronizer
+  useEffect(() => {
+    if (!silentAudioRef.current) return;
+    if (isPlaying) {
+      silentAudioRef.current.play().catch((err) => {
+        console.warn("Silent audio context initialization deferred for interaction click:", err);
+      });
+    } else {
+      silentAudioRef.current.pause();
+    }
+  }, [isPlaying]);
+
   const togglePlayback = useCallback(() => {
+    if (silentAudioRef.current) {
+      if (!isPlaying) {
+        silentAudioRef.current.play().catch(() => {});
+      } else {
+        silentAudioRef.current.pause();
+      }
+    }
     if (widgetRef.current) widgetRef.current.toggle();
     else setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
   const handleNext = useCallback(() => {
+    if (silentAudioRef.current) {
+      silentAudioRef.current.play().catch(() => {});
+    }
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
         const randomIndex = Math.floor(Math.random() * engineTracks.length);
@@ -134,6 +159,9 @@ export default function GymMusicPlayer() {
   }, [selectedPlaylist, currentTrackIndex, engineTracks, isShuffle]);
 
   const handlePrev = useCallback(() => {
+    if (silentAudioRef.current) {
+      silentAudioRef.current.play().catch(() => {});
+    }
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
         const randomIndex = Math.floor(Math.random() * engineTracks.length);
@@ -527,7 +555,7 @@ export default function GymMusicPlayer() {
 
             <button
               onClick={handleAddNewCanalClick}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl transition-all border text-[10px] font-black uppercase ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
                 isAdding
                   ? "bg-emerald-500 text-black border-emerald-400"
                   : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
@@ -536,47 +564,29 @@ export default function GymMusicPlayer() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Añadir</span>
             </button>
-
-          {!user ? (
-            <button
-              onClick={() => setAuthModalOpen(true)}
-              title="Login"
-              className="p-2.5 rounded-xl transition-all border bg-[#10b981]/10 border-[#10b981]/20 text-emerald-400 hover:bg-[#10b981]/20 hover:text-white flex items-center justify-center cursor-pointer shadow-[0_0_15px_rgba(16,185,129,0.1)]"
-            >
-              <Sparkles className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              onClick={logout}
-              title="Logout"
-              className="p-2.5 rounded-xl transition-all border bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-rose-500"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
+          </div>
         </div>
-      </div>
 
          {/* 2. MAIN SPLIT STAGE */}
-      <div className="flex-1 flex flex-col md:flex-row min-h-0 relative overflow-hidden">
-        {/* SIDEBAR: LIBRARY (Responsive layout: Horizontal on mobile, Vertical Column on desktop) */}
-        <div className="flex w-full md:w-[240px] flex-col bg-[#050505] border-b md:border-b-0 md:border-r border-white/5 shrink-0 overflow-hidden">
-            <div className="p-3 md:p-5 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full">
-                <div className="text-left">
-                    <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-                        Canales
+      <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
+        {/* SIDEBAR: LIBRARY (Responsive layout: Compact vertical column on mobile, spacious on desktop) */}
+        <div className="flex w-[90px] md:w-[220px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden">
+            <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full">
+                <div className="text-left w-full md:w-auto">
+                    <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center md:text-left">
+                        Canal
                     </h3>
                 </div>
                 <button 
                   onClick={handleAddNewCanalClick}
                   title="Añadir Nuevo Canal"
-                  className="p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 flex items-center justify-center shrink-0"
+                  className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
                 >
                   <Plus className="w-3.5 h-3.5 stroke-[3px]" />
                 </button>
             </div>
             
-            <div className="flex flex-row md:flex-col p-2 md:p-3 gap-2 overflow-x-auto md:overflow-y-auto scrollbar-hide shrink-0 min-w-0 w-full">
+            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full">
                 {userPlaylists.map(pl => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
@@ -585,19 +595,23 @@ export default function GymMusicPlayer() {
                         <button 
                           key={pl.id} 
                           onClick={() => selectPlaylist(pl)} 
-                          className={`group flex flex-row items-center gap-2 md:gap-3 p-1.5 md:px-3 md:py-2.5 rounded-xl transition-all text-left shrink-0 ${
+                          className={`group flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:px-3 md:py-2.5 rounded-xl transition-all text-center md:text-left shrink-0 ${
                             isSelected 
-                              ? 'bg-emerald-500/10 border-l-2 md:border-l-[3.5px] border-emerald-500 ring-1 ring-emerald-500/10' 
-                              : 'border-l-2 md:border-l-[3.5px] border-transparent hover:bg-white/[0.03]'
+                              ? 'bg-emerald-500/10 border-l-[3px] border-emerald-500 ring-1 ring-emerald-500/10' 
+                              : 'border-l-[3px] border-transparent hover:bg-white/[0.03]'
                           }`}
                         >
                             {/* Dynamic Premium Cover Art */}
-                            <div className={`relative w-8 h-8 md:w-12 md:h-12 rounded-lg md:rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-xs md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                            <div className={`relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-sm md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
                                 {/* Inner Gloss Sheen Overlay */}
                                 <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
                                 
-                                <span className="relative z-10 shrink-0 select-none filter drop-shadow">
-                                    {pl.icon && pl.icon !== "📂" && pl.icon !== "🎵" ? pl.icon : "🎧"}
+                                <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                                    {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                                        pl.icon
+                                    ) : (
+                                        <Headphones className="w-4 h-4 md:w-5 md:h-5 text-white/90" />
+                                    )}
                                 </span>
  
                                 {/* Hover Play Indicator Overlay */}
@@ -607,9 +621,9 @@ export default function GymMusicPlayer() {
                             </div>
  
                             {/* Info */}
-                            <div className="min-w-0 text-left">
-                                <p className={`text-[10px] md:text-[12px] font-black truncate leading-tight ${
-                                  isSelected ? 'text-emerald-400 font-extrabold' : 'text-slate-300 group-hover:text-white'
+                            <div className="min-w-0 text-center md:text-left">
+                                <p className={`text-[9px] md:text-[11px] font-black truncate leading-tight max-w-[70px] md:max-w-[130px] ${
+                                  isSelected ? 'text-emerald-400 font-extrabold' : 'text-slate-400 group-hover:text-white'
                                 }`}>
                                     {pl.name}
                                 </p>
@@ -621,6 +635,27 @@ export default function GymMusicPlayer() {
                     )
                 })}
             </div>
+
+            {/* INICIAR SESIÓN / REGISTRO BANNER ADAPTIVO */}
+            {!user && (
+              <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-emerald-500/5 flex flex-col items-stretch gap-2 shrink-0">
+                <div className="hidden md:block text-left shrink-0">
+                  <p className="text-[8px] font-black uppercase text-emerald-400 tracking-wider">
+                    ¿Administrador?
+                  </p>
+                  <p className="text-[8px] text-slate-500 font-bold mt-0.5">
+                    Gestiona canales
+                  </p>
+                </div>
+                <button
+                  onClick={() => setAuthModalOpen(true)}
+                  className="py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-[8px] md:text-[10px] rounded-lg md:rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1 active:scale-95"
+                >
+                  <LogIn className="w-3 h-3 md:w-3.5 md:h-3.5" />
+                  <span className="hidden md:inline">Conectar</span>
+                </button>
+              </div>
+            )}
         </div>
 
         {/* CONTAINER PLAYER + TRACKLIST */}
@@ -679,22 +714,24 @@ export default function GymMusicPlayer() {
                     <span>{formatTime(position)}</span>
                     <span>{formatTime(duration)}</span>
                   </div>
-                  <div className="w-full h-1 bg-white/15 rounded-full relative group shadow-inner">
+                  <div className="w-full py-2 relative flex items-center cursor-pointer">
                     <input
                       type="range"
                       min="0"
                       max={duration || 100}
                       value={position}
                       onChange={handleSeek}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-35"
+                      className="absolute inset-x-0 inset-y-1 w-full h-8 opacity-0 cursor-pointer z-40"
                     />
-                    <div
-                      className="h-full bg-emerald-500 rounded-full relative pointer-events-none"
-                      style={{
-                        width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
-                      }}
-                    >
-                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow-md translate-x-1/2" />
+                    <div className="w-full h-1.5 bg-white/10 rounded-full relative overflow-visible pointer-events-none">
+                      <div
+                        className="h-full bg-emerald-500 rounded-full relative"
+                        style={{
+                          width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                        }}
+                      >
+                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_10px_rgba(16,185,129,0.6)] translate-x-1/2" />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -758,15 +795,25 @@ export default function GymMusicPlayer() {
                   </div>
                 </div>
 
-                {/* Invisible embedding of SoundCloud API */}
-                <div className="absolute bottom-1 right-1 w-10 h-10 opacity-0 pointer-events-none overflow-hidden select-none">
+                {/* Invisible embedding of SoundCloud API optimized to prevent iOS Safari/Android active viewport suspension */}
+                <div 
+                  className="absolute bottom-1 right-1 w-[2px] h-[2px] opacity-[0.01] pointer-events-none overflow-hidden select-none z-0 bg-transparent"
+                  style={{ clip: "rect(1px, 1px, 1px, 1px)" }}
+                >
                   <iframe
                     id="sc-iframe"
                     key={currentUrl}
                     src={getEmbedUrl(currentUrl)}
                     allow="autoplay; encrypted-media"
                     loading="lazy"
-                    className="w-10 h-10 absolute top-0 left-0"
+                    className="w-1 h-1"
+                  />
+                  <audio
+                    ref={silentAudioRef}
+                    loop
+                    playsInline
+                    src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=="
+                    className="hidden"
                   />
                 </div>
 
@@ -798,6 +845,9 @@ export default function GymMusicPlayer() {
                   <button
                     key={track.id || idx}
                     onClick={() => {
+                      if (silentAudioRef.current) {
+                        silentAudioRef.current.play().catch(() => {});
+                      }
                       if (engineTracks.length > 0) {
                         widgetRef.current?.skip(idx);
                         setIsPlaying(true);
@@ -943,8 +993,12 @@ export default function GymMusicPlayer() {
                     >
                       <div className={`w-16 h-16 rounded-[24px] bg-gradient-to-tr ${getPlaylistGradientClass(pl.name)} flex items-center justify-center text-2xl shadow-lg relative overflow-hidden shrink-0 group-hover:scale-110 transition-transform duration-500`}>
                         <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                        <span className="relative z-10 shrink-0 select-none filter drop-shadow">
-                          {pl.icon && pl.icon !== "📂" && pl.icon !== "🎵" ? pl.icon : "🎧"}
+                        <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                          {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                            pl.icon
+                          ) : (
+                            <Headphones className="w-7 h-7 text-white/90" />
+                          )}
                         </span>
                       </div>
                       <div className="flex-1">

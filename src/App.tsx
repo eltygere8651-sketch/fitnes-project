@@ -1,103 +1,43 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
-  Dumbbell,
-  Flame,
-  Award,
-  CheckCircle,
   Music,
   MessageSquare,
-  Sparkles,
-  ChevronRight,
   Layers,
   Play,
-  TrendingUp,
-  CheckCircle2,
-  Activity,
-  Bell,
-  BookOpen,
   LogOut,
-  User as UserIcon,
   LogIn,
   Smartphone,
-  Download,
   Share2,
   X,
 } from "lucide-react";
 import AIPersonalizedRoutine from "./components/AIPersonalizedRoutine";
-import TechGuide from "./components/TechGuide";
 import AICoachChat from "./components/AICoachChat";
-import ProgressTracker from "./components/ProgressTracker";
 import GymMusicPlayer from "./components/GymMusicPlayer";
-import MotivationalNotifications from "./components/MotivationalNotifications";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
-import { loginWithGoogle, logout } from "./lib/firebase";
+import { logout } from "./lib/firebase";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 
 type TabType =
   | "routine"
-  | "guide"
   | "chat"
-  | "progress"
-  | "notifications"
   | "music";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
   const [activeTab, setActiveTab] = useState<TabType>("music");
-  const [activeStreak, setActiveStreak] = useState(4);
-  const [caloriesBurned, setCaloriesBurned] = useState(300);
-  const [exercisesCount, setExercisesCount] = useState(8);
   const [chatPrefilledExercise, setChatPrefilledExercise] = useState<
     string | null
   >(null);
-  const [todayCompleted, setTodayCompleted] = useState<string[]>([]);
-
-  useEffect(() => {
-    const savedStreak = localStorage.getItem("gym_streak_count");
-    if (savedStreak) setActiveStreak(parseInt(savedStreak));
-    const savedCal = localStorage.getItem("gym_calories_burned");
-    if (savedCal) setCaloriesBurned(parseInt(savedCal));
-    const savedExCount = localStorage.getItem("gym_exercises_count");
-    if (savedExCount) setExercisesCount(parseInt(savedExCount));
-    const savedTodayComp = localStorage.getItem("gym_today_completed");
-    if (savedTodayComp) {
-      try {
-        setTodayCompleted(JSON.parse(savedTodayComp));
-      } catch (e) {}
-    }
-  }, []);
-
-  const handleStreakUpdate = (count: number) => {
-    setActiveStreak(count);
-    localStorage.setItem("gym_streak_count", count.toString());
-  };
 
   const handleExerciseCompletedSimulated = (calories: number) => {
-    const nextCal = caloriesBurned + calories;
-    const nextCount = exercisesCount + 1;
-    setCaloriesBurned(nextCal);
-    setExercisesCount(nextCount);
-    localStorage.setItem("gym_calories_burned", nextCal.toString());
-    localStorage.setItem("gym_exercises_count", nextCount.toString());
+    // Silent workout completed telemetry callback
   };
 
   const handleAskCoachForExerciseName = (exerciseName: string) => {
     setChatPrefilledExercise(exerciseName);
     setActiveTab("chat");
-  };
-
-  const toggleTodayExercise = (exId: string) => {
-    let next: string[];
-    if (todayCompleted.includes(exId)) {
-      next = todayCompleted.filter((e) => e !== exId);
-    } else {
-      next = [...todayCompleted, exId];
-      handleExerciseCompletedSimulated(75);
-    }
-    setTodayCompleted(next);
-    localStorage.setItem("gym_today_completed", JSON.stringify(next));
   };
 
   // --- Progressive Web App (PWA) Install Logic ---
@@ -229,10 +169,7 @@ function AppContent() {
             {[
               { id: "music", icon: <Play className="w-4 h-4" /> },
               { id: "routine", icon: <Layers className="w-4 h-4" /> },
-              { id: "guide", icon: <BookOpen className="w-4 h-4" /> },
               { id: "chat", icon: <MessageSquare className="w-4 h-4" /> },
-              { id: "progress", icon: <TrendingUp className="w-4 h-4" /> },
-              { id: "notifications", icon: <Bell className="w-4 h-4" /> },
             ].map((tab) => {
               const isSelected = activeTab === tab.id;
               return (
@@ -253,83 +190,13 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className={`max-w-7xl w-full mx-auto ${
+      <main className={`w-full mx-auto ${
         activeTab === "music"
-          ? "px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[720px] min-h-[500px] overflow-hidden"
-          : "px-4 sm:px-6 lg:px-8"
-      } py-4 flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch`}>
-        {activeTab !== "music" && (
-          <aside className="lg:col-span-3 flex flex-col gap-6">
-            <div className="bg-[#111] p-5 rounded-[24px] border border-white/5">
-              <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-3 flex items-center justify-between">
-                <span>Constancia Semanal</span>
-                <span className="text-xs text-emerald-500 font-mono font-bold">
-                  4 / 7 Días
-                </span>
-              </h3>
-              <div className="flex flex-col gap-4">
-                <div className="flex justify-between items-end bg-black/40 p-3 rounded-[16px] border border-white/5">
-                  {[
-                    { tag: "L", h: "h-12" },
-                    { tag: "M", h: "h-16" },
-                    { tag: "M", h: "h-10" },
-                    { tag: "J", h: "h-20", active: true },
-                    { tag: "V", h: "h-3" },
-                    { tag: "S", h: "h-3" },
-                    { tag: "D", h: "h-3" },
-                  ].map((bar, i) => (
-                    <div key={i} className="flex flex-col items-center gap-2">
-                      <div className="h-20 w-3.5 bg-black/60 rounded-full overflow-hidden flex flex-col justify-end border border-white/5 shadow-inner">
-                        <motion.div
-                          initial={{ height: 0 }}
-                          animate={{ height: bar.active ? "80%" : bar.h }}
-                          className={`w-full ${bar.active ? "bg-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.8)] relative" : "bg-emerald-500/10"}`}
-                        >
-                          {bar.active && (
-                            <div className="absolute top-0 left-0 right-0 h-1 bg-white/40 blur-[2px]" />
-                          )}
-                        </motion.div>
-                      </div>
-                      <span className="text-[9px] font-mono font-bold text-slate-500">
-                        {bar.tag}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex justify-between items-center text-[11px]">
-                  <span className="text-slate-500 font-bold uppercase">
-                    Racha:
-                  </span>
-                  <span className="font-mono font-black text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
-                    ⚡ {activeStreak} Días
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-[#111] p-4.5 rounded-[20px] border border-white/5 text-center flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.1em]">
-                  Calorías Totales
-                </span>
-                <span className="text-lg font-mono font-black text-white mt-1">
-                  {caloriesBurned} Kcal
-                </span>
-              </div>
-              <div className="bg-[#111] p-4.5 rounded-[20px] border border-white/5 text-center flex flex-col justify-center">
-                <span className="text-[9px] font-bold text-slate-500 uppercase tracking-[0.1em]">
-                  Ejercicios Hechos
-                </span>
-                <span className="text-lg font-mono font-black text-white mt-1">
-                  {exercisesCount} Ejs
-                </span>
-              </div>
-            </div>
-          </aside>
-        )}
+          ? "max-w-7xl px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[720px] min-h-[500px] overflow-hidden"
+          : "max-w-4xl px-4 sm:px-6 lg:px-8"
+      } py-4 flex-1 flex flex-col gap-6`}>
 
-        <section
-          className={`${activeTab === "music" ? "lg:col-span-12 h-full overflow-hidden" : "lg:col-span-6"} flex flex-col gap-6`}
-        >
+        <section className="flex flex-col gap-6 flex-1">
           <div
             className={`rounded-[32px] overflow-hidden flex-1 ${activeTab === "music" ? "bg-transparent border-transparent h-full" : "bg-[#111] border border-white/5 p-4 sm:p-6"} flex flex-col`}
           >
@@ -340,23 +207,11 @@ function AppContent() {
                   onWorkoutSuccess={handleExerciseCompletedSimulated}
                 />
               )}
-              {activeTab === "guide" && (
-                <TechGuide onAskCoach={handleAskCoachForExerciseName} />
-              )}
               {activeTab === "chat" && (
                 <AICoachChat
                   prefilledExercise={chatPrefilledExercise}
                   onClosePrefill={() => setChatPrefilledExercise(null)}
                 />
-              )}
-              {activeTab === "progress" && (
-                <ProgressTracker
-                  onStreakUpdate={handleStreakUpdate}
-                  onWorkoutLogged={() => handleExerciseCompletedSimulated(75)}
-                />
-              )}
-              {activeTab === "notifications" && (
-                <MotivationalNotifications activeStreak={activeStreak} />
               )}
 
               <div
@@ -372,14 +227,13 @@ function AppContent() {
           </div>
 
           {activeTab !== "music" && (
-            <div className="bg-[#0c0c0d] rounded-3xl p-3.5 border border-white/5 flex items-center justify-between gap-4 shadow-2xl relative overflow-hidden group">
+            <div className="bg-[#0c0c0d] rounded-2xl p-3.5 border border-white/5 flex items-center justify-between gap-4 shadow-2xl relative overflow-hidden group">
               <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
               <div className="flex items-center gap-4">
                 <div className="relative">
                   <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 border border-emerald-500/20 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-shadow">
                     <Music className="w-5 h-5 animate-pulse" />
                   </div>
-                  <div className="absolute -bottom-1 -right-1 w-3 h-3 bg-emerald-500 rounded-full border-2 border-[#0c0c0d]" />
                 </div>
                 <div className="flex flex-col">
                   <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500 mb-0.5">
@@ -399,83 +253,6 @@ function AppContent() {
             </div>
           )}
         </section>
-
-        {activeTab !== "music" && (
-          <aside className="lg:col-span-3 flex flex-col gap-6">
-            <div className="bg-[#111] rounded-[24px] p-6 border border-white/5 flex-1 flex flex-col justify-between">
-              <div>
-                <div className="flex justify-between items-center mb-5">
-                  <h3 className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">
-                    Hoy Entrenas:
-                  </h3>
-                  <span className="text-[10px] font-mono leading-none py-1 px-2 rounded-full bg-white/5 text-slate-400 font-semibold border border-white/10 text-center">
-                    Fullbody
-                  </span>
-                </div>
-                <div className="space-y-4">
-                  {[
-                    {
-                      id: "ex1",
-                      name: "Calentamiento Pro",
-                      desc: "Movilidad articular",
-                    },
-                    {
-                      id: "ex2",
-                      name: "Sentadilla Copa",
-                      desc: "Forma vertical",
-                    },
-                    {
-                      id: "ex3",
-                      name: "Flexiones Soporte",
-                      desc: "Codos adentro",
-                    },
-                    {
-                      id: "ex4",
-                      name: "Bicho Muerto Core",
-                      desc: "Ombligo adentro",
-                    },
-                    {
-                      id: "ex5",
-                      name: "Plancha Apoyos",
-                      desc: "Espalda paralela",
-                    },
-                  ].map((item) => {
-                    const isChecked = todayCompleted.includes(item.id);
-                    return (
-                      <div
-                        key={item.id}
-                        className={`relative pl-8 border-l-2 transition-all ${isChecked ? "border-emerald-500 opacity-60" : "border-white/10"}`}
-                      >
-                        <button
-                          onClick={() => toggleTodayExercise(item.id)}
-                          className={`absolute -left-[9px] top-0 w-4.5 h-4.5 rounded-full ring-4 ring-[#111] transition flex items-center justify-center ${isChecked ? "bg-emerald-500 text-black" : "bg-white/10 text-transparent"}`}
-                        >
-                          <span className="text-[8px] font-bold">✓</span>
-                        </button>
-                        <div
-                          className="cursor-pointer select-none"
-                          onClick={() => toggleTodayExercise(item.id)}
-                        >
-                          <p
-                            className={`text-[10px] font-black tracking-tight ${isChecked ? "text-emerald-500" : "text-slate-500"}`}
-                          >
-                            {isChecked ? "COMPLETADO" : "PENDIENTE"}
-                          </p>
-                          <p className="text-xs font-black text-white mt-0.5">
-                            {item.name}
-                          </p>
-                          <p className="text-[10px] font-bold text-slate-400 leading-none">
-                            {item.desc}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </div>
-          </aside>
-        )}
       </main>
 
       <footer className="py-8 text-center mt-auto">

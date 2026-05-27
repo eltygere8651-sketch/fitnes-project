@@ -10,23 +10,31 @@ import {
   Smartphone,
   Share2,
   X,
+  BookOpen,
+  Activity,
+  Bell,
+  Download
 } from "lucide-react";
 import AIPersonalizedRoutine from "./components/AIPersonalizedRoutine";
 import AICoachChat from "./components/AICoachChat";
 import GymMusicPlayer from "./components/GymMusicPlayer";
+import Dashboard from "./components/Dashboard";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout } from "./lib/firebase";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 
 type TabType =
-  | "routine"
+  | "music"
+  | "dashboard"
+  | "book"
   | "chat"
-  | "music";
+  | "activity"
+  | "bell";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
-  const [activeTab, setActiveTab] = useState<TabType>("music");
+  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
   const [chatPrefilledExercise, setChatPrefilledExercise] = useState<
     string | null
   >(null);
@@ -96,80 +104,75 @@ function AppContent() {
       className="min-h-screen bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
     >
       {/* PREMIUM STICKY HEADER & NAVIGATION */}
-      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0">
-        
-        {/* TOP STATUS ROW: NATIVO OPTIMIZADO + CONNECT ACCOUNT */}
-        <div className="w-full px-6 pt-3 pb-1.5 flex items-center justify-between gap-4">
-          {/* Status Badge */}
-          <div className="flex items-center gap-1.5 text-[9px] text-emerald-400 font-extrabold tracking-widest bg-emerald-500/10 border border-emerald-500/20 px-2.5 py-1 rounded-full uppercase">
-            <Smartphone className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-            <span>Nativo Optimizado</span>
-          </div>
-
-          {/* Connect Account Action Trigger */}
-          <div className="flex items-center gap-3">
-            {user ? (
-              <div 
-                onClick={logout}
-                title="Cerrar Sesión"
-                className="flex items-center gap-2 group cursor-pointer bg-white/5 hover:bg-white/10 border border-white/10 px-2.5 py-1 rounded-full transition-all"
-              >
-                <span className="text-[9px] font-black uppercase text-slate-400 group-hover:text-rose-400 tracking-wider transition-colors max-w-[70px] truncate">
-                  {user.displayName || user.email?.split("@")[0]}
+      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-12 sm:pt-4 pb-1">
+        <div className="w-full mb-3 px-6 flex items-center justify-between">
+          {/* LEFT: Nativo Optimizado (cleaner, smaller) */}
+          <div className="flex-1 flex justify-start">
+             <button
+                onClick={handleInstallPress}
+                className="flex items-center gap-2 px-3 py-1.5 sm:px-4 sm:py-2 rounded-full border border-emerald-500/30 text-white bg-transparent hover:bg-emerald-500/10 transition-colors"
+                title="Instalar App Móvil"
+             >
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500" />
+                <span className="text-[9px] sm:text-[10px] font-black uppercase tracking-wider hidden sm:block">
+                  Instalar App Móvil
                 </span>
-                <div className="relative w-5 h-5 rounded-full overflow-hidden ring-1 ring-emerald-500/30">
-                  <img
-                    src={user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName || user.email}&background=10b981&color=fff`}
-                    className="w-full h-full object-cover"
-                    alt="avatar"
-                  />
+                <span className="text-[10px] font-black uppercase tracking-wider block sm:hidden">
+                  Instalar
+                </span>
+             </button>
+          </div>
+
+          {/* CENTER: LOGO BRAND */}
+          <div className="flex flex-col items-center justify-center shrink-0">
+            <div 
+              onClick={() => setActiveTab("music")} 
+              className="flex items-center gap-2.5 group cursor-pointer select-none"
+            >
+              <div className="relative">
+                <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
+                  <Music className="w-4.5 h-4.5 text-black" />
+                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
                 </div>
-                <LogOut className="w-3 h-3 text-slate-500 group-hover:text-rose-400 transition-colors shrink-0" />
               </div>
-            ) : (
-              <button
-                onClick={() => setAuthModalOpen(true)}
-                disabled={authLoading}
-                className="flex items-center gap-1.5 text-[9px] font-black uppercase tracking-widest text-emerald-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <LogIn className="w-3.5 h-3.5" />
-                <span>Connect Account</span>
-              </button>
-            )}
+              <div className="flex flex-col">
+                <span className="text-lg font-black tracking-[0.16em] text-white uppercase italic leading-none">
+                  BIENVE
+                </span>
+                <span className="text-[8px] font-black tracking-[0.32em] text-[#10b981] uppercase leading-none mt-1 opacity-90">
+                  MUSIC APP
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Status or Empty Space */}
+          <div className="flex-1 flex justify-end">
+            <button
+              onClick={() => {
+                if (user) logout();
+                else setAuthModalOpen(true);
+              }}
+              className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors group cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-emerald-400" />
+              <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest hidden sm:block">
+                {user ? "Cerrar Sesión" : "CONNECT ACCOUNT"}
+              </span>
+            </button>
           </div>
         </div>
 
-        {/* LOGO BRAND: BIENVE MUSIC APP (CENTERED) */}
-        <div className="flex flex-col items-center justify-center py-2 shrink-0">
-          <div 
-            onClick={() => setActiveTab("music")} 
-            className="flex items-center gap-3 group cursor-pointer select-none"
-          >
-            <div className="relative">
-              <div className="w-11 h-11 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
-                <Music className="w-5.5 h-5.5 text-black" />
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
-              </div>
-              <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-emerald-400 rounded-full animate-pulse border border-[#080809]" />
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xl font-black tracking-[0.16em] text-white uppercase italic leading-none">
-                BIENVE
-              </span>
-              <span className="text-[10px] font-black tracking-[0.32em] text-[#10b981] uppercase leading-none mt-1 opacity-90">
-                MUSIC APP
-              </span>
-            </div>
-          </div>
-        </div>
-
-        {/* COMPACT FLOATING NAVIGATION PILL ROW (CENTERED, LABEL-FREE) */}
-        <div className="pb-4 pt-1 flex justify-center w-full px-4">
+        {/* COMPACT FLOATING NAVIGATION PILL ROW */}
+        <div className="pb-4 mt-1 flex justify-center w-full px-4">
           <div className="flex bg-[#111]/80 backdrop-blur-md p-1 rounded-2xl items-center gap-1 border border-white/5 shadow-2xl shrink-0 max-w-full overflow-x-auto scrollbar-none">
             {[
               { id: "music", icon: <Play className="w-4 h-4" /> },
-              { id: "routine", icon: <Layers className="w-4 h-4" /> },
+              { id: "dashboard", icon: <Layers className="w-4 h-4" /> },
+              { id: "book", icon: <BookOpen className="w-4 h-4" /> },
               { id: "chat", icon: <MessageSquare className="w-4 h-4" /> },
+              { id: "activity", icon: <Activity className="w-4 h-4" /> },
+              { id: "bell", icon: <Bell className="w-4 h-4" /> },
             ].map((tab) => {
               const isSelected = activeTab === tab.id;
               return (
@@ -201,7 +204,10 @@ function AppContent() {
             className={`rounded-[32px] overflow-hidden flex-1 ${activeTab === "music" ? "bg-transparent border-transparent h-full" : "bg-[#111] border border-white/5 p-4 sm:p-6"} flex flex-col`}
           >
             <div className={`flex-1 relative ${activeTab === "music" ? "h-full overflow-hidden" : ""}`}>
-              {activeTab === "routine" && (
+              {activeTab === "dashboard" && (
+                <Dashboard />
+              )}
+              {activeTab === "book" && (
                 <AIPersonalizedRoutine
                   onAskCoachExercise={handleAskCoachForExerciseName}
                   onWorkoutSuccess={handleExerciseCompletedSimulated}

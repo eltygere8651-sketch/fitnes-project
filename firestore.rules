@@ -28,13 +28,11 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow create: if isOwner(userId) && isValidUser(incoming());
       allow update: if isOwner(userId) && isValidUser(incoming()) && (
-        incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoURL', 'lastLogin'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['email', 'displayName', 'photoURL', 'lastLogin'])
       );
       
       function isValidUser(data) {
-        return data.keys().hasAll(['email', 'lastLogin']) &&
-               data.email is string &&
-               data.lastLogin is timestamp;
+        return data.keys().hasAny(['email', 'lastLogin']);
       }
     }
 

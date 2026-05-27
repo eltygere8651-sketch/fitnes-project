@@ -1,4 +1,4 @@
-const CACHE_NAME = "bienve-music-app-v1";
+const CACHE_NAME = "bienve-music-app-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
@@ -9,7 +9,6 @@ const ASSETS_TO_CACHE = [
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      // Warm up cache, ignore errors for local assets during development
       return cache.addAll(ASSETS_TO_CACHE).catch(() => {});
     })
   );
@@ -37,22 +36,17 @@ self.addEventListener("fetch", (event) => {
   }
   
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
-        if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
-          return networkResponse;
-        }
-        const responseToCache = networkResponse.clone();
-        caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseToCache);
-        });
+    fetch(event.request).then((networkResponse) => {
+      if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== "basic") {
         return networkResponse;
-      }).catch(() => {
-        // Safe offline response for pages if needed
+      }
+      const responseToCache = networkResponse.clone();
+      caches.open(CACHE_NAME).then((cache) => {
+        cache.put(event.request, responseToCache);
       });
+      return networkResponse;
+    }).catch(() => {
+      return caches.match(event.request);
     })
   );
 });

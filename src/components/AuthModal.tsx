@@ -25,7 +25,16 @@ export const AuthModal: React.FC = () => {
       setAuthModalOpen(false);
     } catch (err: any) {
       console.error(err);
-      setErrorMsg(err?.message || "Error al iniciar sesión con Google.");
+      if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
+        setErrorMsg("Google cerró la ventana. Si esto se repite, asegúrate de haber añadido este dominio (ais-pre-yq53473i73hkntpv553kmj-352265948901.europe-west2.run.app) a los Dominios Autorizados en la consola de Firebase.");
+        setIsLoading(false);
+        return;
+      }
+      if (err?.code === "auth/unauthorized-domain") {
+        setErrorMsg("Dominio no autorizado. Ve a Firebase Console -> Authentication -> Settings y añade este dominio a la lista de Autorizados.");
+      } else {
+        setErrorMsg(err?.message || "Error al iniciar sesión con Google.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -120,23 +129,20 @@ export const AuthModal: React.FC = () => {
           </div>
 
           {/* Header content (Static) */}
-          <div className="p-6 pb-2 text-center shrink-0">
-            <div className="mx-auto w-10 h-10 bg-emerald-500/10 text-emerald-400 rounded-2xl border border-emerald-500/20 flex items-center justify-center mb-3">
-              <Sparkles className="w-5 h-5 animate-pulse" />
-            </div>
-            <h2 className="text-lg font-black uppercase tracking-wider text-white">
-              Acceso de Administrador
+          <div className="p-6 pb-4 text-center shrink-0 border-b border-white/5">
+            <h2 className="text-xl font-black uppercase tracking-wider text-emerald-400">
+              ACCESO AL SISTEMA
             </h2>
-            <p className="text-[10px] text-slate-400 mt-1 px-4 leading-relaxed">
-              Inicia sesión o regístrate con tu correo y contraseña, o mediante Google para guardar y sincronizar playlists.
+            <p className="text-[11px] text-slate-400 mt-1 px-4 leading-relaxed font-bold">
+              Inicia sesión o regístrate usando tu Correo Electrónico.
             </p>
           </div>
 
           {/* Scrollable content container for perfect mobile/iOS viewport support */}
-          <div className="overflow-y-auto px-6 pb-6 pt-1 space-y-4 max-h-[62vh] scrollbar-thin scrollbar-thumb-white/5">
+          <div className="overflow-y-auto px-6 pb-6 pt-4 space-y-4 max-h-[62vh] scrollbar-thin scrollbar-thumb-white/5 flex flex-col items-center">
             
             {/* Tabs picker */}
-            <div className="flex bg-white/5 p-1 rounded-xl gap-1 border border-white/[0.03]">
+            <div className="flex bg-white/5 p-1 rounded-xl gap-1 border border-white/[0.03] w-full mb-2">
               <button
                 type="button"
                 onClick={() => {
@@ -172,7 +178,7 @@ export const AuthModal: React.FC = () => {
             </div>
 
             {/* Email + Password Form */}
-            <form onSubmit={handleEmailAction} className="space-y-3.5 pt-1">
+            <form onSubmit={handleEmailAction} className="space-y-4 pt-1 w-full">
               {/* Target alerts */}
               {errorMsg && (
                 <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-start gap-2">
@@ -260,7 +266,7 @@ export const AuthModal: React.FC = () => {
             </form>
 
             {/* Separator bar */}
-            <div className="relative flex py-1 items-center">
+            <div className="relative flex py-1 items-center w-full">
               <div className="flex-grow border-t border-white/5" />
               <span className="flex-shrink mx-3 text-[8px] font-black uppercase text-slate-500 tracking-widest">
                 O también con

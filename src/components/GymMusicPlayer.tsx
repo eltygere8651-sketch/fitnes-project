@@ -125,8 +125,15 @@ export default function GymMusicPlayer() {
         silentAudioRef.current.pause();
       }
     }
-    if (widgetRef.current) widgetRef.current.toggle();
-    else setIsPlaying(!isPlaying);
+    const nextPlaying = !isPlaying;
+    setIsPlaying(nextPlaying);
+    if (widgetRef.current) {
+      if (nextPlaying) {
+        widgetRef.current.play();
+      } else {
+        widgetRef.current.pause();
+      }
+    }
   }, [isPlaying]);
 
   const handleNext = useCallback(() => {
@@ -220,15 +227,6 @@ export default function GymMusicPlayer() {
     return () => unsubscribe();
   }, [user]);
 
-  useEffect(() => {
-    if (!(window as any).SC) {
-      const script = document.createElement("script");
-      script.src = "https://w.soundcloud.com/player/api.js";
-      script.async = true;
-      document.body.appendChild(script);
-    }
-  }, []);
-
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -298,6 +296,20 @@ export default function GymMusicPlayer() {
       });
     }
   }, []);
+
+  useEffect(() => {
+    if (!(window as any).SC) {
+      const script = document.createElement("script");
+      script.src = "https://w.soundcloud.com/player/api.js";
+      script.async = true;
+      script.onload = () => {
+        initWidget();
+      };
+      document.body.appendChild(script);
+    } else {
+      initWidget();
+    }
+  }, [initWidget]);
 
   useEffect(() => {
     if (widgetRef.current) {
@@ -410,6 +422,9 @@ export default function GymMusicPlayer() {
   };
 
   const selectPlaylist = (playlist: MusicPlaylist) => {
+    if (silentAudioRef.current) {
+      silentAudioRef.current.play().catch(() => {});
+    }
     setCustomUrl("");
     setSelectedPlaylist(playlist);
     setCurrentTrackIndex(0);
@@ -420,6 +435,9 @@ export default function GymMusicPlayer() {
     setDuration(0);
     setIsPlaying(true);
     setShowLibrary(false);
+    if (widgetRef.current) {
+      // If widget is already ready but URL changes, mobile still trusts the gesture context here if load is immediate, but we rely on reinit
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -490,10 +508,13 @@ export default function GymMusicPlayer() {
     }
   };
 
-  const getEmbedUrl = (url: string) => {
+  const getEmbedUrl = (url: string, autoPlay: boolean = false) => {
     const encodedUrl = encodeURIComponent(url);
-    return `https://w.soundcloud.com/player/?url=${encodedUrl}&color=%2310b981&auto_play=false&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_playcount=false&buying=false&sharing=false&download=false`;
+    const autoPlayParam = autoPlay ? "true" : "false";
+    return `https://w.soundcloud.com/player/?url=${encodedUrl}&color=%2310b981&auto_play=${autoPlayParam}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_playcount=false&buying=false&sharing=false&download=false`;
   };
+
+  const iframeSrc = React.useMemo(() => getEmbedUrl(currentUrl, isPlaying), [currentUrl]);
 
   // --- DERIVED UI STATES ---
   const displayTracks =
@@ -570,9 +591,9 @@ export default function GymMusicPlayer() {
          {/* 2. MAIN SPLIT STAGE */}
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
         {/* SIDEBAR: LIBRARY (Responsive layout: Compact vertical column on mobile, spacious on desktop) */}
-        <div className="flex w-[90px] md:w-[220px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden">
-            <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full">
-                <div className="text-left w-full md:w-auto">
+        <div className="flex w-[80px] md:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden z-30">
+            <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full h-auto">
+                <div className="text-center md:text-left w-full md:w-auto">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center md:text-left">
                         Canal
                     </h3>
@@ -586,7 +607,7 @@ export default function GymMusicPlayer() {
                 </button>
             </div>
             
-            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full">
+            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full items-center md:items-stretch">
                 {userPlaylists.map(pl => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
@@ -595,7 +616,7 @@ export default function GymMusicPlayer() {
                         <button 
                           key={pl.id} 
                           onClick={() => selectPlaylist(pl)} 
-                          className={`group flex flex-col md:flex-row items-center gap-1 md:gap-3 p-2 md:px-3 md:py-2.5 rounded-xl transition-all text-center md:text-left shrink-0 ${
+                          className={`group flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-1.5 flex-wrap md:flex-nowrap md:px-3 md:py-2.5 rounded-xl transition-all text-center md:text-left shrink-0 ${
                             isSelected 
                               ? 'bg-emerald-500/10 border-l-[3px] border-emerald-500 ring-1 ring-emerald-500/10' 
                               : 'border-l-[3px] border-transparent hover:bg-white/[0.03]'
@@ -649,10 +670,10 @@ export default function GymMusicPlayer() {
                 </div>
                 <button
                   onClick={() => setAuthModalOpen(true)}
-                  className="py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-[8px] md:text-[10px] rounded-lg md:rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1 active:scale-95"
+                  className="py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-[10px] rounded-lg md:rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 active:scale-95"
                 >
-                  <LogIn className="w-3 h-3 md:w-3.5 md:h-3.5" />
-                  <span className="hidden md:inline">Conectar</span>
+                  <LogIn className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span>Iniciar Sesión</span>
                 </button>
               </div>
             )}
@@ -662,151 +683,130 @@ export default function GymMusicPlayer() {
         <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
             
           {/* COMPACT PLAYER BAR (Integrated at the top) */}
-          <div className="flex-none bg-[#0a0a0b] border-b border-white/5 p-4 sm:p-5 relative overflow-hidden shrink-0 shadow-lg">
+          <div className="flex-none bg-[#0a0a0b] border-b border-white/5 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-lg">
             {/* Subtle bottom neon-accent decoration */}
             <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400 to-transparent" />
             
             {selectedPlaylist ? (
-              <div className="flex flex-col md:flex-row gap-4 items-center justify-between w-full max-w-6xl mx-auto">
+              <div className="flex flex-col gap-3 sm:gap-4 items-center justify-center w-full max-w-2xl mx-auto">
                 
-                {/* Left Column: Rotating Artwork + Info */}
-                <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto min-w-0">
-                  <div className="relative shrink-0">
-                    <AnimatePresence>
-                      {isPlaying && (
-                        <motion.div
-                          initial={{ scale: 0.8, opacity: 0 }}
-                          animate={{ scale: 1.1, opacity: 1 }}
-                          exit={{ scale: 0.8, opacity: 0 }}
-                          className="absolute -inset-2 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
-                        />
-                      )}
-                    </AnimatePresence>
-                    <motion.div
-                      animate={{ rotate: isPlaying ? 360 : 0 }}
-                      transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                      className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-lg border border-white/10 ${isPlaying ? "border-emerald-500/45" : ""}`}
-                    >
-                      <img
-                        src={displayArtwork}
-                        alt="Artwork"
-                        className="w-full h-full object-cover"
-                      />
-                      {/* Vinyl Record Center Hole Decor */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="w-2.5 h-2.5 sm:w-4 sm:h-4 bg-[#080809] rounded-full border border-white/20" />
-                      </div>
-                    </motion.div>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <h1 className="text-xs sm:text-md font-black text-white uppercase tracking-tight truncate max-w-[180px] sm:max-w-[260px]">
-                      {displayTitle}
-                    </h1>
-                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[150px]">
-                      {displayArtist}
-                    </p>
-                  </div>
-                </div>
-
-                {/* Center Column: Progress Timeline */}
-                <div className="flex-1 w-full md:max-w-md lg:max-w-xl flex flex-col gap-1.5 justify-center py-1">
-                  <div className="flex items-center justify-between text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest px-1">
-                    <span>{formatTime(position)}</span>
-                    <span>{formatTime(duration)}</span>
-                  </div>
-                  <div className="w-full py-2 relative flex items-center cursor-pointer">
-                    <input
-                      type="range"
-                      min="0"
-                      max={duration || 100}
-                      value={position}
-                      onChange={handleSeek}
-                      className="absolute inset-x-0 inset-y-1 w-full h-8 opacity-0 cursor-pointer z-40"
-                    />
-                    <div className="w-full h-1.5 bg-white/10 rounded-full relative overflow-visible pointer-events-none">
-                      <div
-                        className="h-full bg-emerald-500 rounded-full relative"
-                        style={{
-                          width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
-                        }}
+                {/* UP/CENTER: Artwork + Title centered visually */}
+                <div className="flex items-center justify-center w-full min-w-0 px-2">
+                  <div className="flex items-center justify-center gap-3 sm:gap-4 max-w-full">
+                    <div className="relative shrink-0">
+                      <AnimatePresence>
+                        {isPlaying && (
+                          <motion.div
+                            initial={{ scale: 0.8, opacity: 0 }}
+                            animate={{ scale: 1.1, opacity: 1 }}
+                            exit={{ scale: 0.8, opacity: 0 }}
+                            className="absolute -inset-1.5 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
+                          />
+                        )}
+                      </AnimatePresence>
+                      <motion.div
+                        animate={{ rotate: isPlaying ? 360 : 0 }}
+                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                        className={`relative z-10 w-11 h-11 sm:w-14 sm:h-14 rounded-full overflow-hidden shadow-lg border border-white/10 ${isPlaying ? "border-emerald-500/45" : ""}`}
                       >
-                        <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-white rounded-full shadow-[0_0_10px_rgba(16,185,129,0.6)] translate-x-1/2" />
-                      </div>
+                        <img
+                          src={displayArtwork}
+                          alt="Artwork"
+                          className="w-full h-full object-cover"
+                        />
+                        {/* Vinyl Record Center Hole Decor */}
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          <div className="w-2.5 h-2.5 bg-[#080809] rounded-full border border-white/20" />
+                        </div>
+                      </motion.div>
+                    </div>
+                    <div className="flex flex-col min-w-0 shrink justify-center">
+                      <h1 className="text-[11px] sm:text-sm font-black text-white uppercase tracking-tight truncate max-w-[200px] sm:max-w-[320px] text-left">
+                        {displayTitle}
+                      </h1>
+                      <p className="text-[8px] sm:text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[180px] sm:max-w-[300px] text-left">
+                        {displayArtist}
+                      </p>
                     </div>
                   </div>
                 </div>
 
-                {/* Right Column: Key Playback Controls */}
-                <div className="flex items-center justify-between sm:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-white/[0.03] pt-2 md:pt-0 md:border-t-0">
-                  {/* Slim Responsive Volume Bar */}
-                  <div className="hidden sm:flex items-center gap-2 w-20 opacity-60 hover:opacity-100 transition-opacity">
-                    <Volume2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                    <div className="flex-1 h-1 bg-white/15 rounded-full relative group">
-                      <input
-                        type="range"
-                        min="0"
-                        max="100"
-                        value={volume}
-                        onChange={(e) =>
-                          handleVolumeChange(parseInt(e.target.value))
-                        }
-                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
-                      />
-                      <div
-                        className="h-full bg-emerald-500 rounded-full"
-                        style={{ width: `${volume}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+                {/* BOTTOM/CENTER: Timeline + Controls combined */}
+                <div className="flex flex-col w-full max-w-md gap-3 sm:gap-4 px-4 sm:px-0">
+                  
+                  {/* Controls Row */}
+                  <div className="flex items-center justify-center gap-5 sm:gap-6 w-full">
                     <button
                       onClick={() => setIsShuffle(!isShuffle)}
                       title="Aleatorio"
-                      className={`p-1.5 transition-all transform hover:scale-115 ${isShuffle ? "text-emerald-500 bg-emerald-500/10 rounded-full" : "text-slate-500 hover:text-white"}`}
+                      className={`p-1.5 sm:p-2 transition-all transform hover:scale-115 ${isShuffle ? "text-emerald-500 bg-emerald-500/10 rounded-full" : "text-slate-500 hover:text-white"}`}
                     >
                       <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     </button>
                     <button
                       onClick={handlePrev}
                       title="Anterior"
-                      className="p-1.5 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                      className="p-1.5 sm:p-2 text-slate-500 hover:text-white transition-all transform hover:scale-115"
                     >
-                      <SkipBack className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                      <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                     <motion.button
                       whileTap={{ scale: 0.92 }}
                       onClick={togglePlayback}
-                      className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${isPlaying ? "bg-emerald-500 text-black shadow-emerald-500/20 animate-pulse-slow" : "bg-white text-black hover:bg-slate-200"}`}
+                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${isPlaying ? "bg-emerald-500 text-black shadow-emerald-500/20 animate-pulse-slow" : "bg-white text-black hover:bg-slate-200"}`}
                     >
                       {isPlaying ? (
-                        <Pause className="w-4.5 h-4.5 fill-black" />
+                        <Pause className="w-4.5 h-4.5 sm:w-5 sm:h-5 fill-black" />
                       ) : (
-                        <Play className="w-4.5 h-4.5 fill-black ml-0.5" />
+                        <Play className="w-4.5 h-4.5 sm:w-5 sm:h-5 fill-black ml-0.5" />
                       )}
                     </motion.button>
                     <button
                       onClick={handleNext}
                       title="Siguiente"
-                      className="p-1.5 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                      className="p-1.5 sm:p-2 text-slate-500 hover:text-white transition-all transform hover:scale-115"
                     >
-                      <SkipForward className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                      <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
+                  </div>
+
+                  {/* Progress Timeline Row */}
+                  <div className="flex items-center justify-between gap-3 text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest w-full">
+                    <span className="w-8 text-right shrink-0">{formatTime(position)}</span>
+                    <div className="flex-1 py-1.5 relative flex items-center cursor-pointer min-w-0">
+                      <input
+                        type="range"
+                        min="0"
+                        max={duration || 100}
+                        value={position}
+                        onChange={handleSeek}
+                        className="absolute inset-x-0 inset-y-0 w-full h-full opacity-0 cursor-pointer z-40"
+                      />
+                      <div className="w-full h-1 bg-white/10 rounded-full relative overflow-visible pointer-events-none">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full relative"
+                          style={{
+                            width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                          }}
+                        >
+                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] translate-x-1/2" />
+                        </div>
+                      </div>
+                    </div>
+                    <span className="w-8 text-left shrink-0">{formatTime(duration)}</span>
                   </div>
                 </div>
 
                 {/* Invisible embedding of SoundCloud API optimized to prevent iOS Safari/Android active viewport suspension */}
                 <div 
-                  className="absolute bottom-1 right-1 w-[2px] h-[2px] opacity-[0.01] pointer-events-none overflow-hidden select-none z-0 bg-transparent"
-                  style={{ clip: "rect(1px, 1px, 1px, 1px)" }}
+                  className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0"
                 >
                   <iframe
                     id="sc-iframe"
                     key={currentUrl}
-                    src={getEmbedUrl(currentUrl)}
+                    src={iframeSrc}
                     allow="autoplay; encrypted-media"
-                    loading="lazy"
-                    className="w-1 h-1"
+                    className="w-[300px] h-[300px]"
                   />
                   <audio
                     ref={silentAudioRef}
@@ -850,6 +850,7 @@ export default function GymMusicPlayer() {
                       }
                       if (engineTracks.length > 0) {
                         widgetRef.current?.skip(idx);
+                        widgetRef.current?.play();
                         setIsPlaying(true);
                       } else {
                         setCurrentTrackIndex(idx);

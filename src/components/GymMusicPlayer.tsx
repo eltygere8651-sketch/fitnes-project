@@ -54,6 +54,20 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
   },
 ];
 
+const getPlaylistGradientClass = (name: string) => {
+  const hash = name.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
+  const gradients = [
+    "from-purple-600 via-indigo-700 to-blue-950",
+    "from-emerald-600 via-teal-700 to-cyan-950",
+    "from-rose-600 via-pink-700 to-red-950",
+    "from-amber-600 via-orange-700 to-yellow-950",
+    "from-blue-600 via-purple-700 to-pink-950",
+    "from-fuchsia-600 via-purple-700 to-violet-950",
+    "from-red-600 via-rose-700 to-indigo-950",
+  ];
+  return gradients[hash % gradients.length];
+};
+
 export default function GymMusicPlayer() {
   const { user, loading: authLoading } = useFirebase();
   const isAdmin = user?.email === "eltygere8651@gmail.com";
@@ -540,281 +554,334 @@ export default function GymMusicPlayer() {
       </div>
 
       {/* 2. MAIN SPLIT STAGE */}
-      <div className="flex-1 flex flex-col lg:flex-row min-h-0 relative overflow-y-auto lg:overflow-hidden scrollbar-hide">
-        {/* SIDEBAR: LIBRARY (New) */}
-        <div className="hidden lg:flex w-64 flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-y-auto">
-            <div className="p-4 flex items-center justify-between">
-                <h3 className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-600">Canales</h3>
+      <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
+        {/* SIDEBAR: LIBRARY (Redesigned & High-Performance) */}
+        <div className="flex w-[72px] sm:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-y-auto scrollbar-hide">
+            <div className="p-3 sm:p-5 border-b border-white/[0.03] shrink-0 flex items-center justify-between">
+                <div className="text-center sm:text-left">
+                    <h3 className="hidden sm:block text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
+                        Canales
+                    </h3>
+                    <h3 className="block sm:hidden text-center text-[8px] font-black uppercase text-slate-500 tracking-[0.05em]">
+                        Canal
+                    </h3>
+                </div>
+                {user && (
+                  <button 
+                    onClick={() => {
+                      setIsAdding(true);
+                      setShowLibrary(false);
+                    }}
+                    title="Añadir Nuevo Canal"
+                    className="p-1.5 sm:p-2 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95"
+                  >
+                    <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 stroke-[3px]" />
+                  </button>
+                )}
             </div>
-            <div className="flex flex-col">
-                {userPlaylists.map(pl => (
-                    <button 
-                      key={pl.id} 
-                      onClick={() => selectPlaylist(pl)} 
-                      className={`group w-full flex items-center gap-3 px-4 py-3 transition-all text-left ${selectedPlaylist?.id === pl.id ? 'bg-white/5 border-l-2 border-emerald-500' : 'border-l-2 border-transparent hover:bg-white/[0.02]'}`}
-                    >
-                        <span className="text-sm shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
-                            {pl.icon}
-                        </span>
-                        <div className="min-w-0">
-                            <p className={`text-[12px] font-medium truncate ${selectedPlaylist?.id === pl.id ? 'text-white' : 'text-slate-400 group-hover:text-slate-200'}`}>{pl.name}</p>
-                        </div>
-                    </button>
-                ))}
+            
+            <div className="flex-1 flex flex-col p-1.5 sm:p-3 gap-2">
+                {userPlaylists.map(pl => {
+                    const isSelected = selectedPlaylist?.id === pl.id;
+                    const gradient = getPlaylistGradientClass(pl.name);
+                    
+                    return (
+                        <button 
+                          key={pl.id} 
+                          onClick={() => selectPlaylist(pl)} 
+                          className={`group w-full flex flex-col sm:flex-row items-center gap-2 sm:gap-3 p-2 sm:px-3 sm:py-2.5 rounded-xl transition-all text-left ${
+                            isSelected 
+                              ? 'bg-emerald-500/10 border-l-[3.5px] border-emerald-500 ring-1 ring-emerald-500/10' 
+                              : 'border-l-[3.5px] border-transparent hover:bg-white/[0.03]'
+                          }`}
+                        >
+                            {/* Dynamic Premium Cover Art */}
+                            <div className={`relative w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-lg sm:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                                {/* Inner Gloss Sheen Overlay */}
+                                <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                                
+                                <span className="relative z-10 shrink-0 select-none filter drop-shadow">
+                                    {pl.icon && pl.icon !== "📂" && pl.icon !== "🎵" ? pl.icon : "🎧"}
+                                </span>
+
+                                {/* Hover Play Indicator Overlay */}
+                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                    <Play className="w-4 h-4 text-white fill-white scale-90 group-hover:scale-100 transition-transform duration-300" />
+                                </div>
+                            </div>
+
+                            {/* Info */}
+                            <div className="min-w-0 w-full text-center sm:text-left">
+                                <p className={`text-[9px] sm:text-[12px] font-black truncate leading-tight ${
+                                  isSelected ? 'text-emerald-400 font-extrabold' : 'text-slate-300 group-hover:text-white'
+                                }`}>
+                                    {pl.name}
+                                </p>
+                                <p className="hidden sm:block text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
+                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'}
+                                </p>
+                            </div>
+                        </button>
+                    )
+                })}
             </div>
         </div>
 
         {/* CONTAINER PLAYER + TRACKLIST */}
-        <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden">
+        <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
             
-        {/* PLAYER ENGINE */}
-        <div className="flex-none flex flex-col min-w-0 bg-[#080808] border-b border-white/5 pb-2 shrink-0">
-          {selectedPlaylist ? (
-            <div className="flex-1 flex flex-col min-h-0 overflow-y-auto scrollbar-hide relative">
-              <div className="flex-1 flex flex-col p-6 lg:px-8">
-                <div className="w-full max-w-xl mx-auto flex-1 flex flex-col justify-center gap-6 sm:gap-8 py-2">
-                  {/* Compact Visual Center */}
-                  <div className="relative group self-center w-full flex justify-center mt-2 sm:mt-0">
+          {/* COMPACT PLAYER BAR (Integrated at the top) */}
+          <div className="flex-none bg-[#0a0a0b] border-b border-white/5 p-4 sm:p-5 relative overflow-hidden shrink-0 shadow-lg">
+            {/* Subtle bottom neon-accent decoration */}
+            <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400 to-transparent" />
+            
+            {selectedPlaylist ? (
+              <div className="flex flex-col md:flex-row gap-4 items-center justify-between w-full max-w-6xl mx-auto">
+                
+                {/* Left Column: Rotating Artwork + Info */}
+                <div className="flex items-center gap-3 sm:gap-4 w-full md:w-auto min-w-0">
+                  <div className="relative shrink-0">
                     <AnimatePresence>
                       {isPlaying && (
                         <motion.div
                           initial={{ scale: 0.8, opacity: 0 }}
                           animate={{ scale: 1.1, opacity: 1 }}
                           exit={{ scale: 0.8, opacity: 0 }}
-                          className="absolute -inset-10 bg-emerald-500/10 blur-[80px] rounded-full z-0 pointer-events-none"
+                          className="absolute -inset-2 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
                         />
                       )}
                     </AnimatePresence>
                     <motion.div
-                      layoutId="artwork"
-                      className={`relative z-10 w-40 h-40 sm:w-56 sm:h-56 rounded-[32px] sm:rounded-[40px] overflow-hidden shadow-2xl border border-white/10 transition-all duration-700 ${isPlaying ? "scale-105 border-emerald-500/30" : "scale-100"}`}
+                      animate={{ rotate: isPlaying ? 360 : 0 }}
+                      transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                      className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-lg border border-white/10 ${isPlaying ? "border-emerald-500/45" : ""}`}
                     >
                       <img
                         src={displayArtwork}
                         alt="Artwork"
                         className="w-full h-full object-cover"
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-60" />
+                      {/* Vinyl Record Center Hole Decor */}
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <div className="w-2.5 h-2.5 sm:w-4 sm:h-4 bg-[#080809] rounded-full border border-white/20" />
+                      </div>
                     </motion.div>
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="text-xs sm:text-md font-black text-white uppercase tracking-tight truncate max-w-[180px] sm:max-w-[260px]">
+                      {displayTitle}
+                    </h1>
+                    <p className="text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[150px]">
+                      {displayArtist}
+                    </p>
+                  </div>
+                </div>
 
-                  {/* Text Info */}
-                  <div className="text-center space-y-3">
-                    <motion.div
-                      key={currentTrack.id}
-                      initial={{ y: 15, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      className="space-y-1"
+                {/* Center Column: Progress Timeline */}
+                <div className="flex-1 w-full md:max-w-md lg:max-w-xl flex flex-col gap-1.5 justify-center py-1">
+                  <div className="flex items-center justify-between text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest px-1">
+                    <span>{formatTime(position)}</span>
+                    <span>{formatTime(duration)}</span>
+                  </div>
+                  <div className="w-full h-1 bg-white/15 rounded-full relative group shadow-inner">
+                    <input
+                      type="range"
+                      min="0"
+                      max={duration || 100}
+                      value={position}
+                      onChange={handleSeek}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-35"
+                    />
+                    <div
+                      className="h-full bg-emerald-500 rounded-full relative pointer-events-none"
+                      style={{
+                        width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                      }}
                     >
-                      <h1 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight truncate max-w-sm mx-auto">
-                        {displayTitle}
-                      </h1>
-                      <p className="text-[10px] font-bold text-emerald-500 uppercase tracking-[0.3em]">
-                        {displayArtist}
-                      </p>
-                    </motion.div>
-                  </div>
-
-                  {/* Minimal Controls */}
-                  <div className="w-full max-w-sm mx-auto">
-                    <div className="flex items-center justify-center gap-4 sm:gap-6 mb-4 sm:mb-6">
-                      <button
-                        onClick={() => setIsShuffle(!isShuffle)}
-                        className={`p-2 transition-all transform hover:scale-110 ${isShuffle ? "text-emerald-500 bg-emerald-500/10 rounded-full" : "text-slate-400 hover:text-white"}`}
-                      >
-                        <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
-                      </button>
-                      <button
-                        onClick={handlePrev}
-                        className="p-2 text-slate-600 hover:text-white transition-all transform hover:scale-110"
-                      >
-                        <SkipBack className="w-5 h-5 sm:w-6 sm:h-6" />
-                      </button>
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        onClick={togglePlayback}
-                        className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-xl ${isPlaying ? "bg-emerald-500 text-black shadow-emerald-500/30" : "bg-white text-black hover:bg-slate-200"}`}
-                      >
-                        {isPlaying ? (
-                          <Pause className="w-5 h-5 sm:w-7 sm:h-7 fill-black" />
-                        ) : (
-                          <Play className="w-5 h-5 sm:w-7 sm:h-7 fill-black ml-1" />
-                        )}
-                      </motion.button>
-                      <button
-                        onClick={handleNext}
-                        className="p-2 text-slate-600 hover:text-white transition-all transform hover:scale-110"
-                      >
-                        <SkipForward className="w-5 h-5 sm:w-6 sm:h-6" />
-                      </button>
-                      <div className="w-8 shrink-0" />{" "}
-                      {/* Balance spacer for the shuffle button */}
-                    </div>
-
-                    <div className="flex items-center gap-3 mb-6">
-                      <span className="text-[9px] font-mono text-slate-500">
-                        {formatTime(position)}
-                      </span>
-                      <div className="flex-1 h-1.5 bg-white/10 rounded-full relative group shadow-inner">
-                        <input
-                          type="range"
-                          min="0"
-                          max={duration || 100}
-                          value={position}
-                          onChange={handleSeek}
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        />
-                        <div
-                          className="h-full bg-emerald-500 rounded-full relative pointer-events-none"
-                          style={{
-                            width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
-                          }}
-                        >
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-md translate-x-1/2 scale-0 group-hover:scale-100 transition-transform" />
-                        </div>
-                      </div>
-                      <span className="text-[9px] font-mono text-slate-500">
-                        {formatTime(duration)}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-4 opacity-50 hover:opacity-100 transition-opacity">
-                      <Volume2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                      <div className="flex-1 h-1.5 bg-white/10 rounded-full relative group shadow-inner">
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={volume}
-                          onChange={(e) =>
-                            handleVolumeChange(parseInt(e.target.value))
-                          }
-                          className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                        />
-                        <div
-                          className="h-full bg-emerald-500 rounded-full transition-all duration-300 relative pointer-events-none"
-                          style={{ width: `${volume}%` }}
-                        >
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 bg-white rounded-full shadow-xl translate-x-1/2 scale-0 group-hover:scale-100 transition-transform" />
-                        </div>
-                      </div>
+                      <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow-md translate-x-1/2" />
                     </div>
                   </div>
                 </div>
+
+                {/* Right Column: Key Playback Controls */}
+                <div className="flex items-center justify-between sm:justify-end gap-3 w-full md:w-auto shrink-0 border-t border-white/[0.03] pt-2 md:pt-0 md:border-t-0">
+                  {/* Slim Responsive Volume Bar */}
+                  <div className="hidden sm:flex items-center gap-2 w-20 opacity-60 hover:opacity-100 transition-opacity">
+                    <Volume2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                    <div className="flex-1 h-1 bg-white/15 rounded-full relative group">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={volume}
+                        onChange={(e) =>
+                          handleVolumeChange(parseInt(e.target.value))
+                        }
+                        className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
+                      />
+                      <div
+                        className="h-full bg-emerald-500 rounded-full"
+                        style={{ width: `${volume}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3 sm:gap-4 ml-auto">
+                    <button
+                      onClick={() => setIsShuffle(!isShuffle)}
+                      title="Aleatorio"
+                      className={`p-1.5 transition-all transform hover:scale-115 ${isShuffle ? "text-emerald-500 bg-emerald-500/10 rounded-full" : "text-slate-500 hover:text-white"}`}
+                    >
+                      <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    </button>
+                    <button
+                      onClick={handlePrev}
+                      title="Anterior"
+                      className="p-1.5 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                    >
+                      <SkipBack className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    </button>
+                    <motion.button
+                      whileTap={{ scale: 0.92 }}
+                      onClick={togglePlayback}
+                      className={`w-10 h-10 sm:w-11 sm:h-11 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${isPlaying ? "bg-emerald-500 text-black shadow-emerald-500/20 animate-pulse-slow" : "bg-white text-black hover:bg-slate-200"}`}
+                    >
+                      {isPlaying ? (
+                        <Pause className="w-4.5 h-4.5 fill-black" />
+                      ) : (
+                        <Play className="w-4.5 h-4.5 fill-black ml-0.5" />
+                      )}
+                    </motion.button>
+                    <button
+                      onClick={handleNext}
+                      title="Siguiente"
+                      className="p-1.5 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                    >
+                      <SkipForward className="w-4 h-4 sm:w-4.5 sm:h-4.5" />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Invisible embedding of SoundCloud API */}
+                <div className="absolute bottom-1 right-1 w-10 h-10 opacity-0 pointer-events-none overflow-hidden select-none">
+                  <iframe
+                    id="sc-iframe"
+                    key={currentUrl}
+                    src={getEmbedUrl(currentUrl)}
+                    allow="autoplay; encrypted-media"
+                    loading="lazy"
+                    className="w-10 h-10 absolute top-0 left-0"
+                  />
+                </div>
+
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-4 text-center">
+                <p className="text-[10px] font-black uppercase tracking-[0.3em] text-slate-500">Selecciona o Añade un Canal para empezar</p>
+              </div>
+            )}
+          </div>
+
+          {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
+          {selectedPlaylist ? (
+            <div className="flex-1 flex flex-col min-h-0 bg-black/40">
+              <div className="p-4 sm:p-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40">
+                <div className="space-y-0.5">
+                  <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
+                    LISTA DE REPRODUCCIÓN
+                  </p>
+                  <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate max-w-[240px]">
+                    {selectedPlaylist.name}
+                  </h3>
+                </div>
+                <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
               </div>
 
-              {/* SC Engine Viewport (Hidden but active) */}
-              <div className="absolute bottom-4 right-4 w-32 h-10 opacity-0 pointer-events-none overflow-hidden select-none">
-                <iframe
-                  id="sc-iframe"
-                  key={currentUrl}
-                  src={getEmbedUrl(currentUrl)}
-                  allow="autoplay; encrypted-media"
-                  loading="lazy"
-                  className="w-64 h-32 absolute top-0 -left-10"
-                />
+              <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-1.5 scrollbar-hide">
+                {displayTracks.map((track, idx) => (
+                  <button
+                    key={track.id || idx}
+                    onClick={() => {
+                      if (engineTracks.length > 0) {
+                        widgetRef.current?.skip(idx);
+                        setIsPlaying(true);
+                      } else {
+                        setCurrentTrackIndex(idx);
+                        setIsPlaying(true);
+                      }
+                    }}
+                    className={`w-full flex items-center gap-4 p-3 sm:p-3.5 rounded-xl transition-all text-left border ${
+                      displayTrackIndex === idx
+                        ? "bg-emerald-500 border-white/10 text-black shadow-md font-semibold"
+                        : "bg-white/[0.02] border-transparent hover:bg-white/[0.04] hover:border-white/5 text-slate-300 hover:text-white"
+                    }`}
+                  >
+                    <div
+                      className={`text-[9px] font-black w-4 shrink-0 transition-colors ${displayTrackIndex === idx ? "text-black/40" : "text-emerald-500/30"}`}
+                    >
+                      {(idx + 1).toString().padStart(2, "0")}
+                    </div>
+                    
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-[12px] font-bold truncate leading-tight ${displayTrackIndex === idx ? "text-black" : "text-white"}`}>
+                        {track.title}
+                      </p>
+                      <p className={`text-[8.5px] font-bold uppercase truncate opacity-60 mt-0.5`}>
+                        {track.artist || "Unknown Artist"}
+                      </p>
+                    </div>
+
+                    {displayTrackIndex === idx && isPlaying && (
+                      <div className="flex gap-0.5 items-end h-3 shrink-0">
+                        {[...Array(3)].map((_, i) => (
+                          <motion.div
+                            key={i}
+                            animate={{ height: [2, 11, 2] }}
+                            transition={{
+                              duration: 0.45 + i * 0.1,
+                              repeat: Infinity,
+                            }}
+                            className="w-[2px] bg-black rounded-full"
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </button>
+                ))}
+              </div>
+
+              <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                <span>Total de canciones: {displayTracks.length || 0}</span>
+                <span className="text-emerald-500">Bienve Engine Premium</span>
               </div>
             </div>
           ) : (
-            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center">
-              <div className="w-32 h-32 border border-dashed border-white/10 rounded-full flex items-center justify-center mb-6">
-                <Music className="w-8 h-8 text-white/5 animate-pulse" />
+            <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-transparent">
+              <div className="w-24 h-24 border border-dashed border-white/10 rounded-full flex items-center justify-center mb-6">
+                <Music className="w-7 h-7 text-white/5 animate-pulse" />
               </div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.5em] text-white/20 mb-4">
-                Signal Offline
+              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20 mb-4">
+                Estación Offline
               </h3>
-              <button
-                onClick={() => setShowLibrary(true)}
-                className="px-6 py-3 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-xl hover:scale-105 transition-all shadow-xl active:scale-95"
-              >
-                Abrir Biblioteca
-              </button>
+              <div className="flex flex-col sm:flex-row gap-3">
+                <button
+                  onClick={() => setShowLibrary(true)}
+                  className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-black uppercase text-[10px] rounded-lg hover:bg-white/10 transition-all"
+                >
+                  Abrir Biblioteca
+                </button>
+                <button
+                  onClick={() => setIsAdding(true)}
+                  className="px-5 py-2.5 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-lg hover:scale-105 transition-all shadow-xl flex items-center gap-2"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  Añadir Canal
+                </button>
+              </div>
             </div>
           )}
+
         </div>
-
-        {/* RIGHT: PERMANENT TRACK LIST (Optimized for Visibility) */}
-        <div
-          className={`flex-1 w-full bg-black/40 flex flex-col ${
-            !selectedPlaylist ? "hidden" : ""
-          }`}
-        >
-          <div className="p-6 border-b border-white/5 flex items-center justify-between">
-            <div className="space-y-0.5">
-              <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
-                En Cola
-              </p>
-              <h3 className="text-xs font-black text-white uppercase truncate max-w-[150px]">
-                {selectedPlaylist?.name}
-              </h3>
-            </div>
-            <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow" />
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-4 space-y-1.5 scrollbar-hide">
-            {displayTracks.map((track, idx) => (
-              <button
-                key={track.id || idx}
-                onClick={() => {
-                  if (engineTracks.length > 0) {
-                    widgetRef.current?.skip(idx);
-                    setIsPlaying(true);
-                  } else {
-                    setCurrentTrackIndex(idx);
-                    setIsPlaying(true);
-                  }
-                }}
-                className={`w-full flex items-center gap-4 p-3 rounded-2xl transition-all text-left border ${
-                  displayTrackIndex === idx
-                    ? "bg-emerald-500 border-white/10 text-black shadow-md"
-                    : "bg-white/[0.02] border-transparent hover:bg-white/[0.05] hover:border-white/5"
-                }`}
-              >
-                <div
-                  className={`text-[9px] font-black w-4 shrink-0 transition-colors ${displayTrackIndex === idx ? "text-black/40" : "text-emerald-500/30"}`}
-                >
-                  {(idx + 1).toString().padStart(2, "0")}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p
-                    className={`text-[11px] font-black truncate leading-tight ${displayTrackIndex === idx ? "text-black" : "text-white"}`}
-                  >
-                    {track.title}
-                  </p>
-                  <p
-                    className={`text-[8px] font-bold uppercase truncate opacity-60`}
-                  >
-                    {track.artist || "Unknown"}
-                  </p>
-                </div>
-                {displayTrackIndex === idx && isPlaying && (
-                  <div className="flex gap-0.5 items-end h-3">
-                    {[...Array(3)].map((_, i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ height: [2, 10, 2] }}
-                        transition={{
-                          duration: 0.4 + i * 0.1,
-                          repeat: Infinity,
-                        }}
-                        className="w-[2px] bg-black rounded-full"
-                      />
-                    ))}
-                  </div>
-                )}
-              </button>
-            ))}
-          </div>
-
-          <div className="p-4 bg-black/40 border-t border-white/5">
-            <div className="flex justify-between items-center text-[8px] font-black uppercase text-slate-600 tracking-widest">
-              <span>Pistas: {displayTracks.length || 0}</span>
-              <span className="text-emerald-500/40">Studio Pro v1.0</span>
-            </div>
-          </div>
-        </div>
-        </div>
-
       </div>
 
       {/* OVERLAY: LIBRARY MODAL */}
@@ -839,12 +906,26 @@ export default function GymMusicPlayer() {
                     {userPlaylists.length} Canales Sincronizados
                   </p>
                 </div>
-                <button
-                  onClick={() => setShowLibrary(false)}
-                  className="p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/10 text-slate-400 hover:text-white"
-                >
-                  <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
+                <div className="flex items-center gap-3">
+                  {user && (
+                    <button
+                      onClick={() => {
+                        setIsAdding(true);
+                        setShowLibrary(false);
+                      }}
+                      className="hidden sm:flex items-center gap-2 px-6 py-3 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-2xl hover:scale-105 transition-all shadow-xl"
+                    >
+                      <Plus className="w-4 h-4" />
+                      <span>Crear Canal</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setShowLibrary(false)}
+                    className="p-3 sm:p-4 bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/10 text-slate-400 hover:text-white"
+                  >
+                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                </div>
               </div>
 
               <div className="flex-1 overflow-y-auto px-6 pb-8 sm:px-10 sm:pb-12 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 scrollbar-hide relative z-10">
@@ -864,8 +945,11 @@ export default function GymMusicPlayer() {
                           : "bg-white/[0.03] border-white/5 hover:border-white/20 hover:bg-white/[0.06]"
                       }`}
                     >
-                      <div className="w-16 h-16 bg-black/40 rounded-[28px] flex items-center justify-center text-3xl shadow-inner border border-white/5 group-hover:scale-110 transition-transform duration-500">
-                        {pl.icon}
+                      <div className={`w-16 h-16 rounded-[24px] bg-gradient-to-tr ${getPlaylistGradientClass(pl.name)} flex items-center justify-center text-2xl shadow-lg relative overflow-hidden shrink-0 group-hover:scale-110 transition-transform duration-500`}>
+                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                        <span className="relative z-10 shrink-0 select-none filter drop-shadow">
+                          {pl.icon && pl.icon !== "📂" && pl.icon !== "🎵" ? pl.icon : "🎧"}
+                        </span>
                       </div>
                       <div className="flex-1">
                         <p className="text-base font-black truncate uppercase tracking-tight mb-2">
@@ -891,7 +975,7 @@ export default function GymMusicPlayer() {
                       </div>
                     </button>
 
-                    {isAdmin && (
+                    {(isAdmin || pl.ownerId === user?.uid) && (
                       <div className="absolute right-6 top-6 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-all transform translate-y-2 group-hover:translate-y-0">
                         <button
                           onClick={(e) => {

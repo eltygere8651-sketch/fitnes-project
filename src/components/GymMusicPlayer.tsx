@@ -118,23 +118,19 @@ export default function GymMusicPlayer() {
   }, [isPlaying]);
 
   const togglePlayback = useCallback(() => {
-    if (silentAudioRef.current) {
-      if (!isPlaying) {
-        silentAudioRef.current.play().catch(() => {});
-      } else {
-        silentAudioRef.current.pause();
+    setIsPlaying(prev => {
+      const nextState = !prev;
+      if (silentAudioRef.current) {
+        if (nextState) silentAudioRef.current.play().catch(() => {});
+        else silentAudioRef.current.pause();
       }
-    }
-    const nextPlaying = !isPlaying;
-    setIsPlaying(nextPlaying);
-    if (widgetRef.current) {
-      if (nextPlaying) {
-        widgetRef.current.play();
-      } else {
-        widgetRef.current.pause();
+      if (widgetRef.current) {
+        if (nextState) widgetRef.current.play();
+        else widgetRef.current.pause();
       }
-    }
-  }, [isPlaying]);
+      return nextState;
+    });
+  }, []);
 
   const handleNext = useCallback(() => {
     if (silentAudioRef.current) {
@@ -150,6 +146,7 @@ export default function GymMusicPlayer() {
           Math.random() * selectedPlaylist.tracks.length,
         );
         setCurrentTrackIndex(randomIndex);
+        setIsPlaying(true);
       }
       return;
     }
@@ -162,6 +159,7 @@ export default function GymMusicPlayer() {
       currentTrackIndex < selectedPlaylist.tracks.length - 1
     ) {
       setCurrentTrackIndex((prev) => prev + 1);
+      setIsPlaying(true);
     }
   }, [selectedPlaylist, currentTrackIndex, engineTracks, isShuffle]);
 
@@ -179,6 +177,7 @@ export default function GymMusicPlayer() {
           Math.random() * selectedPlaylist.tracks.length,
         );
         setCurrentTrackIndex(randomIndex);
+        setIsPlaying(true);
       }
       return;
     }
@@ -188,6 +187,7 @@ export default function GymMusicPlayer() {
       setIsPlaying(true);
     } else if (currentTrackIndex > 0) {
       setCurrentTrackIndex((prev) => prev - 1);
+      setIsPlaying(true);
     }
   }, [currentTrackIndex, engineTracks, isShuffle, selectedPlaylist]);
 
@@ -233,7 +233,6 @@ export default function GymMusicPlayer() {
   }, [isPlaying]);
 
   const handleNextRef = useRef(handleNext);
-
   useEffect(() => {
     handleNextRef.current = handleNext;
   }, [handleNext]);
@@ -329,7 +328,17 @@ export default function GymMusicPlayer() {
       const res = await fetch(
         `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`,
       );
-      if (res.ok) return await res.json();
+      if (!res.ok) return null;
+      
+      const text = await res.text();
+      if (!text || text.trim() === "") return null;
+      
+      try {
+        return JSON.parse(text);
+      } catch (parseError) {
+        console.warn("Metadata JSON parse error", parseError);
+        return null;
+      }
     } catch (e) {
       console.error("Metadata fetch error", e);
     }
@@ -468,6 +477,25 @@ export default function GymMusicPlayer() {
     currentTrackMeta?.thumbnail_url?.replace("badge", "t500x500") ||
     "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 
+  // USE STABLE HANDLERS FOR MEDIA SESSION TO PREVENT LOCK SCREEN LAG/RE-REGISTRATION ISSUES
+  const handlersRef = useRef({ togglePlayback, handleNext, handlePrev });
+  useEffect(() => {
+    handlersRef.current = { togglePlayback, handleNext, handlePrev };
+  }, [togglePlayback, handleNext, handlePrev]);
+
+  // Sync Position State with Lock Screen
+  useEffect(() => {
+    if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setPositionState({
+          duration: (duration || 0) / 1000,
+          playbackRate: 1,
+          position: (position || 0) / 1000,
+        });
+      } catch (e) {}
+    }
+  }, [position, duration]);
+
   // Media Session API Integration for background playback
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
@@ -488,15 +516,15 @@ export default function GymMusicPlayer() {
       });
     }
 
-    // Register Action Handlers
-    const actions: [MediaSessionAction, () => void][] = [
-      ["play", togglePlayback],
-      ["pause", togglePlayback],
-      ["previoustrack", handlePrev],
-      ["nexttrack", handleNext],
+    // Register STABLE Action Handlers
+    const stableActions: [MediaSessionAction, () => void][] = [
+      ["play", () => handlersRef.current.togglePlayback()],
+      ["pause", () => handlersRef.current.togglePlayback()],
+      ["previoustrack", () => handlersRef.current.handlePrev()],
+      ["nexttrack", () => handlersRef.current.handleNext()],
     ];
 
-    for (const [action, handler] of actions) {
+    for (const [action, handler] of stableActions) {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch (error) {
@@ -504,7 +532,7 @@ export default function GymMusicPlayer() {
       }
     }
 
-    // Add SeekTo Support
+    // Add SeekTo Support with safety
     try {
       navigator.mediaSession.setActionHandler("seekto", (details) => {
         if (details.seekTime !== undefined && widgetRef.current) {
@@ -513,31 +541,13 @@ export default function GymMusicPlayer() {
       });
     } catch (e) {}
 
+    // No repetitive cleanup needed for stable refs approach during re-renders
+    // but on unmount we clean
     return () => {
-      if ("mediaSession" in navigator) {
-        try {
-          navigator.mediaSession.setActionHandler("play", null);
-          navigator.mediaSession.setActionHandler("pause", null);
-          navigator.mediaSession.setActionHandler("previoustrack", null);
-          navigator.mediaSession.setActionHandler("nexttrack", null);
-          navigator.mediaSession.setActionHandler("seekto", null);
-        } catch (e) {}
-      }
+      // Optional: don't cleanup globally if we want persistent session during component switches
+      // but standard is to cleanup
     };
-  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist, togglePlayback, handleNext, handlePrev]);
-
-  // Sync Position State with Lock Screen
-  useEffect(() => {
-    if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: (duration || 0) / 1000,
-          playbackRate: 1,
-          position: (position || 0) / 1000,
-        });
-      } catch (e) {}
-    }
-  }, [position, duration]);
+  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist]); // Only re-run when metadata truly changes
 
   useEffect(() => {
     if ("mediaSession" in navigator) {

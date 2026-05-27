@@ -320,6 +320,10 @@ export default function AIPersonalizedRoutine({
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
       const data = await response.json();
       setRoutine(data);
       localStorage.setItem("gym_active_routine", JSON.stringify(data));

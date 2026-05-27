@@ -11,8 +11,6 @@ import {
   Share2,
   X,
   BookOpen,
-  Activity,
-  Bell,
   Download
 } from "lucide-react";
 import AIPersonalizedRoutine from "./components/AIPersonalizedRoutine";
@@ -28,13 +26,11 @@ type TabType =
   | "music"
   | "dashboard"
   | "book"
-  | "chat"
-  | "activity"
-  | "bell";
+  | "chat";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
-  const [activeTab, setActiveTab] = useState<TabType>("dashboard");
+  const [activeTab, setActiveTab] = useState<TabType>("music");
   const [chatPrefilledExercise, setChatPrefilledExercise] = useState<
     string | null
   >(null);
@@ -129,18 +125,31 @@ function AppContent() {
               className="flex items-center gap-2.5 group cursor-pointer select-none"
             >
               <div className="relative">
-                <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden">
-                  <img src="/icon-512.png" alt="Logo" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20" />
+                <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden relative">
+                  {/* High Intensity Energy Layers */}
+                  <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
+                  <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-30 z-20" />
+                  
+                  {/* Lightning Arcs */}
+                  <div className="absolute left-1/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.2s' }} />
+                  <div className="absolute left-2/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.7s' }} />
+                  <div className="absolute left-3/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '1.2s' }} />
+
+                  <img src="/icon-512.png" alt="Logo" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
+                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20 z-40" />
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-lg font-black tracking-[0.16em] text-white uppercase italic leading-none">
+                <span className="text-2xl font-brand font-black tracking-[-0.02em] text-premium-gradient uppercase italic leading-none drop-shadow-[0_0_15px_rgba(16,185,129,0.3)] select-none">
                   BIENVE
                 </span>
-                <span className="text-[8px] font-black tracking-[0.32em] text-[#10b981] uppercase leading-none mt-1 opacity-90">
-                  MUSIC APP
-                </span>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className="h-[1px] w-3 bg-emerald-500/30" />
+                  <span className="text-[7.5px] font-black tracking-[0.35em] text-emerald-400 uppercase leading-none opacity-80">
+                    MUSIC APP
+                  </span>
+                  <div className="h-[1px] w-3 bg-emerald-500/30" />
+                </div>
               </div>
             </div>
           </div>
@@ -163,34 +172,81 @@ function AppContent() {
         </div>
 
         {/* COMPACT FLOATING NAVIGATION PILL ROW */}
-        <div className="pb-4 mt-1 flex justify-center w-full px-4">
-          <div className="flex bg-[#111]/80 backdrop-blur-md p-1 rounded-2xl items-center gap-1 border border-white/5 shadow-2xl shrink-0 max-w-full overflow-x-auto scrollbar-none">
+        <div className="pb-4 mt-1 flex justify-center w-full px-4 overflow-hidden">
+          <div className="flex bg-[#111]/80 backdrop-blur-md p-1.5 rounded-[22px] items-center gap-1 sm:gap-2 border border-white/5 shadow-2xl shrink-0 max-w-full overflow-x-auto scrollbar-none no-scrollbar">
             {[
-              { id: "music", icon: <Play className="w-4 h-4" /> },
-              { id: "dashboard", icon: <Layers className="w-4 h-4" /> },
-              { id: "book", icon: <BookOpen className="w-4 h-4" /> },
-              { id: "chat", icon: <MessageSquare className="w-4 h-4" /> },
-              { id: "activity", icon: <Activity className="w-4 h-4" /> },
-              { id: "bell", icon: <Bell className="w-4 h-4" /> },
+              { id: "music", icon: <Play className="w-4 h-4" />, label: "PLAYER" },
+              { id: "dashboard", icon: <Layers className="w-4 h-4" />, label: "PANEL" },
+              { id: "book", icon: <BookOpen className="w-4 h-4" />, label: "RUTINA" },
+              { id: "chat", icon: <MessageSquare className="w-4 h-4" />, label: "COACH" },
             ].map((tab) => {
               const isSelected = activeTab === tab.id;
               return (
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl transition-all flex items-center justify-center cursor-pointer relative overflow-hidden group shrink-0 ${
+                  className={`h-11 px-4 sm:px-6 rounded-[18px] transition-all flex items-center gap-3 cursor-pointer relative overflow-hidden group shrink-0 ${
                     isSelected
-                      ? "bg-emerald-500 text-black shadow-[0_0_15px_rgba(16,185,129,0.45)] scale-102"
-                      : "text-slate-400 hover:text-white bg-transparent hover:bg-white/5"
+                      ? "bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.15)] scale-[1.02]"
+                      : "text-slate-500 hover:text-white bg-transparent hover:bg-white/5"
                   }`}
                 >
-                  {tab.icon}
+                  <div className={`${isSelected ? "scale-110" : "group-hover:scale-110"} transition-transform duration-300`}>
+                    {tab.icon}
+                  </div>
+                  <span className={`text-[10px] font-brand font-black uppercase tracking-[0.1em] ${isSelected ? "opacity-100" : "opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto overflow-hidden transition-all duration-300"}`}>
+                    {tab.label}
+                  </span>
+                  {isSelected && (
+                    <motion.div
+                      layoutId="activeTab"
+                      className="absolute inset-0 bg-white -z-10"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
                 </button>
               );
             })}
           </div>
         </div>
       </nav>
+
+      {/* MOBILE NAVIGATION BAR (FOR TRUE PREMIUM FEEL ON TOUCH DEVICES) */}
+      <div className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)] max-w-[420px]">
+        <div className="bg-[#0c0c0d]/90 backdrop-blur-3xl border border-white/10 rounded-[32px] p-1.5 flex items-center justify-between shadow-[0_20px_60px_rgba(0,0,0,0.8)] px-2">
+           {[
+              { id: "music", icon: <Play className="w-4.5 h-4.5" />, label: "PLAYER" },
+              { id: "dashboard", icon: <Layers className="w-4.5 h-4.5" />, label: "PANEL" },
+              { id: "chat", icon: <MessageSquare className="w-4.5 h-4.5" />, label: "COACH" },
+              { id: "book", icon: <BookOpen className="w-4.5 h-4.5" />, label: "RUTINA" },
+            ].map((tab) => {
+              const isSelected = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id as TabType)}
+                  className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-[22px] transition-all duration-300 relative group flex-1 ${
+                    isSelected ? "text-emerald-400" : "text-slate-500"
+                  }`}
+                >
+                  <div className={`${isSelected ? "scale-110 mb-0.5" : "group-active:scale-95 opacity-60"} transition-all duration-300 relative z-10`}>
+                    {tab.icon}
+                  </div>
+                  <span className={`text-[6.5px] font-black tracking-[0.1em] uppercase transition-all duration-300 relative z-10 ${isSelected ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 h-0 overflow-hidden"}`}>
+                    {tab.label}
+                  </span>
+                  {isSelected && (
+                    <motion.div 
+                      layoutId="mobileActiveTab"
+                      className="absolute inset-x-1 inset-y-1 bg-emerald-500/10 rounded-[18px] z-0"
+                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
+                    />
+                  )}
+                </button>
+              );
+            })}
+        </div>
+      </div>
 
       <main className={`w-full mx-auto ${
         activeTab === "music"
@@ -241,8 +297,8 @@ function AppContent() {
                   </div>
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-[9px] font-black uppercase tracking-[0.2em] text-emerald-500 mb-0.5">
-                    BIENVE MUSIC APP ACTIVE
+                  <span className="text-[9px] font-brand font-black uppercase tracking-[0.1em] text-premium-gradient mb-0.5">
+                    BIENVE MUSIC ACTIVE
                   </span>
                   <p className="text-[11px] text-white font-bold truncate max-w-[200px]">
                     Optimized Training Flow
@@ -262,7 +318,7 @@ function AppContent() {
 
       <footer className="py-8 text-center mt-auto">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
-          <p>© 2026 BIENVE MUSIC APP • OPTIMIZED FLOW</p>
+          <p>2026 BIENVE MUSIC APP • ALL RIGHTS RESERVED</p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <div
@@ -300,8 +356,16 @@ function AppContent() {
               {/* Header */}
               <div className="p-6 pb-4 flex justify-between items-start border-b border-white/5 bg-[#0e0e10]/60">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.3)] overflow-hidden">
-                    <img src="/icon-512.png" alt="App Icon" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] overflow-hidden relative group/hero">
+                    {/* High Intensity Energy Layers */}
+                    <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
+                    <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-40 z-20" />
+                    
+                    {/* Lightning Arcs */}
+                    <div className="absolute left-1/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.1s' }} />
+                    <div className="absolute left-2/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.5s' }} />
+
+                    <img src="/icon-512.png" alt="App Icon" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
                   </div>
                   <div>
                     <h3 className="text-base font-black uppercase tracking-wider text-white">

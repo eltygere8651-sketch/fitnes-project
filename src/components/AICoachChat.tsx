@@ -94,6 +94,10 @@ export default function AICoachChat({
         }),
       });
 
+      if (!response.ok) {
+        throw new Error(`Server error: ${response.status}`);
+      }
+
       const data = await response.json();
       const coachMsg: ChatMessage = {
         id: (Date.now() + 1).toString(),

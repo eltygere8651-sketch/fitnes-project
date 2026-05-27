@@ -163,10 +163,10 @@ function AppContent() {
               }}
               className="flex items-center gap-2 text-slate-300 hover:text-white transition-colors group cursor-pointer"
             >
-              <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-emerald-400" />
-              <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest hidden sm:block">
-                {user ? "Cerrar Sesión" : "CONNECT ACCOUNT"}
-              </span>
+                <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4 group-hover:text-emerald-400" />
+                <span className="text-[9px] sm:text-[10px] uppercase font-black tracking-widest hidden sm:block">
+                  {user ? "Cerrar Sesión" : "ENTRAR AL PANEL"}
+                </span>
             </button>
           </div>
         </div>
@@ -328,7 +328,7 @@ function AppContent() {
             </div>
             <span className="text-slate-700">|</span>
             <span className="text-emerald-500">
-              {user ? user.email : "GUEST MODE"}
+              {user ? user.email : "MODO LECTURA"}
             </span>
           </div>
         </div>

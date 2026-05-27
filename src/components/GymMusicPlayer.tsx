@@ -16,6 +16,7 @@ import {
   X,
   Loader2,
   Shuffle,
+  Shield,
   ShieldAlert,
   LogOut,
   LogIn,
@@ -108,6 +109,7 @@ export default function GymMusicPlayer() {
   // Keep background JS context alive on iOS/Android via silent loop ambient audio synchronizer
   useEffect(() => {
     if (!silentAudioRef.current) return;
+    silentAudioRef.current.volume = 0.05; // Non-zero volume is more reliable for lock screen sessions
     if (isPlaying) {
       silentAudioRef.current.play().catch((err) => {
         console.warn("Silent audio context initialization deferred for interaction click:", err);
@@ -205,12 +207,15 @@ export default function GymMusicPlayer() {
   // Sync with Firestore
   useEffect(() => {
     let q;
-    if (user) {
+    // Administrador ve todo el archivo global. Usuarios normales solo lo suyo.
+    // Invitados ven todo el archivo global (Modo Lectura).
+    if (user && !isAdmin) {
       q = query(
         collection(db, "users", user.uid, "playlists"),
         orderBy("createdAt", "desc"),
       );
     } else {
+      // Usamos collectionGroup para ver cualquier playlist en la base de datos
       q = query(collectionGroup(db, "playlists"));
     }
 
@@ -225,7 +230,7 @@ export default function GymMusicPlayer() {
       }
     });
     return () => unsubscribe();
-  }, [user]);
+  }, [user, isAdmin]);
 
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => {
@@ -346,7 +351,7 @@ export default function GymMusicPlayer() {
   };
 
   const handleAddNewCanalClick = () => {
-    if (!user) {
+    if (!isAdmin) {
       setAuthModalOpen(true);
       return;
     }
@@ -355,7 +360,7 @@ export default function GymMusicPlayer() {
   };
 
   const handleAddPlaylist = async () => {
-    if (!user) return alert("Debes iniciar sesión para añadir playlists");
+    if (!isAdmin) return alert("Solo el administrador puede añadir playlists");
     const url = customUrl.trim();
     if (!url || !url.includes("soundcloud.com")) {
       alert("Por favor inserta un enlace válido de SoundCloud");
@@ -408,25 +413,35 @@ export default function GymMusicPlayer() {
   };
 
   const saveEdit = async () => {
-    if (!editingId || !isAdmin) return;
+    if (!editingId || !isAdmin || !user) return;
     try {
-      await updateDoc(doc(db, "users", user.uid, "playlists", editingId), {
+      // Buscamos la playlist para obtener su ownerId real
+      const pl = userPlaylists.find(p => p.id === editingId);
+      const targetOwnerId = pl?.ownerId || user.uid;
+      
+      await updateDoc(doc(db, "users", targetOwnerId, "playlists", editingId), {
         name: editingName,
         updatedAt: serverTimestamp(),
       });
       setEditingId(null);
     } catch (error) {
       console.error("Error saving edit", error);
+      alert("Error al guardar cambios. Verifica tus permisos.");
     }
   };
 
   const deletePlaylist = async (plId: string) => {
-    if (!isAdmin) return;
+    if (!isAdmin || !user) return;
+    if (!confirm("¿Seguro que quieres eliminar este canal?")) return;
     try {
-      await deleteDoc(doc(db, "users", user.uid, "playlists", plId));
+      const pl = userPlaylists.find(p => p.id === plId);
+      const targetOwnerId = pl?.ownerId || user.uid;
+      
+      await deleteDoc(doc(db, "users", targetOwnerId, "playlists", plId));
       if (selectedPlaylist?.id === plId) setSelectedPlaylist(null);
     } catch (error) {
       console.error("Error deleting", error);
+      alert("Error al eliminar. Verifica tus permisos.");
     }
   };
 
@@ -517,34 +532,60 @@ export default function GymMusicPlayer() {
             sizes: "256x256",
             type: "image/jpeg",
           },
+          {
+            src: displayArtwork,
+            sizes: "96x96",
+            type: "image/jpeg",
+          },
         ],
       });
     }
 
-    // Register STABLE Action Handlers with direct interaction
-    const actionHandlers: [MediaSessionAction, () => void][] = [
-      ["play", () => {
-        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
-        togglePlayback();
+    // Define handlers that use the latest state via handlersRef to avoid stale closures
+    const playHandler = () => {
+      if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
+      handlersRef.current.togglePlayback();
+    };
+
+    const pauseHandler = () => {
+      handlersRef.current.togglePlayback();
+    };
+
+    const nextHandler = () => {
+      if (silentAudioRef.current) {
+        silentAudioRef.current.currentTime = 0;
+        silentAudioRef.current.play().catch(() => {});
+      }
+      handlersRef.current.handleNext();
+    };
+
+    const prevHandler = () => {
+      if (silentAudioRef.current) {
+        silentAudioRef.current.currentTime = 0;
+        silentAudioRef.current.play().catch(() => {});
+      }
+      handlersRef.current.handlePrev();
+    };
+
+    // Register handlers - always register both next and prev to ensure they show up on iOS
+    const actions: [MediaSessionAction, () => void][] = [
+      ["play", playHandler],
+      ["pause", pauseHandler],
+      ["previoustrack", prevHandler],
+      ["nexttrack", nextHandler],
+      ["seekforward", () => {
+        if (widgetRef.current) widgetRef.current.getPosition((p: number) => widgetRef.current.seekTo(p + 10000));
       }],
-      ["pause", () => {
-        togglePlayback();
-      }],
-      ["previoustrack", () => {
-        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
-        handlePrev();
-      }],
-      ["nexttrack", () => {
-        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
-        handleNext();
+      ["seekbackward", () => {
+        if (widgetRef.current) widgetRef.current.getPosition((p: number) => widgetRef.current.seekTo(Math.max(0, p - 10000)));
       }],
     ];
 
-    actionHandlers.forEach(([action, handler]) => {
+    actions.forEach(([action, handler]) => {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch (error) {
-        console.warn(`Media action "${action}" not supported.`);
+        // Fallback for older browsers
       }
     });
 
@@ -558,9 +599,9 @@ export default function GymMusicPlayer() {
     } catch (e) {}
 
     return () => {
-      // We don't unregister them globally to maintain control if screen turns off
+      // Keep persistent for session stability during app usage
     };
-  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist, togglePlayback, handleNext, handlePrev]);
+  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist]); // Minimal dependencies to prevent excessive re-registration
 
   useEffect(() => {
     if ("mediaSession" in navigator) {
@@ -633,6 +674,7 @@ export default function GymMusicPlayer() {
             <span className="hidden sm:block">Librería</span>
           </button>
 
+          {isAdmin && (
             <button
               onClick={handleAddNewCanalClick}
               className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
@@ -644,7 +686,8 @@ export default function GymMusicPlayer() {
               <Plus className="w-4 h-4" />
               <span className="hidden sm:inline">Añadir</span>
             </button>
-          </div>
+          )}
+        </div>
         </div>
 
          {/* 2. MAIN SPLIT STAGE */}
@@ -657,13 +700,15 @@ export default function GymMusicPlayer() {
                         Canal
                     </h3>
                 </div>
-                <button 
-                  onClick={handleAddNewCanalClick}
-                  title="Añadir Nuevo Canal"
-                  className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                </button>
+                {isAdmin && (
+                  <button 
+                    onClick={handleAddNewCanalClick}
+                    title="Añadir Nuevo Canal"
+                    className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
+                  >
+                    <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                  </button>
+                )}
             </div>
             
             <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full items-center md:items-stretch">
@@ -716,23 +761,23 @@ export default function GymMusicPlayer() {
                 })}
             </div>
 
-            {/* INICIAR SESIÓN / REGISTRO BANNER ADAPTIVO */}
+            {/* ACCESO ADMIN BANNER */}
             {!user && (
               <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-emerald-500/5 flex flex-col items-stretch gap-2 shrink-0">
                 <div className="hidden md:block text-left shrink-0">
                   <p className="text-[8px] font-black uppercase text-emerald-400 tracking-wider">
-                    ¿Administrador?
+                    Modo Administrador
                   </p>
                   <p className="text-[8px] text-slate-500 font-bold mt-0.5">
-                    Gestiona canales
+                    Para gestionar canales
                   </p>
                 </div>
                 <button
                   onClick={() => setAuthModalOpen(true)}
                   className="py-1.5 md:py-2 bg-emerald-500 hover:bg-emerald-400 text-black font-black uppercase tracking-wider text-[10px] rounded-lg md:rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 active:scale-95"
                 >
-                  <LogIn className="w-3.5 h-3.5 md:w-4 md:h-4" />
-                  <span>Iniciar Sesión</span>
+                  <Shield className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span>Entrar</span>
                 </button>
               </div>
             )}
@@ -890,7 +935,8 @@ export default function GymMusicPlayer() {
                     ref={silentAudioRef}
                     loop
                     playsInline
-                    src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQQAAAAAAA=="
+                    preload="auto"
+                    src="data:audio/wav;base64,UklGRqAAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YVAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8Pw=="
                     className="hidden"
                   />
                 </div>

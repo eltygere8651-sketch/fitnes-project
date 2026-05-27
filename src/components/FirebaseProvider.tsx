@@ -51,6 +51,9 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         const syncProfile = async (retryCount = 0) => {
+          // Only sync profile if user is the admin to avoid permission errors
+          if (u.email !== "eltygere8651@gmail.com") return;
+          
           try {
             const userRef = doc(db, "users", u.uid);
             await setDoc(

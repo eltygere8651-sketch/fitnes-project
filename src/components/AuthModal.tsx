@@ -1,12 +1,11 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
-import { loginWithGoogle, loginWithEmail, signupWithEmail } from "../lib/firebase";
+import { loginWithGoogle, loginWithEmail } from "../lib/firebase";
 import { X, LogIn, Mail, Lock, Shield, Sparkles, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useFirebase();
-  const [activeTab, setActiveTab] = useState<"login" | "register">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -26,15 +25,11 @@ export const AuthModal: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       if (err?.code === "auth/popup-closed-by-user" || err?.code === "auth/cancelled-popup-request") {
-        setErrorMsg("Google cerró la ventana. Si esto se repite, asegúrate de haber añadido este dominio (ais-pre-yq53473i73hkntpv553kmj-352265948901.europe-west2.run.app) a los Dominios Autorizados en la consola de Firebase.");
+        setErrorMsg("Google cerró la ventana.");
         setIsLoading(false);
         return;
       }
-      if (err?.code === "auth/unauthorized-domain") {
-        setErrorMsg("Dominio no autorizado. Ve a Firebase Console -> Authentication -> Settings y añade este dominio a la lista de Autorizados.");
-      } else {
-        setErrorMsg(err?.message || "Error al iniciar sesión con Google.");
-      }
+      setErrorMsg(err?.message || "Error al iniciar sesión.");
     } finally {
       setIsLoading(false);
     }
@@ -46,47 +41,27 @@ export const AuthModal: React.FC = () => {
       setErrorMsg("Por favor, rellena todos los campos.");
       return;
     }
-    if (password.length < 6) {
-      setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
-      return;
-    }
 
     setIsLoading(true);
     setErrorMsg(null);
     setSuccessMsg(null);
 
     try {
-      if (activeTab === "login") {
-        await loginWithEmail(email.trim(), password);
-        setSuccessMsg("¡Sesión iniciada con éxito!");
-        setTimeout(() => {
-          setAuthModalOpen(false);
-          // Reload page to ensure all components sync with Auth state
-          window.location.reload();
-        }, 1000);
-      } else {
-        await signupWithEmail(email.trim(), password);
-        setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito!");
-        setTimeout(() => {
-          setAuthModalOpen(false);
-          window.location.reload();
-        }, 1000);
-      }
+      await loginWithEmail(email.trim(), password);
+      setSuccessMsg("¡Sesión iniciada con éxito!");
+      setTimeout(() => {
+        setAuthModalOpen(false);
+        window.location.reload();
+      }, 1000);
     } catch (err: any) {
       console.error("Auth error:", err);
       const code = err?.code || "";
       let friendlyMessage = "Error de autenticación.";
 
       if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
-        friendlyMessage = "Correo o contraseña incorrectos. Verifica tus datos o crea una cuenta.";
-      } else if (code === "auth/email-already-in-use") {
-        friendlyMessage = "Este correo ya está registrado. Intenta iniciar sesión en su lugar.";
-      } else if (code === "auth/weak-password") {
-        friendlyMessage = "Contraseña muy débil. Debe tener al menos 6 caracteres.";
+        friendlyMessage = "Correo o contraseña incorrectos.";
       } else if (code === "auth/invalid-email") {
         friendlyMessage = "Formato de correo electrónico no válido.";
-      } else if (code === "auth/operation-not-allowed") {
-        friendlyMessage = "El inicio de sesión por Correo/Contraseña no está habilitado. Por favor, actívalo en tu consola de Firebase.";
       } else {
         friendlyMessage = err?.message || String(err);
       }
@@ -131,50 +106,24 @@ export const AuthModal: React.FC = () => {
           {/* Header content (Static) */}
           <div className="p-6 pb-4 text-center shrink-0 border-b border-white/5">
             <h2 className="text-xl font-black uppercase tracking-wider text-emerald-400">
-              ACCESO AL SISTEMA
+              ACCESO ADMINISTRADOR
             </h2>
             <p className="text-[11px] text-slate-400 mt-1 px-4 leading-relaxed font-bold">
-              Inicia sesión o regístrate usando tu Correo Electrónico.
+              Introduce tus credenciales para gestionar el sistema.
             </p>
           </div>
 
           {/* Scrollable content container for perfect mobile/iOS viewport support */}
           <div className="overflow-y-auto px-6 pb-6 pt-4 space-y-4 max-h-[62vh] scrollbar-thin scrollbar-thumb-white/5 flex flex-col items-center">
             
-            {/* Tabs picker */}
+            {/* Login Tab Display Only */}
             <div className="flex bg-white/5 p-1 rounded-xl gap-1 border border-white/[0.03] w-full mb-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("login");
-                  setErrorMsg(null);
-                  setSuccessMsg(null);
-                }}
-                className={`flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer text-center flex items-center justify-center gap-1 ${
-                  activeTab === "login"
-                    ? "bg-emerald-500 text-black shadow-lg"
-                    : "text-slate-400 hover:text-white"
-                }`}
+              <div
+                className="flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all text-center flex items-center justify-center gap-1 bg-emerald-500 text-black shadow-lg"
               >
-                <LogIn className="w-3.5 h-3.5 shrink-0" />
-                <span>Entrar (Correo)</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveTab("register");
-                  setErrorMsg(null);
-                  setSuccessMsg(null);
-                }}
-                className={`flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all cursor-pointer text-center flex items-center justify-center gap-1 ${
-                  activeTab === "register"
-                    ? "bg-emerald-500 text-black shadow-lg"
-                    : "text-slate-400 hover:text-white"
-                }`}
-              >
-                <UserPlus className="w-3.5 h-3.5 shrink-0" />
-                <span>Registrarse</span>
-              </button>
+                <Shield className="w-3.5 h-3.5 shrink-0" />
+                <span>Iniciar Sesión</span>
+              </div>
             </div>
 
             {/* Email + Password Form */}
@@ -220,11 +169,6 @@ export const AuthModal: React.FC = () => {
                   <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block">
                     Contraseña
                   </label>
-                  {activeTab === "register" && (
-                    <span className="text-[8px] text-slate-500 uppercase tracking-widest">
-                      Mín. 6 chars
-                    </span>
-                  )}
                 </div>
                 <div className="relative">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
@@ -259,7 +203,7 @@ export const AuthModal: React.FC = () => {
                 ) : (
                   <>
                     <LogIn className="w-4 h-4" />
-                    {activeTab === "login" ? "Iniciar Sesión" : "Crear e Iniciar Sesión"}
+                    Entrar al Sistema
                   </>
                 )}
               </button>

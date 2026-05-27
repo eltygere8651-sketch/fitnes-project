@@ -512,27 +512,43 @@ export default function GymMusicPlayer() {
             sizes: "512x512",
             type: "image/jpeg",
           },
+          {
+            src: displayArtwork,
+            sizes: "256x256",
+            type: "image/jpeg",
+          },
         ],
       });
     }
 
-    // Register STABLE Action Handlers
-    const stableActions: [MediaSessionAction, () => void][] = [
-      ["play", () => handlersRef.current.togglePlayback()],
-      ["pause", () => handlersRef.current.togglePlayback()],
-      ["previoustrack", () => handlersRef.current.handlePrev()],
-      ["nexttrack", () => handlersRef.current.handleNext()],
+    // Register STABLE Action Handlers with direct interaction
+    const actionHandlers: [MediaSessionAction, () => void][] = [
+      ["play", () => {
+        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
+        togglePlayback();
+      }],
+      ["pause", () => {
+        togglePlayback();
+      }],
+      ["previoustrack", () => {
+        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
+        handlePrev();
+      }],
+      ["nexttrack", () => {
+        if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
+        handleNext();
+      }],
     ];
 
-    for (const [action, handler] of stableActions) {
+    actionHandlers.forEach(([action, handler]) => {
       try {
         navigator.mediaSession.setActionHandler(action, handler);
       } catch (error) {
-        console.warn(`The media session action "${action}" is not supported yet.`);
+        console.warn(`Media action "${action}" not supported.`);
       }
-    }
+    });
 
-    // Add SeekTo Support with safety
+    // Add SeekTo Support
     try {
       navigator.mediaSession.setActionHandler("seekto", (details) => {
         if (details.seekTime !== undefined && widgetRef.current) {
@@ -541,13 +557,10 @@ export default function GymMusicPlayer() {
       });
     } catch (e) {}
 
-    // No repetitive cleanup needed for stable refs approach during re-renders
-    // but on unmount we clean
     return () => {
-      // Optional: don't cleanup globally if we want persistent session during component switches
-      // but standard is to cleanup
+      // We don't unregister them globally to maintain control if screen turns off
     };
-  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist]); // Only re-run when metadata truly changes
+  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist, togglePlayback, handleNext, handlePrev]);
 
   useEffect(() => {
     if ("mediaSession" in navigator) {

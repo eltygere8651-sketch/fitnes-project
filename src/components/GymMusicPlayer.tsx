@@ -22,6 +22,8 @@ import {
   LogIn,
   Headphones,
   Save,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   collection,
@@ -72,11 +74,18 @@ const getPlaylistGradientClass = (name: string) => {
   return gradients[hash % gradients.length];
 };
 
+const getEmbedUrl = (url: string, autoPlay: boolean = false) => {
+  const encodedUrl = encodeURIComponent(url);
+  const autoPlayParam = autoPlay ? "true" : "false";
+  return `https://w.soundcloud.com/player/?url=${encodedUrl}&color=%2310b981&auto_play=${autoPlayParam}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_playcount=false&buying=false&sharing=false&download=false&api_enable=true`;
+};
+
 export default function GymMusicPlayer() {
   const { user, loading: authLoading, setAuthModalOpen } = useFirebase();
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
+  const [isTracklistOpen, setIsTracklistOpen] = useState(true);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
@@ -124,6 +133,10 @@ export default function GymMusicPlayer() {
     alert("Acceso bloqueado por seguridad (1 hora).");
   };
   const [volume, setVolume] = useState(70);
+  const volumeRef = useRef(volume);
+  useEffect(() => {
+    volumeRef.current = volume;
+  }, [volume]);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isShuffle, setIsShuffle] = useState(false);
@@ -143,6 +156,10 @@ export default function GymMusicPlayer() {
   const currentUrl = currentTrack.url || currentTrack.soundcloudUrl || "";
 
   // Keep background JS context alive on iOS/Android via silent loop ambient audio synchronizer
+  const [hasInitializedWidget, setHasInitializedWidget] = useState(false);
+  const [initialIframeUrl] = useState(() => getEmbedUrl(currentUrl, false));
+  const loadedTrackUrlRef = useRef<string>(currentUrl);
+
   useEffect(() => {
     if (!silentAudioRef.current) return;
     silentAudioRef.current.volume = 0.05; // Non-zero volume is more reliable for lock screen sessions
@@ -156,78 +173,102 @@ export default function GymMusicPlayer() {
   }, [isPlaying]);
 
   const togglePlayback = useCallback(() => {
-    setIsPlaying(prev => {
-      const nextState = !prev;
-      if (silentAudioRef.current) {
-        if (nextState) silentAudioRef.current.play().catch(() => {});
-        else silentAudioRef.current.pause();
+    const widget = widgetRef.current;
+    if (!widget || !hasInitializedWidget) {
+      console.warn("Widget not ready");
+      return;
+    }
+
+    if (silentAudioRef.current) {
+      if (!isPlaying) {
+        silentAudioRef.current.play().catch(() => {});
+      } else {
+        silentAudioRef.current.pause();
       }
-      if (widgetRef.current) {
-        if (nextState) widgetRef.current.play();
-        else widgetRef.current.pause();
-      }
-      return nextState;
-    });
-  }, []);
+    }
+
+    if (isPlaying) {
+      widget.toggle();
+      setIsPlaying(false);
+    } else {
+      widget.toggle();
+      setIsPlaying(true);
+    }
+  }, [isPlaying, hasInitializedWidget]);
 
   const handleNext = useCallback(() => {
     if (silentAudioRef.current) {
+      silentAudioRef.current.currentTime = 0;
       silentAudioRef.current.play().catch(() => {});
     }
+    
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
-        const randomIndex = Math.floor(Math.random() * engineTracks.length);
+        const currentIndex = engineTrackIndex;
+        let randomIndex = Math.floor(Math.random() * engineTracks.length);
+        if (randomIndex === currentIndex && engineTracks.length > 1) {
+          randomIndex = (randomIndex + 1) % engineTracks.length;
+        }
         widgetRef.current.skip(randomIndex);
-        setIsPlaying(true);
       } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
-        const randomIndex = Math.floor(
-          Math.random() * selectedPlaylist.tracks.length,
-        );
+        const currentIndex = currentTrackIndex;
+        let randomIndex = Math.floor(Math.random() * selectedPlaylist.tracks.length);
+        if (randomIndex === currentIndex) {
+          randomIndex = (randomIndex + 1) % selectedPlaylist.tracks.length;
+        }
         setCurrentTrackIndex(randomIndex);
-        setIsPlaying(true);
       }
+      setIsPlaying(true);
       return;
     }
 
     if (engineTracks.length > 1 && widgetRef.current) {
       widgetRef.current.next();
-      setIsPlaying(true);
     } else if (
       selectedPlaylist &&
       currentTrackIndex < selectedPlaylist.tracks.length - 1
     ) {
       setCurrentTrackIndex((prev) => prev + 1);
-      setIsPlaying(true);
+    } else if (selectedPlaylist && selectedPlaylist.tracks.length > 0) {
+      setCurrentTrackIndex(0);
     }
-  }, [selectedPlaylist, currentTrackIndex, engineTracks, isShuffle]);
+    setIsPlaying(true);
+  }, [selectedPlaylist, currentTrackIndex, engineTracks, isShuffle, engineTrackIndex]);
 
   const handlePrev = useCallback(() => {
     if (silentAudioRef.current) {
+      silentAudioRef.current.currentTime = 0;
       silentAudioRef.current.play().catch(() => {});
     }
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
-        const randomIndex = Math.floor(Math.random() * engineTracks.length);
+        const currentIndex = engineTrackIndex;
+        let randomIndex = Math.floor(Math.random() * engineTracks.length);
+        if (randomIndex === currentIndex && engineTracks.length > 1) {
+          randomIndex = (randomIndex + 1) % engineTracks.length;
+        }
         widgetRef.current.skip(randomIndex);
-        setIsPlaying(true);
       } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
-        const randomIndex = Math.floor(
-          Math.random() * selectedPlaylist.tracks.length,
-        );
+        const currentIndex = currentTrackIndex;
+        let randomIndex = Math.floor(Math.random() * selectedPlaylist.tracks.length);
+        if (randomIndex === currentIndex) {
+          randomIndex = (randomIndex + 1) % selectedPlaylist.tracks.length;
+        }
         setCurrentTrackIndex(randomIndex);
-        setIsPlaying(true);
       }
+      setIsPlaying(true);
       return;
     }
 
     if (engineTracks.length > 1 && widgetRef.current) {
       widgetRef.current.prev();
-      setIsPlaying(true);
     } else if (currentTrackIndex > 0) {
       setCurrentTrackIndex((prev) => prev - 1);
-      setIsPlaying(true);
+    } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
+      setCurrentTrackIndex(selectedPlaylist.tracks.length - 1);
     }
-  }, [currentTrackIndex, engineTracks, isShuffle, selectedPlaylist]);
+    setIsPlaying(true);
+  }, [currentTrackIndex, engineTracks, isShuffle, selectedPlaylist, engineTrackIndex]);
 
   // Fetch meta for custom UI
   useEffect(() => {
@@ -243,8 +284,6 @@ export default function GymMusicPlayer() {
   // Sync with Firestore
   useEffect(() => {
     let q;
-    // Administrador ve todo el archivo global. Usuarios normales solo lo suyo.
-    // Invitados ven todo el archivo global (Modo Lectura).
     if (user && !isAdmin && savedSecurityCode !== "ho82788278") {
       q = query(
         collection(db, "users", user.uid, "playlists"),
@@ -259,7 +298,6 @@ export default function GymMusicPlayer() {
         const data = doc.data();
         let ownerId = data.ownerId;
         
-        // Si viene de collectionGroup, podemos extraer el ownerId del path: users/{ownerId}/playlists/{id}
         if (!ownerId && doc.ref.path.includes("users/")) {
           const segments = doc.ref.path.split("/");
           const userIdx = segments.indexOf("users");
@@ -271,7 +309,7 @@ export default function GymMusicPlayer() {
         return {
           id: doc.id,
           ...data,
-          ownerId: ownerId, // Aseguramos que tenga el ownerId para delete/update
+          ownerId: ownerId,
         };
       }) as MusicPlaylist[];
       setUserPlaylists(folders);
@@ -292,84 +330,103 @@ export default function GymMusicPlayer() {
     handleNextRef.current = handleNext;
   }, [handleNext]);
 
-  const initWidget = useCallback(() => {
+  const initWidget = useCallback((forcedUrl?: string) => {
     const iframe = document.getElementById("sc-iframe") as HTMLIFrameElement;
     if (iframe && (window as any).SC) {
-      if (widgetRef.current) {
-        try {
-          widgetRef.current.unbind((window as any).SC.Widget.Events.READY);
-          widgetRef.current.unbind((window as any).SC.Widget.Events.PLAY);
-          widgetRef.current.unbind((window as any).SC.Widget.Events.PAUSE);
-          widgetRef.current.unbind((window as any).SC.Widget.Events.PLAY_PROGRESS);
-          widgetRef.current.unbind((window as any).SC.Widget.Events.FINISH);
-        } catch (e) {}
-      }
+      if (!widgetRef.current) {
+        const widget = (window as any).SC.Widget(iframe);
+        widgetRef.current = widget;
 
-      const widget = (window as any).SC.Widget(iframe);
-      widgetRef.current = widget;
+        widget.bind((window as any).SC.Widget.Events.READY, () => {
+          console.log("SoundCloud Widget READY");
+          setHasInitializedWidget(true);
+          setIsLoadingTrack(false);
+          widget.setVolume(volumeRef.current);
+          
+          widget.getSounds((sounds: any[]) => {
+            if (sounds && sounds.length > 0) {
+              setEngineTracks(
+                sounds.map((s: any) => ({
+                  id: s.id.toString(),
+                  title: s.title,
+                  artist: s.user?.username || "SoundCloud Artist",
+                  artwork_url: s.artwork_url,
+                })),
+              );
+            }
+          });
 
-      widget.bind((window as any).SC.Widget.Events.READY, () => {
-        setIsLoadingTrack(false);
-        widget.setVolume(volume);
-        widget.getSounds((sounds: any[]) => {
-          if (sounds && sounds.length > 0) {
-            setEngineTracks(
-              sounds.map((s) => ({
-                id: s.id.toString(),
-                title: s.title,
-                artist: s.user?.username || "SoundCloud Artist",
-                artwork_url: s.artwork_url,
-              })),
-            );
+          widget.getDuration((d: number) => setDuration(d));
+          if (isPlayingRef.current) {
+            widget.play();
           }
         });
-        widget.getDuration((d: number) => setDuration(d));
-        if (isPlayingRef.current) {
-          // ensure small delay for reliable playback start on some devices
-          setTimeout(() => widget.play(), 50);
-        }
-      });
 
-      widget.bind((window as any).SC.Widget.Events.PLAY, () => {
-        setIsPlaying(true);
-        setIsLoadingTrack(false);
-        widget.getCurrentSoundIndex((index: number) =>
-          setEngineTrackIndex(index),
-        );
-        widget.getCurrentSound((sound: any) => {
-          setEngineCurrentSound(sound);
-          setDuration(sound.duration);
+        widget.bind((window as any).SC.Widget.Events.PLAY, () => {
+          setIsPlaying(true);
+          setIsLoadingTrack(false);
+          widget.getCurrentSoundIndex((index: number) => setEngineTrackIndex(index));
+          widget.getCurrentSound((sound: any) => {
+            setEngineCurrentSound(sound);
+            setDuration(sound.duration);
+          });
         });
-      });
 
-      widget.bind((window as any).SC.Widget.Events.PAUSE, () =>
-        setIsPlaying(false),
-      );
+        widget.bind((window as any).SC.Widget.Events.PAUSE, () => setIsPlaying(false));
 
-      widget.bind(
-        (window as any).SC.Widget.Events.PLAY_PROGRESS,
-        (data: any) => {
+        widget.bind((window as any).SC.Widget.Events.PLAY_PROGRESS, (data: any) => {
           setPosition(data.currentPosition);
-        },
-      );
+        });
 
-      widget.bind((window as any).SC.Widget.Events.FINISH, () => {
-        // Small delay to ensure audio buffer completes before starting next
-        setTimeout(() => {
+        widget.bind((window as any).SC.Widget.Events.ERROR, () => {
+          console.warn("Track blocked or unavailable. Skipping to next.");
           if (handleNextRef.current) handleNextRef.current();
-        }, 300);
-      });
+        });
+
+        widget.bind((window as any).SC.Widget.Events.FINISH, () => {
+          if (handleNextRef.current) handleNextRef.current();
+        });
+      }
+
+      // Smoothly load new URLs via Widget API
+      if (forcedUrl && widgetRef.current) {
+        // If not initialized yet, we can't 'load' reliably, so we'll wait for the READY event
+        // to handle the first track. But if it's already true, we load.
+        if (hasInitializedWidget && forcedUrl !== loadedTrackUrlRef.current) {
+          loadedTrackUrlRef.current = forcedUrl;
+          setIsLoadingTrack(true);
+          widgetRef.current.load(forcedUrl, {
+            auto_play: isPlayingRef.current,
+            show_artwork: false,
+            color: "#10b981",
+            callback: () => {
+              setIsLoadingTrack(false);
+              widgetRef.current.setVolume(volumeRef.current);
+              widgetRef.current.getSounds((sounds: any[]) => {
+                if (sounds && sounds.length > 0) {
+                  setEngineTracks(
+                    sounds.map((s: any) => ({
+                      id: s.id.toString(),
+                      title: s.title,
+                      artist: s.user?.username || "SoundCloud Artist",
+                      artwork_url: s.artwork_url,
+                    })),
+                  );
+                }
+              });
+            }
+          });
+        }
+      }
     }
-  }, []);
+  }, [hasInitializedWidget]);
 
   useEffect(() => {
     if (!(window as any).SC) {
       const script = document.createElement("script");
       script.src = "https://w.soundcloud.com/player/api.js";
       script.async = true;
-      script.onload = () => {
-        initWidget();
-      };
+      script.onload = () => initWidget();
       document.body.appendChild(script);
     } else {
       initWidget();
@@ -377,17 +434,16 @@ export default function GymMusicPlayer() {
   }, [initWidget]);
 
   useEffect(() => {
-    if (widgetRef.current) {
+    if (widgetRef.current && hasInitializedWidget) {
       widgetRef.current.setVolume(volume);
     }
-  }, [volume]);
+  }, [volume, hasInitializedWidget]);
 
   useEffect(() => {
-    if (selectedPlaylist) {
-      const timer = setTimeout(() => initWidget(), 300);
-      return () => clearTimeout(timer);
+    if (hasInitializedWidget && currentUrl) {
+      initWidget(currentUrl);
     }
-  }, [currentUrl, initWidget, selectedPlaylist]);
+  }, [currentUrl, initWidget, hasInitializedWidget]);
 
   const fetchMetadata = async (url: string) => {
     try {
@@ -842,12 +898,6 @@ export default function GymMusicPlayer() {
     }
   };
 
-  const getEmbedUrl = (url: string, autoPlay: boolean = false) => {
-    const encodedUrl = encodeURIComponent(url);
-    const autoPlayParam = autoPlay ? "true" : "false";
-    return `https://w.soundcloud.com/player/?url=${encodedUrl}&color=%2310b981&auto_play=${autoPlayParam}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_playcount=false&buying=false&sharing=false&download=false`;
-  };
-
   const iframeSrc = React.useMemo(() => getEmbedUrl(currentUrl, isPlaying), [currentUrl]);
 
   // --- DERIVED UI STATES ---
@@ -859,7 +909,24 @@ export default function GymMusicPlayer() {
     engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
 
   return (
-    <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full min-h-[85vh] lg:min-h-[620px] lg:h-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
+    <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
+      {/* Invisible embedding of SoundCloud API optimized to prevent iOS Safari/Android active viewport suspension */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0">
+        <iframe
+          id="sc-iframe"
+          src={initialIframeUrl}
+          allow="autoplay; encrypted-media"
+          className="w-[300px] h-[300px]"
+        />
+        <audio
+          ref={silentAudioRef}
+          loop
+          playsInline
+          preload="auto"
+          src="data:audio/wav;base64,UklGRqAAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YVAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8Pw=="
+          className="hidden"
+        />
+      </div>
       {/* 1. COMPACT HEADER */}
       <div className="flex justify-between items-center px-6 py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
         <div className="flex items-center gap-4 min-w-0 flex-1">
@@ -939,7 +1006,7 @@ export default function GymMusicPlayer() {
                 </button>
             </div>
             
-            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full items-center md:items-stretch">
+            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none flex-1 min-h-0 w-full items-center md:items-stretch">
                 {userPlaylists.map(pl => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
@@ -1015,9 +1082,9 @@ export default function GymMusicPlayer() {
         <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
             
           {/* COMPACT PLAYER BAR (Integrated at the top) */}
-          <div className="flex-none bg-[#0a0a0b] border-b border-white/5 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-lg">
+          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-5 sm:p-7 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
             {/* Subtle bottom neon-accent decoration */}
-            <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400 to-transparent" />
+            <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent" />
             
             {selectedPlaylist ? (
               <div className="flex flex-col gap-3 sm:gap-4 items-center justify-center w-full max-w-2xl mx-auto">
@@ -1037,9 +1104,15 @@ export default function GymMusicPlayer() {
                         )}
                       </AnimatePresence>
                       <motion.div
-                        animate={{ rotate: isPlaying ? 360 : 0 }}
-                        transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
-                        className={`relative z-10 w-11 h-11 sm:w-14 sm:h-14 rounded-full overflow-hidden shadow-lg border border-white/10 ${isPlaying ? "border-emerald-500/45" : ""}`}
+                        animate={{ 
+                          rotate: isPlaying ? 360 : 0,
+                          scale: isPlaying ? [1, 1.02, 1] : 1
+                        }}
+                        transition={{ 
+                          rotate: { duration: 20, repeat: Infinity, ease: "linear" },
+                          scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
+                        }}
+                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"}`}
                       >
                         <img
                           src={displayArtwork}
@@ -1047,8 +1120,9 @@ export default function GymMusicPlayer() {
                           className="w-full h-full object-cover"
                         />
                         {/* Vinyl Record Center Hole Decor */}
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-2.5 h-2.5 bg-[#080809] rounded-full border border-white/20" />
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="w-3 h-3 bg-[#080809] rounded-full border border-white/20 shadow-inner" />
+                          <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/10" />
                         </div>
                       </motion.div>
                     </div>
@@ -1069,67 +1143,91 @@ export default function GymMusicPlayer() {
                 </div>
 
                 {/* BOTTOM/CENTER: Timeline + Controls combined */}
-                <div className="flex flex-col w-full max-w-md gap-3 sm:gap-4 px-4 sm:px-0">
+                <div className="flex flex-col w-full max-w-md gap-5 sm:gap-7 px-4 sm:px-0">
                   
                   {/* Controls Row */}
-                  <div className="flex items-center justify-center gap-5 sm:gap-6 w-full">
+                  <div className="flex items-center justify-between w-full px-1">
                     <button
                       onClick={() => setIsShuffle(!isShuffle)}
                       title="Aleatorio"
-                      className={`p-1.5 sm:p-2 transition-all transform hover:scale-115 ${isShuffle ? "text-emerald-500 bg-emerald-500/10 rounded-full" : "text-slate-500 hover:text-white"}`}
+                      className={`p-2 transition-all transform active:scale-90 flex-shrink-0 ${isShuffle ? "text-emerald-400 bg-emerald-500/10 rounded-full ring-1 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "text-slate-500 hover:text-white"}`}
                     >
-                      <Shuffle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                      <Shuffle className="w-5 h-5" />
                     </button>
+                    
                     <button
                       onClick={handlePrev}
                       title="Anterior"
-                      className="p-1.5 sm:p-2 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                      className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-105 flex-shrink-0"
                     >
-                      <SkipBack className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <SkipBack className="w-6 h-6 fill-current" />
                     </button>
-                    <motion.button
-                      whileTap={{ scale: 0.92 }}
-                      onClick={togglePlayback}
-                      className={`w-10 h-10 sm:w-12 sm:h-12 rounded-full flex items-center justify-center transition-all duration-300 shadow-lg ${isPlaying ? "bg-emerald-500 text-black shadow-emerald-500/20 animate-pulse-slow" : "bg-white text-black hover:bg-slate-200"}`}
-                    >
-                      {isPlaying ? (
-                        <Pause className="w-4.5 h-4.5 sm:w-5 sm:h-5 fill-black" />
-                      ) : (
-                        <Play className="w-4.5 h-4.5 sm:w-5 sm:h-5 fill-black ml-0.5" />
-                      )}
-                    </motion.button>
+
+                    <div className="relative group mx-1 sm:mx-4 flex-shrink-0">
+                      {/* Premium Outer Glow */}
+                      <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
+                      
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        whileHover={{ scale: 1.05 }}
+                        onClick={togglePlayback}
+                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
+                          isPlaying 
+                            ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
+                            : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
+                        }`}
+                      >
+                        {isPlaying ? (
+                          <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+                        ) : (
+                          <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+                        )}
+                      </motion.button>
+                    </div>
+
                     <button
                       onClick={handleNext}
                       title="Siguiente"
-                      className="p-1.5 sm:p-2 text-slate-500 hover:text-white transition-all transform hover:scale-115"
+                      className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-105 flex-shrink-0"
                     >
-                      <SkipForward className="w-4 h-4 sm:w-5 sm:h-5" />
+                      <SkipForward className="w-6 h-6 fill-current" />
                     </button>
 
-                    {/* Compact Volume Control */}
-                    <div className="flex items-center gap-2 ml-2 sm:ml-4 group/vol">
-                      <Volume2 className="w-3.5 h-3.5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors shrink-0" />
-                      <div className="w-12 sm:w-20 h-1 bg-white/10 rounded-full relative cursor-pointer">
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          value={volume}
-                          onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-                          className="absolute inset-x-0 -inset-y-2 w-full h-5 opacity-0 cursor-pointer z-40"
-                        />
-                        <div
-                          className="h-full bg-emerald-500/60 group-hover/vol:bg-emerald-500 rounded-full transition-colors"
-                          style={{ width: `${volume}%` }}
-                        />
+                    {/* Vertical Volume Control */}
+                    <div className="relative flex items-center justify-center group/vol flex-shrink-0 cursor-pointer w-8 h-8 sm:w-10 sm:h-10">
+                      <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors" />
+                      
+                      {/* Vertical Slider Flyout (Wrapper with bottom padding bridges the hover gap) */}
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 pb-2 opacity-0 pointer-events-none group-hover/vol:opacity-100 group-hover/vol:pointer-events-auto transition-all duration-300 z-50">
+                        <div className="w-10 h-28 sm:w-12 sm:h-32 bg-[#0a0a0b]/95 backdrop-blur-3xl border border-white/10 rounded-full flex flex-col items-center justify-center py-4 shadow-2xl">
+                          <div className="relative w-1.5 h-full bg-white/10 rounded-full overflow-hidden flex flex-col justify-end">
+                            <input
+                              type="range"
+                              min="0"
+                              max="100"
+                              value={volume}
+                              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
+                              style={{ 
+                                WebkitAppearance: "slider-vertical",
+                                appearance: "slider-vertical"
+                              }}
+                              // @ts-ignore
+                              orient="vertical"
+                            />
+                            <div
+                              className="absolute bottom-0 left-0 right-0 bg-emerald-500 group-hover/vol:bg-emerald-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] pointer-events-none"
+                              style={{ height: `${volume}%` }}
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Progress Timeline Row */}
-                  <div className="flex items-center justify-between gap-3 text-[8px] font-mono font-bold text-slate-500 uppercase tracking-widest w-full">
-                    <span className="w-8 text-right shrink-0">{formatTime(position)}</span>
-                    <div className="flex-1 py-1.5 relative flex items-center cursor-pointer min-w-0">
+                  <div className="flex flex-col gap-3 w-full mt-1">
+                    <div className="flex-1 relative flex items-center h-4 cursor-pointer min-w-0 group/timeline">
                       <input
                         type="range"
                         min="0"
@@ -1138,40 +1236,27 @@ export default function GymMusicPlayer() {
                         onChange={handleSeek}
                         className="absolute inset-x-0 inset-y-0 w-full h-full opacity-0 cursor-pointer z-40"
                       />
-                      <div className="w-full h-1 bg-white/10 rounded-full relative overflow-visible pointer-events-none">
+                      <div className="w-full h-1.5 bg-white/5 rounded-full relative overflow-hidden pointer-events-none border border-white/5">
                         <div
-                          className="h-full bg-emerald-500 rounded-full relative"
+                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full relative transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                           style={{
                             width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
                           }}
                         >
-                          <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow-[0_0_8px_rgba(16,185,129,0.5)] translate-x-1/2" />
+                          <div className="absolute right-0 inset-y-0 w-12 bg-white/20 blur-md pointer-events-none" />
                         </div>
                       </div>
                     </div>
-                    <span className="w-8 text-left shrink-0">{formatTime(duration)}</span>
-                  </div>
-                </div>
 
-                {/* Invisible embedding of SoundCloud API optimized to prevent iOS Safari/Android active viewport suspension */}
-                <div 
-                  className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0"
-                >
-                  <iframe
-                    id="sc-iframe"
-                    key={currentUrl}
-                    src={iframeSrc}
-                    allow="autoplay; encrypted-media"
-                    className="w-[300px] h-[300px]"
-                  />
-                  <audio
-                    ref={silentAudioRef}
-                    loop
-                    playsInline
-                    preload="auto"
-                    src="data:audio/wav;base64,UklGRqAAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YVAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8Pw=="
-                    className="hidden"
-                  />
+                    <div className="flex items-center justify-between text-[9px] font-black font-mono text-slate-500 uppercase tracking-[0.2em] w-full px-0.5">
+                      <span className="shrink-0">{formatTime(position)}</span>
+                      <div className="flex items-center gap-1.5 opacity-30">
+                        <Sparkles className="w-2.5 h-2.5" />
+                        <span className="hidden sm:inline">Quantum Engine</span>
+                      </div>
+                      <span className="shrink-0">{formatTime(duration)}</span>
+                    </div>
+                  </div>
                 </div>
 
               </div>
@@ -1184,80 +1269,165 @@ export default function GymMusicPlayer() {
 
           {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
           {selectedPlaylist ? (
-            <div className="flex-1 flex flex-col min-h-0 bg-black/40">
-              <div className="p-4 sm:p-5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40">
-                <div className="space-y-0.5">
-                  <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest">
+            <div className="flex flex-col min-h-0 bg-black/40 flex-1">
+              <button 
+                onClick={() => setIsTracklistOpen(!isTracklistOpen)}
+                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40 hover:bg-[#0a0a0b]/80 transition-colors cursor-pointer group"
+              >
+                {/* Neon accent on hover */}
+                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-emerald-500/0 group-hover:bg-emerald-500/20 transition-colors" />
+                <div className="space-y-0.5 text-left">
+                  <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
                     LISTA DE REPRODUCCIÓN
+                    <span className="px-1.5 py-0.5 rounded pl-1 bg-emerald-500/10 text-[7px] text-emerald-400">
+                      {displayTracks.length} PISTAS
+                    </span>
                   </p>
                   <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate max-w-[240px]">
                     {selectedPlaylist.name}
                   </h3>
                 </div>
-                <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
-              </div>
+                <div className="flex items-center gap-3">
+                  <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0 hidden sm:block" />
+                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shrink-0">
+                    {isTracklistOpen ? (
+                      <ChevronUp className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-white" />
+                    )}
+                  </div>
+                </div>
+              </button>
 
-              <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-1.5 scrollbar-hide">
-                {displayTracks.map((track, idx) => (
+              <AnimatePresence initial={false}>
+                {isTracklistOpen && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="flex flex-col flex-1 min-h-0 overflow-hidden bg-[#030303]"
+                  >
+                    <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0.5 scrollbar-none">
+                {displayTracks.map((track, idx) => {
+                  const isActive = displayTrackIndex === idx;
+                  return (
                   <button
                     key={track.id || idx}
                     onClick={() => {
                       if (silentAudioRef.current) {
                         silentAudioRef.current.play().catch(() => {});
                       }
-                      if (engineTracks.length > 0) {
-                        widgetRef.current?.skip(idx);
-                        widgetRef.current?.play();
-                        setIsPlaying(true);
+                      if (isActive && hasInitializedWidget && widgetRef.current) {
+                        if (!isPlaying) {
+                           widgetRef.current.play();
+                        }
                       } else {
-                        setCurrentTrackIndex(idx);
-                        setIsPlaying(true);
+                        if (engineTracks.length > 0) {
+                          widgetRef.current?.skip(idx);
+                          widgetRef.current?.play();
+                        } else {
+                          setCurrentTrackIndex(idx);
+                        }
                       }
+                      setIsPlaying(true);
                     }}
-                    className={`w-full flex items-center gap-4 p-3 sm:p-3.5 rounded-xl transition-all text-left border ${
-                      displayTrackIndex === idx
-                        ? "bg-emerald-500 border-white/10 text-black shadow-md font-semibold"
-                        : "bg-white/[0.02] border-transparent hover:bg-white/[0.04] hover:border-white/5 text-slate-300 hover:text-white"
+                    className={`group/track w-full flex items-center gap-3 sm:gap-4 px-3 py-2 sm:px-4 sm:py-2.5 transition-all text-left relative overflow-hidden rounded-xl ${
+                      isActive
+                        ? "bg-white/[0.08]"
+                        : "bg-transparent hover:bg-white/[0.04]"
                     }`}
                   >
-                    <div
-                      className={`text-[9px] font-black w-4 shrink-0 transition-colors ${displayTrackIndex === idx ? "text-black/40" : "text-emerald-500/30"}`}
-                    >
-                      {(idx + 1).toString().padStart(2, "0")}
+                    {/* Track Number & Hover/Active States (Spotify Style) */}
+                    <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                      {/* Default Track Number */}
+                      <span className={`text-[12px] font-medium transition-opacity duration-200 ${
+                        isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
+                      }`}>
+                        {idx + 1}
+                      </span>
+                      
+                      {/* Play/Pause/EQ Icon overlay */}
+                      <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                        isActive ? "opacity-100" : "opacity-0 group-hover/track:opacity-100"
+                      }`}>
+                         {isActive && isPlaying ? (
+                            <div className="flex gap-[2px] items-end h-[12px] shrink-0">
+                              {[...Array(3)].map((_, i) => (
+                                <motion.div
+                                  key={i}
+                                  animate={{ height: [3, 12, 3] }}
+                                  transition={{ duration: 0.45 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
+                                  className="w-[2px] bg-emerald-400 rounded-full"
+                                />
+                              ))}
+                            </div>
+                         ) : (
+                            <Play className={`w-4 h-4 ml-0.5 fill-current ${isActive ? "text-emerald-400" : "text-white"}`} />
+                         )}
+                      </div>
                     </div>
                     
-                    <div className="flex-1 min-w-0">
-                      <p className={`text-[12px] font-bold truncate leading-tight ${displayTrackIndex === idx ? "text-black" : "text-white"}`}>
+                    {/* Thumbnail */}
+                    <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                      {track.artwork_url || track.thumbnail || track.artwork ? (
+                        <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
+                      ) : (
+                        <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                      )}
+                      
+                      {/* Mobile Play Overlay (since number is hidden on mobile) */}
+                      <div className={`sm:hidden absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/track:opacity-100'}`}>
+                         {isActive && isPlaying ? (
+                            <div className="flex gap-[2px] items-end h-[12px] shrink-0">
+                              {[...Array(3)].map((_, i) => (
+                                <motion.div
+                                  key={i}
+                                  animate={{ height: [3, 12, 3] }}
+                                  transition={{ duration: 0.45 + i * 0.1, repeat: Infinity }}
+                                  className="w-[2px] bg-emerald-400 rounded-full"
+                                />
+                              ))}
+                            </div>
+                         ) : (
+                            <Play className="w-5 h-5 ml-0.5 fill-white" />
+                         )}
+                      </div>
+                    </div>
+                    
+                    {/* Track Info */}
+                    <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
+                      <p className={`text-[13px] sm:text-[14px] font-medium truncate leading-tight transition-colors duration-200 ${
+                        isActive ? "text-emerald-400" : "text-white"
+                      }`}>
                         {track.title}
                       </p>
-                      <p className={`text-[8.5px] font-bold uppercase truncate opacity-60 mt-0.5`}>
-                        {track.artist || "Unknown Artist"}
+                      <p className={`text-[11px] sm:text-[12px] font-normal truncate mt-0.5 transition-colors duration-200 ${
+                        isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
+                      }`}>
+                        {track.artist || track.author || "Unknown Artist"}
                       </p>
                     </div>
 
-                    {displayTrackIndex === idx && isPlaying && (
-                      <div className="flex gap-0.5 items-end h-3 shrink-0">
-                        {[...Array(3)].map((_, i) => (
-                          <motion.div
-                            key={i}
-                            animate={{ height: [2, 11, 2] }}
-                            transition={{
-                              duration: 0.45 + i * 0.1,
-                              repeat: Infinity,
-                            }}
-                            className="w-[2px] bg-black rounded-full"
-                          />
-                        ))}
-                      </div>
-                    )}
+                    {/* Duration / Options */}
+                    <div className="hidden sm:flex items-center gap-4 shrink-0 relative z-10 text-[12px] font-medium text-slate-400">
+                      {track.duration && (
+                         <span className="w-10 text-right group-hover/track:text-white transition-colors">
+                           {track.duration}
+                         </span>
+                      )}
+                    </div>
                   </button>
-                ))}
-              </div>
+                  );
+                })}
+                    </div>
 
-              <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
-                <span>Total de canciones: {displayTracks.length || 0}</span>
-                <span className="text-emerald-500">Bienve Engine Premium</span>
-              </div>
+                    <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                      <span>Total de canciones: {displayTracks.length || 0}</span>
+                      <span className="text-emerald-500">Bienve Engine Premium</span>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-transparent">
@@ -1411,13 +1581,13 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
             animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="absolute inset-0 z-[70] flex items-start justify-center p-6 bg-black/60 pt-20 sm:pt-32"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
               initial={{ opacity: 0, y: -40, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -40, scale: 0.95 }}
-              className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative overflow-hidden"
+              className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative"
             >
               <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/20 blur-[120px] rounded-full" />
               
@@ -1516,13 +1686,13 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
             animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="absolute inset-0 z-[70] flex items-start justify-center p-6 bg-black/60 pt-20 sm:pt-32"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
               initial={{ opacity: 0, y: -40, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -40, scale: 0.95 }}
-              className="w-full max-w-xl bg-[#0a0a0a] border border-red-500/20 rounded-[40px] p-8 sm:p-12 shadow-[0_0_100px_rgba(239,68,68,0.1)] relative overflow-hidden"
+              className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-red-500/20 rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(239,68,68,0.1)] relative"
             >
               <div className="absolute -top-32 -right-32 w-64 h-64 bg-red-500/20 blur-[120px] rounded-full" />
               
@@ -1609,13 +1779,13 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
             animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="absolute inset-0 z-50 flex items-start justify-center p-6 bg-black/60 pt-20 sm:pt-32"
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
               initial={{ opacity: 0, y: -40, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: -40, scale: 0.95 }}
-              className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative overflow-hidden"
+              className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative"
             >
               <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/20 blur-[120px] rounded-full" />
               <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-emerald-500/5 blur-[120px] rounded-full" />

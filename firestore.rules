@@ -44,15 +44,17 @@ service cloud.firestore {
       // Creación permitida si el documento tiene la clave secreta correcta o es el admin
       allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
       
-      // Escritura restringida únicamente al Admin
-      allow update, delete: if isAdmin() && (request.auth.uid == userId);
+      // Escritura permitida al Admin, al Dueño, o a quien conozca la clave (si el doc la tiene)
+      allow update, delete: if isAdmin() || 
+                             (isSignedIn() && (request.auth.uid == userId || existing().adminSecret == "ho82788278"));
     }
 
     // Regla de respaldo para cualquier subcolección de playlist si existiera
     match /{path=**}/playlists/{playlistId} {
       allow list, get: if true;
       allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
-      allow update, delete: if isAdmin();
+      allow update, delete: if isAdmin() || 
+                             (isSignedIn() && (request.auth.uid == userId || (resource != null && resource.data.adminSecret == "ho82788278")));
     }
   }
 }

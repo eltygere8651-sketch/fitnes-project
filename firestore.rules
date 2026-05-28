@@ -36,20 +36,23 @@ service cloud.firestore {
       allow delete: if isAdmin() && (request.auth.uid == userId);
     }
 
-    // 2. Playlists (Acceso Público de Lectura, Escritura SOLO Admin)
-    // Usamos collectionGroup para playlists o paths específicos
+    // 2. Playlists (Acceso Público de Lectura, Escritura SOLO Admin o con Clave)
     match /users/{userId}/playlists/{playlistId} {
-      // Lectura pública por si quieres compartir tus listas
+      // Lectura pública
       allow list, get: if true; 
       
-      // Escritura RESTRINGIDA únicamente al Admin
-      allow create, update, delete: if isAdmin() && (request.auth.uid == userId);
+      // Creación permitida si el documento tiene la clave secreta correcta o es el admin
+      allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
+      
+      // Escritura restringida únicamente al Admin
+      allow update, delete: if isAdmin() && (request.auth.uid == userId);
     }
 
     // Regla de respaldo para cualquier subcolección de playlist si existiera
     match /{path=**}/playlists/{playlistId} {
       allow list, get: if true;
-      allow create, update, delete: if isAdmin();
+      allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
+      allow update, delete: if isAdmin();
     }
   }
 }

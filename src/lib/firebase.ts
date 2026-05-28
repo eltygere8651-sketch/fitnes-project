@@ -7,7 +7,8 @@ import {
   signOut, 
   getRedirectResult, 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword 
+  createUserWithEmailAndPassword,
+  signInAnonymously 
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -76,6 +77,7 @@ export const signupWithEmail = async (email: string, pass: string) => {
 };
 
 export const logout = () => signOut(auth);
+export { signInAnonymously };
 
 // Handle redirect result on load
 getRedirectResult(auth)

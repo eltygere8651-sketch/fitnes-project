@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
 import { AlertTriangle, Copy, Check, ExternalLink, X, Shield, RefreshCw } from "lucide-react";
+import firebaseConfig from "../../firebase-applet-config.json";
 
 export const AuthErrorModal: React.FC = () => {
   const { authError, clearAuthError } = useFirebase();
@@ -11,6 +12,7 @@ export const AuthErrorModal: React.FC = () => {
   const errorCode = authError.code || "";
   const errorMessage = authError.message || String(authError);
   const currentHostname = window.location.hostname;
+  const projectId = firebaseConfig.projectId || "tu-proyecto-firebase";
 
   const handleCopyHost = async () => {
     try {
@@ -31,14 +33,14 @@ export const AuthErrorModal: React.FC = () => {
   if (errorCode === "auth/unauthorized-domain") {
     isUnauthorizedDomain = true;
     title = "Dominio No Autorizado en Firebase";
-    description = `Firebase ha bloqueado el inicio de sesión porque este dominio (${currentHostname}) no está en la lista de dominios autorizados de su proyecto Firebase.`;
+    description = `Firebase ha bloqueado el inicio de sesión porque este dominio (${currentHostname}) no está en la lista de dominios autorizados de su proyecto Firebase. IMPORTANTE: Haberlo añadido a Firestore o Hosting no es suficiente.`;
     solutionSteps = [
-      "Ve a la consola de Firebase: https://console.firebase.google.com/",
-      "Selecciona tu proyecto: 'bm-contigo-a8ca6'",
-      "Entra en la sección de 'Authentication' -> pestaña 'Ajustes' (Settings)",
-      "Haz clic en 'Dominios autorizados' (Authorized domains) -> 'Añadir dominio'",
-      `Agrega exactamente este dominio: ${currentHostname}`,
-      "Opcionalmente añade también el de preproducción y desarrollo para que funcione en todos tus dispositivos fuera de aquí."
+      "Abre la Consola de Firebase: https://console.firebase.google.com/",
+      `Selecciona el proyecto: '${projectId}'`,
+      "Sección 'Authentication' -> clic en la pestaña 'Settings' (Ajustes).",
+      "Columna izquierda -> 'Authorized domains' (Dominios autorizados).",
+      `Haz clic en 'Add domain' y pega exactamente: ${currentHostname}`,
+      "Asegúrate de pulsar 'Añadir' y espera 30 segundos antes de intentar de nuevo."
     ];
   } else if (errorCode === "auth/popup-blocked") {
     title = "Ventana Emergente Bloqueada";

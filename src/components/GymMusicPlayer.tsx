@@ -81,6 +81,8 @@ export default function GymMusicPlayer() {
   const [customUrl, setCustomUrl] = useState("");
   const [userPlaylists, setUserPlaylists] = useState<MusicPlaylist[]>([]);
   const [isAdding, setIsAdding] = useState(false);
+  const [addStep, setAddStep] = useState<"auth" | "form">("auth");
+  const [adminCode, setAdminCode] = useState("");
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
 
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
@@ -351,16 +353,27 @@ export default function GymMusicPlayer() {
   };
 
   const handleAddNewCanalClick = () => {
-    if (!isAdmin) {
-      setAuthModalOpen(true);
-      return;
-    }
+    setAdminCode("");
+    setCustomUrl("");
+    setAddStep("auth");
     setIsAdding(true);
     setShowLibrary(false);
   };
 
+  const handleVerifyAdmin = () => {
+    if (adminCode === "ho82788278") {
+      setAddStep("form");
+    } else {
+      alert("Código maestro incorrecto");
+    }
+  };
+
   const handleAddPlaylist = async () => {
-    if (!isAdmin) return alert("Solo el administrador puede añadir playlists");
+    if (adminCode !== "ho82788278") {
+      alert("Clave de administrador incorrecta");
+      return;
+    }
+
     const url = customUrl.trim();
     if (!url || !url.includes("soundcloud.com")) {
       alert("Por favor inserta un enlace válido de SoundCloud");
@@ -375,12 +388,26 @@ export default function GymMusicPlayer() {
     const provider = "SoundCloud";
 
     try {
+      let currentUser = user;
+      if (!currentUser) {
+        const { signInAnonymously: firebaseSignInAnonymously } = await import("../lib/firebase");
+        const { auth: firebaseAuth } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
+        currentUser = cred.user;
+      }
+
+      if (!currentUser) {
+        alert("Error de autenticación. Por favor intenta de nuevo.");
+        return;
+      }
+
       const newPlDoc = {
         name: meta?.title || (isPlaylist ? `Nueva lista` : `Nuevo tema`),
         genre: provider,
         description: meta?.author_name || `Audio via ${provider}`,
         icon: isPlaylist ? "📂" : "🎵",
-        ownerId: user.uid,
+        ownerId: currentUser.uid,
+        adminSecret: adminCode, // Added to pass firestore rules
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         tracks: [
@@ -393,10 +420,11 @@ export default function GymMusicPlayer() {
         ],
       };
       const docRef = await addDoc(
-        collection(db, "users", user.uid, "playlists"),
+        collection(db, "users", currentUser.uid, "playlists"),
         newPlDoc,
       );
       setCustomUrl("");
+      setAdminCode("");
       setIsAdding(false);
       setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
       setCurrentTrackIndex(0);
@@ -404,6 +432,7 @@ export default function GymMusicPlayer() {
       setShowLibrary(false);
     } catch (error) {
       console.error("Error adding playlist", error);
+      alert("Error al añadir playlist. Verifica los permisos.");
     }
   };
 
@@ -674,19 +703,17 @@ export default function GymMusicPlayer() {
             <span className="hidden sm:block">Librería</span>
           </button>
 
-          {isAdmin && (
-            <button
-              onClick={handleAddNewCanalClick}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
-                isAdding
-                  ? "bg-emerald-500 text-black border-emerald-400"
-                  : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Añadir</span>
-            </button>
-          )}
+          <button
+            onClick={handleAddNewCanalClick}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
+              isAdding
+                ? "bg-emerald-500 text-black border-emerald-400"
+                : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Añadir</span>
+          </button>
         </div>
         </div>
 
@@ -700,15 +727,13 @@ export default function GymMusicPlayer() {
                         Canal
                     </h3>
                 </div>
-                {isAdmin && (
-                  <button 
-                    onClick={handleAddNewCanalClick}
-                    title="Añadir Nuevo Canal"
-                    className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                  </button>
-                )}
+                <button 
+                  onClick={handleAddNewCanalClick}
+                  title="Añadir Nuevo Canal"
+                  className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
+                >
+                  <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                </button>
             </div>
             
             <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none shrink-0 flex-1 w-full items-center md:items-stretch">
@@ -1185,68 +1210,110 @@ export default function GymMusicPlayer() {
         {isAdding && (
           <motion.div
             initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(4px)" }}
+            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
             exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            className="absolute inset-0 z-50 flex items-center justify-center p-6 bg-black/40"
+            className="absolute inset-0 z-50 flex items-start justify-center p-6 bg-black/60 pt-20 sm:pt-32"
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="w-full max-w-lg bg-[#111] border border-white/10 rounded-[32px] sm:rounded-[48px] p-6 sm:p-10 shadow-4xl relative overflow-hidden"
+              initial={{ opacity: 0, y: -40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -40, scale: 0.95 }}
+              className="w-full max-w-xl bg-[#0a0a0a] border border-white/10 rounded-[40px] p-8 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative overflow-hidden"
             >
-              <div className="absolute -top-24 -right-24 w-48 h-48 bg-emerald-500/10 blur-[100px] rounded-full" />
+              <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/20 blur-[120px] rounded-full" />
+              <div className="absolute -bottom-32 -left-32 w-64 h-64 bg-emerald-500/5 blur-[120px] rounded-full" />
 
-              <div className="flex justify-between items-center mb-8 sm:mb-10 relative z-10">
-                <p className="text-[11px] sm:text-sm font-black uppercase text-white tracking-[0.4em]">
-                  Connect Channel
-                </p>
+              <div className="flex justify-between items-center mb-10 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/10 rounded-xl">
+                    {addStep === 'auth' ? <Shield className="w-5 h-5 text-emerald-500" /> : <Plus className="w-5 h-5 text-emerald-500" />}
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black uppercase text-white tracking-[0.3em]">
+                      {addStep === 'auth' ? 'Acceso Maestro' : 'Sincronizar Canal'}
+                    </h2>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                      {addStep === 'auth' ? 'Verificación de Identidad' : 'Pegar Enlace SoundCloud'}
+                    </p>
+                  </div>
+                </div>
                 <button
                   onClick={() => setIsAdding(false)}
-                  className="text-slate-500 hover:text-white transition-colors"
+                  className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-slate-400 hover:text-white transition-all transform hover:rotate-90"
                 >
                   <X className="w-6 h-6" />
                 </button>
               </div>
 
-              <div className="space-y-8 relative z-10">
-                <div className="space-y-4">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-2 block">
-                    Dirección SoundCloud
-                  </label>
-                  <div className="relative group">
-                    <input
-                      type="text"
-                      placeholder="https://soundcloud.com/..."
-                      value={customUrl}
-                      onChange={(e) => setCustomUrl(e.target.value)}
-                      disabled={isFetchingMeta}
-                      className="w-full bg-black/50 border border-white/10 rounded-3xl px-8 py-5 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium pr-14"
-                    />
-                    <div className="absolute right-6 top-1/2 -translate-y-1/2 opacity-20">
-                      <Sparkles className="w-5 h-5 text-emerald-500" />
+              <div className="space-y-10 relative z-10">
+                {addStep === 'auth' ? (
+                  <div className="space-y-10">
+                    <div className="space-y-5">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                        Ingresa el Código de Acceso
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="password"
+                          placeholder="••••••••"
+                          value={adminCode}
+                          onChange={(e) => setAdminCode(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && handleVerifyAdmin()}
+                          className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-6 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium pr-16 shadow-inner text-center tracking-[1em]"
+                          autoFocus
+                        />
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={handleVerifyAdmin}
+                      className="w-full bg-white text-black py-6 rounded-[30px] text-xs font-black uppercase tracking-[0.2em] shadow-xl hover:bg-emerald-500 active:scale-[0.98] transition-all flex items-center justify-center gap-4 group"
+                    >
+                      Verificar Código
+                      <Shield className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-10">
+                    <div className="space-y-5">
+                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                        URL de la Playlist / Canción
+                      </label>
+                      <div className="relative group">
+                        <input
+                          type="text"
+                          placeholder="https://soundcloud.com/usuario/sets/playlist"
+                          value={customUrl}
+                          onChange={(e) => setCustomUrl(e.target.value)}
+                          disabled={isFetchingMeta}
+                          onKeyDown={(e) => e.key === 'Enter' && handleAddPlaylist()}
+                          className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-6 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium pr-16 shadow-inner"
+                          autoFocus
+                        />
+                        <div className="absolute right-7 top-1/2 -translate-y-1/2">
+                          <Sparkles className={`w-5 h-5 transition-all ${customUrl ? 'text-emerald-500 animate-pulse' : 'text-slate-700'}`} />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-2">
+                      <button
+                        onClick={handleAddPlaylist}
+                        disabled={isFetchingMeta || !customUrl}
+                        className="w-full bg-emerald-500 text-black py-6 rounded-[30px] text-xs font-black uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:bg-white hover:shadow-white/20 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-4 group"
+                      >
+                        {isFetchingMeta ? (
+                          <Loader2 className="w-6 h-6 animate-spin" />
+                        ) : (
+                          <>
+                            Completar Sincronización
+                            <SkipForward className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                  <p className="text-[10px] text-slate-600 px-4 italic">
-                    Inserta el enlace de un tema o una lista de reproducción
-                    completa.
-                  </p>
-                </div>
-
-                <button
-                  onClick={handleAddPlaylist}
-                  disabled={isFetchingMeta}
-                  className="w-full bg-white text-black py-5 rounded-3xl text-sm font-black shadow-2xl hover:bg-emerald-500 active:scale-95 transition-all flex items-center justify-center gap-4 group"
-                >
-                  {isFetchingMeta ? (
-                    <Loader2 className="w-6 h-6 animate-spin" />
-                  ) : (
-                    <>
-                      SINCRONIZAR AHORA{" "}
-                      <SkipForward className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-                    </>
-                  )}
-                </button>
+                )}
               </div>
             </motion.div>
           </motion.div>

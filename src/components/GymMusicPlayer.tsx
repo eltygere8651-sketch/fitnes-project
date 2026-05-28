@@ -100,10 +100,8 @@ export default function GymMusicPlayer() {
   const [editingDescription, setEditingDescription] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [isSyncing, setIsSyncing] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
-  const [isTrackSnippet, setIsTrackSnippet] = useState(false);
   const [securityAttempts, setSecurityAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
   const [savedSecurityCode, setSavedSecurityCode] = useState<string | null>(null);
@@ -313,8 +311,6 @@ export default function GymMusicPlayer() {
       widget.bind((window as any).SC.Widget.Events.READY, () => {
         setIsLoadingTrack(false);
         widget.setVolume(volume);
-        
-        // Fetch track list from widget
         widget.getSounds((sounds: any[]) => {
           if (sounds && sounds.length > 0) {
             setEngineTracks(
@@ -323,21 +319,14 @@ export default function GymMusicPlayer() {
                 title: s.title,
                 artist: s.user?.username || "SoundCloud Artist",
                 artwork_url: s.artwork_url,
-                duration: s.duration,
-                isSnippet: s.duration <= 31000 // 30s + small buffer is usually a preview
               })),
             );
           }
         });
-
-        widget.getDuration((d: number) => {
-          setDuration(d);
-          setIsTrackSnippet(d <= 31000);
-        });
-
+        widget.getDuration((d: number) => setDuration(d));
         if (isPlayingRef.current) {
           // ensure small delay for reliable playback start on some devices
-          setTimeout(() => widget.play(), 100);
+          setTimeout(() => widget.play(), 50);
         }
       });
 
@@ -350,7 +339,6 @@ export default function GymMusicPlayer() {
         widget.getCurrentSound((sound: any) => {
           setEngineCurrentSound(sound);
           setDuration(sound.duration);
-          setIsTrackSnippet(sound.duration <= 31000);
         });
       });
 
@@ -366,35 +354,10 @@ export default function GymMusicPlayer() {
       );
 
       widget.bind((window as any).SC.Widget.Events.FINISH, () => {
-        // If it's a playlist (Set), the widget handles internal transitions. 
-        // We only trigger handleNext if it's a single track or the last track in the widget's list.
-        widget.getCurrentSoundIndex((idx: number) => {
-          widget.getSounds((sounds: any[]) => {
-            const isLastInWidget = sounds && idx === sounds.length - 1;
-            
-            // Wait a bit to see if SoundCloud starts the next one automatically
-            setTimeout(() => {
-              // If we are at the end of the widget's internal list, we might want to manually 
-              // loop or move to the next playlist entry if we had multiple URLs (not common here)
-              if (isLastInWidget) {
-                 if (handleNextRef.current) handleNextRef.current();
-              } else {
-                 // The widget should have automatically moved to next track in the set
-                 // its own PLAY event will update our state
-              }
-            }, 500);
-          });
-        });
-      });
-
-      // Error handling to prevent getting stuck
-      widget.bind((window as any).SC.Widget.Events.ERROR, () => {
-        console.error("SoundCloud widget playback error");
-        setIsLoadingTrack(false);
-        // Try skipping to next if error
+        // Small delay to ensure audio buffer completes before starting next
         setTimeout(() => {
           if (handleNextRef.current) handleNextRef.current();
-        }, 1000);
+        }, 300);
       });
     }
   }, []);
@@ -553,46 +516,6 @@ export default function GymMusicPlayer() {
     } catch (error) {
       console.error("Error adding playlist", error);
       alert("Error al añadir playlist. Verifica los permisos.");
-    }
-  };
-
-  const syncPlaylistMetadata = async () => {
-    if (!selectedPlaylist || !engineTracks.length || isSyncing) return;
-    
-    // Solo permitir sincronizar si tenemos el código maestro o somos admin
-    if (!isAdmin && savedSecurityCode !== "ho82788278") {
-      alert("Se requiere código maestro para sincronizar metadatos.");
-      return;
-    }
-
-    try {
-      setIsSyncing(true);
-      
-      const targetOwnerId = selectedPlaylist.ownerId;
-      if (!targetOwnerId) {
-        alert("No se pudo determinar el propietario para sincronizar.");
-        return;
-      }
-
-      // Convert engine tracks to our MusicTrack format
-      const updatedTracks: MusicTrack[] = engineTracks.map((et, i) => ({
-        id: et.id || `sync_${Date.now()}_${i}`,
-        title: et.title || "Unknown Title",
-        artist: et.artist || "Unknown Artist",
-        url: selectedPlaylist.tracks[0]?.url || "", // Keep the base URL
-      }));
-
-      await updateDoc(doc(db, "users", targetOwnerId, "playlists", selectedPlaylist.id), {
-        tracks: updatedTracks,
-        updatedAt: serverTimestamp(),
-      });
-      
-      alert(`Sincronización completa: ${updatedTracks.length} pistas actualizadas.`);
-    } catch (error: any) {
-      console.error("Error syncing metadata", error);
-      alert(`Error al sincronizar: ${error.message}`);
-    } finally {
-      setIsSyncing(false);
     }
   };
 
@@ -1129,24 +1052,19 @@ export default function GymMusicPlayer() {
                         </div>
                       </motion.div>
                     </div>
-                    <div className="flex flex-col min-w-0 shrink justify-center">
-                      <div className="flex items-center gap-1.5 overflow-hidden">
-                        <h1 className="text-[11px] sm:text-sm font-black text-white uppercase tracking-tight truncate max-w-[200px] sm:max-w-[320px] text-left">
-                          {displayTitle}
-                        </h1>
-                        {isLoadingTrack && (
-                          <Loader2 className="w-3 h-3 text-emerald-500 animate-spin shrink-0" />
-                        )}
-                        {isTrackSnippet && (
-                          <span className="px-1.5 py-0.5 bg-amber-500/10 text-amber-500 border border-amber-500/20 rounded-md text-[8px] font-black uppercase tracking-wider shrink-0">
-                            Previa (30s)
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-[8px] sm:text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[180px] sm:max-w-[300px] text-left">
-                        {displayArtist}
-                      </p>
+                  <div className="flex flex-col min-w-0 shrink justify-center">
+                    <div className="flex items-center gap-1.5 overflow-hidden">
+                      <h1 className="text-[11px] sm:text-sm font-black text-white uppercase tracking-tight truncate max-w-[200px] sm:max-w-[320px] text-left">
+                        {displayTitle}
+                      </h1>
+                      {isLoadingTrack && (
+                        <Loader2 className="w-3 h-3 text-emerald-500 animate-spin shrink-0" />
+                      )}
                     </div>
+                    <p className="text-[8px] sm:text-[9px] font-black text-emerald-400 uppercase tracking-[0.2em] mt-0.5 truncate max-w-[180px] sm:max-w-[300px] text-left">
+                      {displayArtist}
+                    </p>
+                  </div>
                   </div>
                 </div>
 
@@ -1309,20 +1227,9 @@ export default function GymMusicPlayer() {
                     </div>
                     
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <p className={`text-[12px] font-bold truncate leading-tight ${displayTrackIndex === idx ? "text-black" : "text-white"}`}>
-                          {track.title}
-                        </p>
-                        {(track as any).isSnippet && (
-                          <span className={`px-1 py-0.5 border rounded-sm text-[7px] font-black uppercase shrink-0 ${
-                            displayTrackIndex === idx 
-                              ? "bg-black/10 border-black/20 text-black/60" 
-                              : "bg-amber-500/10 border-amber-500/20 text-amber-500"
-                          }`}>
-                            Preview
-                          </span>
-                        )}
-                      </div>
+                      <p className={`text-[12px] font-bold truncate leading-tight ${displayTrackIndex === idx ? "text-black" : "text-white"}`}>
+                        {track.title}
+                      </p>
                       <p className={`text-[8.5px] font-bold uppercase truncate opacity-60 mt-0.5`}>
                         {track.artist || "Unknown Artist"}
                       </p>
@@ -1347,25 +1254,9 @@ export default function GymMusicPlayer() {
                 ))}
               </div>
 
-              <div className="p-3.5 bg-[#050505] border-t border-white/5 flex flex-col gap-2 shrink-0">
-                <div className="flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest">
-                  <span>Total de pistas: {displayTracks.length || 0}</span>
-                  <div className="flex items-center gap-2">
-                    <span className="text-emerald-500">Bienve Engine Premium</span>
-                    {(isAdmin || savedSecurityCode === "ho82788278") && (
-                      <button
-                        onClick={syncPlaylistMetadata}
-                        disabled={isSyncing || !engineTracks.length}
-                        className={`ml-2 p-1 px-3 bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/20 rounded-lg text-[8px] font-black uppercase tracking-widest transition-all flex items-center gap-1.5 ${
-                          isSyncing ? "opacity-50" : ""
-                        }`}
-                      >
-                        {isSyncing ? <Loader2 className="w-2.5 h-2.5 animate-spin" /> : <Sparkles className="w-2.5 h-2.5 text-emerald-400" />}
-                        Sincronizar
-                      </button>
-                    )}
-                  </div>
-                </div>
+              <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                <span>Total de canciones: {displayTracks.length || 0}</span>
+                <span className="text-emerald-500">Bienve Engine Premium</span>
               </div>
             </div>
           ) : (

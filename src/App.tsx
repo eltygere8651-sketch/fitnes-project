@@ -250,7 +250,7 @@ function AppContent() {
 
       <main className={`w-full mx-auto ${
         activeTab === "music"
-          ? "max-w-7xl px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[720px] min-h-[500px] overflow-hidden"
+          ? "max-w-7xl px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[1100px] min-h-[500px] overflow-hidden"
           : "max-w-4xl px-4 sm:px-6 lg:px-8"
       } py-4 flex-1 flex flex-col gap-6`}>
 

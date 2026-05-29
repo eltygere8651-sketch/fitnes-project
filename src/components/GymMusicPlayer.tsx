@@ -58,6 +58,118 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     duration: "4:03",
     soundcloudUrl: "https://soundcloud.com/m83/midnight-city",
   },
+  {
+    id: "gym1",
+    title: "The Business",
+    artist: "Tiësto",
+    bpm: 120,
+    duration: "2:44",
+    soundcloudUrl: "https://soundcloud.com/tiesto/the-business",
+  },
+  {
+    id: "gym2",
+    title: "Levels",
+    artist: "Avicii",
+    bpm: 126,
+    duration: "3:20",
+    soundcloudUrl: "https://soundcloud.com/aviciiofficial/avicii-levels",
+  },
+  {
+    id: "gym3",
+    title: "Animals",
+    artist: "Martin Garrix",
+    bpm: 128,
+    duration: "5:04",
+    soundcloudUrl: "https://soundcloud.com/martingarrix/animals-original-mix",
+  },
+  {
+    id: "gym4",
+    title: "Faded",
+    artist: "Alan Walker",
+    bpm: 90,
+    duration: "3:32",
+    soundcloudUrl: "https://soundcloud.com/alanwalker/faded",
+  },
+  {
+    id: "gym5",
+    title: "Blinding Lights",
+    artist: "The Weeknd",
+    bpm: 171,
+    duration: "3:20",
+    soundcloudUrl: "https://soundcloud.com/theweeknd/blinding-lights",
+  },
+  {
+    id: "gym6",
+    title: "Keraunos (Drift Phonk)",
+    artist: "PlayaPhonk",
+    bpm: 151,
+    duration: "2:27",
+    soundcloudUrl: "https://soundcloud.com/playaphonk/keraunos",
+  },
+  {
+    id: "gym7",
+    title: "Rapture",
+    artist: "Nadia Ali (Avicii Remix)",
+    bpm: 126,
+    duration: "3:38",
+    soundcloudUrl: "https://soundcloud.com/aviciiofficial/nadia-ali-rapture-avicii",
+  },
+  {
+    id: "gym8",
+    title: "Wake Me Up",
+    artist: "Avicii",
+    bpm: 124,
+    duration: "4:07",
+    soundcloudUrl: "https://soundcloud.com/aviciiofficial/preview-avicii-wake-me-up",
+  },
+  {
+    id: "gym9",
+    title: "Adagio for Strings",
+    artist: "Tiësto",
+    bpm: 140,
+    duration: "7:20",
+    soundcloudUrl: "https://soundcloud.com/tiesto/adagio-for-strings-original",
+  },
+  {
+    id: "gym10",
+    title: "Clarity",
+    artist: "Zedd ft. Foxes",
+    bpm: 128,
+    duration: "4:31",
+    soundcloudUrl: "https://soundcloud.com/zedd/clarity",
+  },
+  {
+    id: "gym11",
+    title: "Lean On",
+    artist: "Major Lazer & DJ Snake",
+    bpm: 98,
+    duration: "2:56",
+    soundcloudUrl: "https://soundcloud.com/majorlazer/lean-on",
+  },
+  {
+    id: "gym12",
+    title: "Titanium",
+    artist: "David Guetta ft. Sia",
+    bpm: 126,
+    duration: "4:05",
+    soundcloudUrl: "https://soundcloud.com/davidguetta/titanium-feat-sia",
+  },
+  {
+    id: "gym13",
+    title: "Strobe (Club Edit)",
+    artist: "deadmau5",
+    bpm: 128,
+    duration: "6:12",
+    soundcloudUrl: "https://soundcloud.com/deadmau5/strobe-club-edit",
+  },
+  {
+    id: "gym14",
+    title: "Intro",
+    artist: "The xx",
+    bpm: 120,
+    duration: "2:08",
+    soundcloudUrl: "https://soundcloud.com/thexxofficial/intro",
+  },
 ];
 
 const getPlaylistGradientClass = (name: string) => {
@@ -142,6 +254,7 @@ export default function GymMusicPlayer() {
   const [isShuffle, setIsShuffle] = useState(false);
   const widgetRef = useRef<any>(null);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
+  const expectedPlayingRef = useRef(false);
 
   // Initialize security code from localStorage
   useEffect(() => {
@@ -151,8 +264,56 @@ export default function GymMusicPlayer() {
     }
   }, []);
 
+  // --- DERIVED UI STATES (GUARANTEE MINIMUM of 10+ SONGS ON PC/DESKTOP WITH SMOOTH SCROLL) ---
+  const displayTracks = React.useMemo(() => {
+    let baseTracks: any[] = [];
+    
+    // If we have engineTracks loaded from the active SoundCloud set, start with those
+    if (engineTracks && engineTracks.length > 0) {
+      baseTracks = [...engineTracks];
+    } else {
+      baseTracks = [...(selectedPlaylist?.tracks || ALL_DATABASE_TRACKS)];
+    }
+    
+    const allUniqueTracks: any[] = [...baseTracks];
+    const trackKeys = new Set(baseTracks.map(t => t.url || t.soundcloudUrl || t.title));
+    
+    // Append from other playlists in our library to make the list rich and endless
+    if (allUniqueTracks.length < 15 && userPlaylists && userPlaylists.length > 0) {
+      for (const pl of userPlaylists) {
+        if (!pl || !pl.tracks) continue;
+        for (const track of pl.tracks) {
+          const key = track.url || track.soundcloudUrl || track.title;
+          if (key && !trackKeys.has(key)) {
+            trackKeys.add(key);
+            allUniqueTracks.push(track);
+            if (allUniqueTracks.length >= 15) break;
+          }
+        }
+        if (allUniqueTracks.length >= 15) break;
+      }
+    }
+    
+    // Append from ALL_DATABASE_TRACKS if still needed to ensure a minimum full list
+    if (allUniqueTracks.length < 15) {
+      for (const track of ALL_DATABASE_TRACKS) {
+        const key = track.url || track.soundcloudUrl || track.title;
+        if (key && !trackKeys.has(key)) {
+          trackKeys.add(key);
+          allUniqueTracks.push(track);
+          if (allUniqueTracks.length >= 15) break;
+        }
+      }
+    }
+    
+    return allUniqueTracks;
+  }, [engineTracks, selectedPlaylist, userPlaylists]);
+
+  const displayTrackIndex =
+    engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
+
   const currentTrack =
-    selectedPlaylist?.tracks[currentTrackIndex] || ALL_DATABASE_TRACKS[0];
+    displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
   const currentUrl = currentTrack.url || currentTrack.soundcloudUrl || "";
 
   // Keep background JS context alive on iOS/Android via silent loop ambient audio synchronizer
@@ -188,9 +349,11 @@ export default function GymMusicPlayer() {
     }
 
     if (isPlaying) {
+      expectedPlayingRef.current = false;
       widget.toggle();
       setIsPlaying(false);
     } else {
+      expectedPlayingRef.current = true;
       widget.toggle();
       setIsPlaying(true);
     }
@@ -202,6 +365,8 @@ export default function GymMusicPlayer() {
       silentAudioRef.current.play().catch(() => {});
     }
     
+    expectedPlayingRef.current = true;
+
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
         const currentIndex = engineTrackIndex;
@@ -209,37 +374,57 @@ export default function GymMusicPlayer() {
         if (randomIndex === currentIndex && engineTracks.length > 1) {
           randomIndex = (randomIndex + 1) % engineTracks.length;
         }
-        widgetRef.current.skip(randomIndex);
-      } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
-        const currentIndex = currentTrackIndex;
-        let randomIndex = Math.floor(Math.random() * selectedPlaylist.tracks.length);
-        if (randomIndex === currentIndex) {
-          randomIndex = (randomIndex + 1) % selectedPlaylist.tracks.length;
+        const widget = widgetRef.current;
+        try {
+          widget.skip(randomIndex);
+          widget.play();
+        } catch (e) {
+          console.warn("Skip failed", e);
         }
-        setCurrentTrackIndex(randomIndex);
+      } else {
+        const tracksList = displayTracks;
+        if (tracksList.length > 1) {
+          const currentIndex = currentTrackIndex;
+          let randomIndex = Math.floor(Math.random() * tracksList.length);
+          if (randomIndex === currentIndex) {
+            randomIndex = (randomIndex + 1) % tracksList.length;
+          }
+          setCurrentTrackIndex(randomIndex);
+        } else if (tracksList.length === 1) {
+          setCurrentTrackIndex(0);
+        }
       }
       setIsPlaying(true);
       return;
     }
 
     if (engineTracks.length > 1 && widgetRef.current) {
-      widgetRef.current.next();
-    } else if (
-      selectedPlaylist &&
-      currentTrackIndex < selectedPlaylist.tracks.length - 1
-    ) {
-      setCurrentTrackIndex((prev) => prev + 1);
-    } else if (selectedPlaylist && selectedPlaylist.tracks.length > 0) {
-      setCurrentTrackIndex(0);
+      const widget = widgetRef.current;
+      try {
+        widget.next();
+        widget.play();
+      } catch (e) {
+        console.warn("Next failed", e);
+      }
+    } else {
+      const tracksList = displayTracks;
+      if (currentTrackIndex < tracksList.length - 1) {
+        setCurrentTrackIndex((prev) => prev + 1);
+      } else if (tracksList.length > 0) {
+        setCurrentTrackIndex(0);
+      }
     }
     setIsPlaying(true);
-  }, [selectedPlaylist, currentTrackIndex, engineTracks, isShuffle, engineTrackIndex]);
+  }, [displayTracks, currentTrackIndex, engineTracks, isShuffle, engineTrackIndex]);
 
   const handlePrev = useCallback(() => {
     if (silentAudioRef.current) {
       silentAudioRef.current.currentTime = 0;
       silentAudioRef.current.play().catch(() => {});
     }
+
+    expectedPlayingRef.current = true;
+
     if (isShuffle) {
       if (engineTracks.length > 1 && widgetRef.current) {
         const currentIndex = engineTrackIndex;
@@ -247,28 +432,48 @@ export default function GymMusicPlayer() {
         if (randomIndex === currentIndex && engineTracks.length > 1) {
           randomIndex = (randomIndex + 1) % engineTracks.length;
         }
-        widgetRef.current.skip(randomIndex);
-      } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
-        const currentIndex = currentTrackIndex;
-        let randomIndex = Math.floor(Math.random() * selectedPlaylist.tracks.length);
-        if (randomIndex === currentIndex) {
-          randomIndex = (randomIndex + 1) % selectedPlaylist.tracks.length;
+        const widget = widgetRef.current;
+        try {
+          widget.skip(randomIndex);
+          widget.play();
+        } catch (e) {
+          console.warn("Skip failed", e);
         }
-        setCurrentTrackIndex(randomIndex);
+      } else {
+        const tracksList = displayTracks;
+        if (tracksList.length > 1) {
+          const currentIndex = currentTrackIndex;
+          let randomIndex = Math.floor(Math.random() * tracksList.length);
+          if (randomIndex === currentIndex) {
+            randomIndex = (randomIndex + 1) % tracksList.length;
+          }
+          setCurrentTrackIndex(randomIndex);
+        } else if (tracksList.length === 1) {
+          setCurrentTrackIndex(0);
+        }
       }
       setIsPlaying(true);
       return;
     }
 
     if (engineTracks.length > 1 && widgetRef.current) {
-      widgetRef.current.prev();
-    } else if (currentTrackIndex > 0) {
-      setCurrentTrackIndex((prev) => prev - 1);
-    } else if (selectedPlaylist && selectedPlaylist.tracks.length > 1) {
-      setCurrentTrackIndex(selectedPlaylist.tracks.length - 1);
+      const widget = widgetRef.current;
+      try {
+        widget.prev();
+        widget.play();
+      } catch (e) {
+        console.warn("Prev failed", e);
+      }
+    } else {
+      const tracksList = displayTracks;
+      if (currentTrackIndex > 0) {
+        setCurrentTrackIndex((prev) => prev - 1);
+      } else if (tracksList.length > 0) {
+        setCurrentTrackIndex(tracksList.length - 1);
+      }
     }
     setIsPlaying(true);
-  }, [currentTrackIndex, engineTracks, isShuffle, selectedPlaylist, engineTrackIndex]);
+  }, [currentTrackIndex, engineTracks, isShuffle, displayTracks, engineTrackIndex]);
 
   // Fetch meta for custom UI
   useEffect(() => {
@@ -363,6 +568,7 @@ export default function GymMusicPlayer() {
         });
 
         widget.bind((window as any).SC.Widget.Events.PLAY, () => {
+          expectedPlayingRef.current = true;
           setIsPlaying(true);
           setIsLoadingTrack(false);
           widget.getCurrentSoundIndex((index: number) => setEngineTrackIndex(index));
@@ -372,7 +578,11 @@ export default function GymMusicPlayer() {
           });
         });
 
-        widget.bind((window as any).SC.Widget.Events.PAUSE, () => setIsPlaying(false));
+        widget.bind((window as any).SC.Widget.Events.PAUSE, () => {
+          if (!expectedPlayingRef.current) {
+            setIsPlaying(false);
+          }
+        });
 
         widget.bind((window as any).SC.Widget.Events.PLAY_PROGRESS, (data: any) => {
           setPosition(data.currentPosition);
@@ -396,24 +606,34 @@ export default function GymMusicPlayer() {
           loadedTrackUrlRef.current = forcedUrl;
           setIsLoadingTrack(true);
           widgetRef.current.load(forcedUrl, {
-            auto_play: isPlayingRef.current,
+            auto_play: expectedPlayingRef.current,
             show_artwork: false,
             color: "#10b981",
             callback: () => {
               setIsLoadingTrack(false);
-              widgetRef.current.setVolume(volumeRef.current);
-              widgetRef.current.getSounds((sounds: any[]) => {
-                if (sounds && sounds.length > 0) {
-                  setEngineTracks(
-                    sounds.map((s: any) => ({
-                      id: s.id.toString(),
-                      title: s.title,
-                      artist: s.user?.username || "SoundCloud Artist",
-                      artwork_url: s.artwork_url,
-                    })),
-                  );
+              if (widgetRef.current) {
+                widgetRef.current.setVolume(volumeRef.current);
+                if (expectedPlayingRef.current) {
+                  const widget = widgetRef.current;
+                  try {
+                    widget.play();
+                  } catch (e) {
+                    console.warn("Play failed", e);
+                  }
                 }
-              });
+                widgetRef.current.getSounds((sounds: any[]) => {
+                  if (sounds && sounds.length > 0) {
+                    setEngineTracks(
+                      sounds.map((s: any) => ({
+                        id: s.id.toString(),
+                        title: s.title,
+                        artist: s.user?.username || "SoundCloud Artist",
+                        artwork_url: s.artwork_url,
+                      })),
+                    );
+                  }
+                });
+              }
             }
           });
         }
@@ -567,6 +787,7 @@ export default function GymMusicPlayer() {
       setIsAdding(false);
       setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
       setCurrentTrackIndex(0);
+      expectedPlayingRef.current = true;
       setIsPlaying(true);
       setShowLibrary(false);
     } catch (error) {
@@ -735,6 +956,7 @@ export default function GymMusicPlayer() {
     setEngineCurrentSound(null);
     setPosition(0);
     setDuration(0);
+    expectedPlayingRef.current = true;
     setIsPlaying(true);
     setShowLibrary(false);
     if (widgetRef.current) {
@@ -748,6 +970,69 @@ export default function GymMusicPlayer() {
     if (widgetRef.current) {
       widgetRef.current.seekTo(newPos);
     }
+  };
+
+  const handleTimelinePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const updatePosition = (clientX: number) => {
+      const rect = container.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+      const width = rect.width;
+      if (width > 0 && duration > 0) {
+        const pct = Math.max(0, Math.min(1, clickX / width));
+        const newPos = Math.round(pct * duration);
+        setPosition(newPos);
+        if (widgetRef.current) {
+          widgetRef.current.seekTo(newPos);
+        }
+      }
+    };
+
+    updatePosition(e.clientX);
+    container.setPointerCapture(e.pointerId);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      updatePosition(moveEvent.clientX);
+    };
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      container.releasePointerCapture(e.pointerId);
+      container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    container.addEventListener("pointermove", handlePointerMove);
+    container.addEventListener("pointerup", handlePointerUp);
+  };
+
+  const handleVolumePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const updateVolume = (clientX: number) => {
+      const rect = container.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+      const width = rect.width;
+      if (width > 0) {
+        const pct = Math.max(0, Math.min(1, clickX / width));
+        const newVol = Math.round(pct * 100);
+        handleVolumeChange(newVol);
+      }
+    };
+
+    updateVolume(e.clientX);
+    container.setPointerCapture(e.pointerId);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      updateVolume(moveEvent.clientX);
+    };
+
+    const handlePointerUp = (upEvent: PointerEvent) => {
+      container.releasePointerCapture(e.pointerId);
+      container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    container.addEventListener("pointermove", handlePointerMove);
+    container.addEventListener("pointerup", handlePointerUp);
   };
 
   const formatTime = (ms: number) => {
@@ -900,13 +1185,7 @@ export default function GymMusicPlayer() {
 
   const iframeSrc = React.useMemo(() => getEmbedUrl(currentUrl, isPlaying), [currentUrl]);
 
-  // --- DERIVED UI STATES ---
-  const displayTracks =
-    engineTracks.length > 0
-      ? engineTracks
-      : selectedPlaylist?.tracks || ALL_DATABASE_TRACKS;
-  const displayTrackIndex =
-    engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
+  // --- DERIVED UI STATES (already defined above) ---
 
   return (
     <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
@@ -1082,7 +1361,7 @@ export default function GymMusicPlayer() {
         <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
             
           {/* COMPACT PLAYER BAR (Integrated at the top) */}
-          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-5 sm:p-7 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
             {/* Subtle bottom neon-accent decoration */}
             <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent" />
             
@@ -1143,102 +1422,104 @@ export default function GymMusicPlayer() {
                 </div>
 
                 {/* BOTTOM/CENTER: Timeline + Controls combined */}
-                <div className="flex flex-col w-full max-w-md gap-5 sm:gap-7 px-4 sm:px-0">
+                <div className="flex flex-col w-full max-w-md gap-4 sm:gap-6 px-4 sm:px-0">
                   
-                  {/* Controls Row */}
-                  <div className="flex items-center justify-between w-full px-1">
-                    <button
-                      onClick={() => setIsShuffle(!isShuffle)}
-                      title="Aleatorio"
-                      className={`p-2 transition-all transform active:scale-90 flex-shrink-0 ${isShuffle ? "text-emerald-400 bg-emerald-500/10 rounded-full ring-1 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]" : "text-slate-500 hover:text-white"}`}
-                    >
-                      <Shuffle className="w-5 h-5" />
-                    </button>
+                  {/* Controls Row - Premium 3-column layout to keep play button centered */}
+                  <div className="flex items-center justify-between w-full px-2">
                     
-                    <button
-                      onClick={handlePrev}
-                      title="Anterior"
-                      className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-105 flex-shrink-0"
-                    >
-                      <SkipBack className="w-6 h-6 fill-current" />
-                    </button>
-
-                    <div className="relative group mx-1 sm:mx-4 flex-shrink-0">
-                      {/* Premium Outer Glow */}
-                      <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
-                      
-                      <motion.button
-                        whileTap={{ scale: 0.9 }}
-                        whileHover={{ scale: 1.05 }}
-                        onClick={togglePlayback}
-                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
-                          isPlaying 
-                            ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
-                            : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
+                    {/* Left Column: Shuffle Button */}
+                    <div className="flex-1 flex justify-start">
+                      <button
+                        onClick={() => setIsShuffle(!isShuffle)}
+                        title="Aleatorio"
+                        className={`group/shuffle relative p-2 transition-all transform active:scale-90 ${
+                          isShuffle ? "text-emerald-500" : "text-slate-500 hover:text-white"
                         }`}
                       >
-                        {isPlaying ? (
-                          <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
-                        ) : (
-                          <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+                        <Shuffle className="w-5 h-5" />
+                        {isShuffle && (
+                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                         )}
-                      </motion.button>
+                        {/* Tooltip-like label for Shuffle on hover */}
+                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 text-[10px] py-1 px-2 rounded opacity-0 group-hover/shuffle:opacity-100 transition-opacity whitespace-nowrap pointer-events-none uppercase tracking-tighter">
+                          Mezcla
+                        </span>
+                      </button>
                     </div>
 
-                    <button
-                      onClick={handleNext}
-                      title="Siguiente"
-                      className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-105 flex-shrink-0"
-                    >
-                      <SkipForward className="w-6 h-6 fill-current" />
-                    </button>
+                    {/* Center Column: Primary Playback Controls */}
+                    <div className="flex-[2] flex items-center justify-center gap-3 sm:gap-7">
+                      <button
+                        onClick={handlePrev}
+                        title="Anterior"
+                        className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                      >
+                        <SkipBack className="w-6 h-6 fill-current" />
+                      </button>
 
-                    {/* Vertical Volume Control */}
-                    <div className="relative flex items-center justify-center group/vol flex-shrink-0 cursor-pointer w-8 h-8 sm:w-10 sm:h-10">
-                      <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors" />
-                      
-                      {/* Vertical Slider Flyout (Wrapper with bottom padding bridges the hover gap) */}
-                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 pb-2 opacity-0 pointer-events-none group-hover/vol:opacity-100 group-hover/vol:pointer-events-auto transition-all duration-300 z-50">
-                        <div className="w-10 h-28 sm:w-12 sm:h-32 bg-[#0a0a0b]/95 backdrop-blur-3xl border border-white/10 rounded-full flex flex-col items-center justify-center py-4 shadow-2xl">
-                          <div className="relative w-1.5 h-full bg-white/10 rounded-full overflow-hidden flex flex-col justify-end">
-                            <input
-                              type="range"
-                              min="0"
-                              max="100"
-                              value={volume}
-                              onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
-                              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-50"
-                              style={{ 
-                                WebkitAppearance: "slider-vertical",
-                                appearance: "slider-vertical"
-                              }}
-                              // @ts-ignore
-                              orient="vertical"
-                            />
+                      <div className="relative group flex-shrink-0">
+                        {/* Premium Outer Glow */}
+                        <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
+                        
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          whileHover={{ scale: 1.05 }}
+                          onClick={togglePlayback}
+                          className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
+                            isPlaying 
+                              ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
+                              : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
+                          }`}
+                        >
+                          {isPlaying ? (
+                            <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+                          ) : (
+                            <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+                          )}
+                        </motion.button>
+                      </div>
+
+                      <button
+                        onClick={handleNext}
+                        title="Siguiente"
+                        className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                      >
+                        <SkipForward className="w-6 h-6 fill-current" />
+                      </button>
+                    </div>
+
+                    {/* Right Column: Optimized Volume Control */}
+                    <div className="flex-1 flex justify-end">
+                      <div className="relative flex items-center group/vol flex-shrink-0 cursor-pointer h-10 px-2 transition-all rounded-full hover:bg-white/5">
+                        <div className="w-0 group-hover/vol:w-20 sm:group-hover/vol:w-24 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden flex items-center">
+                          <div 
+                            onPointerDown={handleVolumePointerDown}
+                            className="relative flex-1 h-1 bg-white/10 rounded-full select-none touch-none cursor-pointer mr-3 ml-2"
+                          >
                             <div
-                              className="absolute bottom-0 left-0 right-0 bg-emerald-500 group-hover/vol:bg-emerald-400 rounded-full transition-all duration-300 shadow-[0_0_8px_rgba(16,185,129,0.2)] pointer-events-none"
-                              style={{ height: `${volume}%` }}
+                              className="absolute top-0 bottom-0 left-0 bg-emerald-500 group-hover/vol:bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)] transition-all duration-200 pointer-events-none"
+                              style={{ width: `${volume}%` }}
+                            />
+                            <div 
+                              className="absolute top-1/2 w-2.5 h-2.5 bg-white rounded-full -translate-y-1/2 -translate-x-1/2 shadow-[0_2px_8px_rgba(0,0,0,0.8)] scale-0 group-hover/vol:scale-100 transition-transform duration-300 pointer-events-none"
+                              style={{ left: `${volume}%` }}
                             />
                           </div>
                         </div>
+                        <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors" />
                       </div>
                     </div>
                   </div>
 
                   {/* Progress Timeline Row */}
                   <div className="flex flex-col gap-3 w-full mt-1">
-                    <div className="flex-1 relative flex items-center h-4 cursor-pointer min-w-0 group/timeline">
-                      <input
-                        type="range"
-                        min="0"
-                        max={duration || 100}
-                        value={position}
-                        onChange={handleSeek}
-                        className="absolute inset-x-0 inset-y-0 w-full h-full opacity-0 cursor-pointer z-40"
-                      />
-                      <div className="w-full h-1.5 bg-white/5 rounded-full relative overflow-hidden pointer-events-none border border-white/5">
+                    <div 
+                      onPointerDown={handleTimelinePointerDown}
+                      className="flex-1 relative flex items-center h-4 cursor-pointer min-w-0 group/timeline select-none touch-none"
+                    >
+                      <div className="w-full h-1.5 bg-white/5 rounded-full relative overflow-hidden border border-white/5 pointer-events-none">
                         <div
-                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full relative transition-all duration-300 shadow-[0_0_10px_rgba(16,185,129,0.3)]"
+                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full relative shadow-[0_0_10px_rgba(16,185,129,0.3)]"
                           style={{
                             width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
                           }}
@@ -1246,6 +1527,14 @@ export default function GymMusicPlayer() {
                           <div className="absolute right-0 inset-y-0 w-12 bg-white/20 blur-md pointer-events-none" />
                         </div>
                       </div>
+                      
+                      {/* Premium Spotify-Style Interactive Handle */}
+                      <div 
+                        className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-150 shadow-[0_0_5px_rgba(255,255,255,0.8)] pointer-events-none"
+                        style={{
+                          left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 6px)`,
+                        }}
+                      />
                     </div>
 
                     <div className="flex items-center justify-between text-[9px] font-black font-mono text-slate-500 uppercase tracking-[0.2em] w-full px-0.5">
@@ -1270,12 +1559,9 @@ export default function GymMusicPlayer() {
           {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
           {selectedPlaylist ? (
             <div className="flex flex-col min-h-0 bg-black/40 flex-1">
-              <button 
-                onClick={() => setIsTracklistOpen(!isTracklistOpen)}
-                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40 hover:bg-[#0a0a0b]/80 transition-colors cursor-pointer group"
+              <div 
+                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40"
               >
-                {/* Neon accent on hover */}
-                <div className="absolute inset-x-0 bottom-0 h-[1px] bg-emerald-500/0 group-hover:bg-emerald-500/20 transition-colors" />
                 <div className="space-y-0.5 text-left">
                   <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
                     LISTA DE REPRODUCCIÓN
@@ -1288,146 +1574,131 @@ export default function GymMusicPlayer() {
                   </h3>
                 </div>
                 <div className="flex items-center gap-3">
-                  <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0 hidden sm:block" />
-                  <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-white/10 transition-colors shrink-0">
-                    {isTracklistOpen ? (
-                      <ChevronUp className="w-4 h-4 text-slate-400 group-hover:text-white" />
-                    ) : (
-                      <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-white" />
-                    )}
-                  </div>
+                  <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
                 </div>
-              </button>
+              </div>
 
-              <AnimatePresence initial={false}>
-                {isTracklistOpen && (
-                  <motion.div
-                    initial={{ height: 0, opacity: 0 }}
-                    animate={{ height: "auto", opacity: 1 }}
-                    exit={{ height: 0, opacity: 0 }}
-                    className="flex flex-col flex-1 min-h-0 overflow-hidden bg-[#030303]"
-                  >
-                    <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0.5 scrollbar-none">
-                {displayTracks.map((track, idx) => {
-                  const isActive = displayTrackIndex === idx;
-                  return (
-                  <button
-                    key={track.id || idx}
-                    onClick={() => {
-                      if (silentAudioRef.current) {
-                        silentAudioRef.current.play().catch(() => {});
-                      }
-                      if (isActive && hasInitializedWidget && widgetRef.current) {
-                        if (!isPlaying) {
-                           widgetRef.current.play();
-                        }
-                      } else {
-                        if (engineTracks.length > 0) {
-                          widgetRef.current?.skip(idx);
-                          widgetRef.current?.play();
-                        } else {
-                          setCurrentTrackIndex(idx);
-                        }
-                      }
-                      setIsPlaying(true);
-                    }}
-                    className={`group/track w-full flex items-center gap-3 sm:gap-4 px-3 py-2 sm:px-4 sm:py-2.5 transition-all text-left relative overflow-hidden rounded-xl ${
-                      isActive
-                        ? "bg-white/[0.08]"
-                        : "bg-transparent hover:bg-white/[0.04]"
-                    }`}
-                  >
-                    {/* Track Number & Hover/Active States (Spotify Style) */}
-                    <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
-                      {/* Default Track Number */}
-                      <span className={`text-[12px] font-medium transition-opacity duration-200 ${
-                        isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
-                      }`}>
-                        {idx + 1}
-                      </span>
-                      
-                      {/* Play/Pause/EQ Icon overlay */}
-                      <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                        isActive ? "opacity-100" : "opacity-0 group-hover/track:opacity-100"
-                      }`}>
-                         {isActive && isPlaying ? (
-                            <div className="flex gap-[2px] items-end h-[12px] shrink-0">
-                              {[...Array(3)].map((_, i) => (
-                                <motion.div
-                                  key={i}
-                                  animate={{ height: [3, 12, 3] }}
-                                  transition={{ duration: 0.45 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
-                                  className="w-[2px] bg-emerald-400 rounded-full"
-                                />
-                              ))}
-                            </div>
-                         ) : (
-                            <Play className={`w-4 h-4 ml-0.5 fill-current ${isActive ? "text-emerald-400" : "text-white"}`} />
-                         )}
-                      </div>
-                    </div>
-                    
-                    {/* Thumbnail */}
-                    <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
-                      {track.artwork_url || track.thumbnail || track.artwork ? (
-                        <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
-                      )}
-                      
-                      {/* Mobile Play Overlay (since number is hidden on mobile) */}
-                      <div className={`sm:hidden absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/track:opacity-100'}`}>
-                         {isActive && isPlaying ? (
-                            <div className="flex gap-[2px] items-end h-[12px] shrink-0">
-                              {[...Array(3)].map((_, i) => (
-                                <motion.div
-                                  key={i}
-                                  animate={{ height: [3, 12, 3] }}
-                                  transition={{ duration: 0.45 + i * 0.1, repeat: Infinity }}
-                                  className="w-[2px] bg-emerald-400 rounded-full"
-                                />
-                              ))}
-                            </div>
-                         ) : (
-                            <Play className="w-5 h-5 ml-0.5 fill-white" />
-                         )}
-                      </div>
-                    </div>
-                    
-                    {/* Track Info */}
-                    <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
-                      <p className={`text-[13px] sm:text-[14px] font-medium truncate leading-tight transition-colors duration-200 ${
-                        isActive ? "text-emerald-400" : "text-white"
-                      }`}>
-                        {track.title}
-                      </p>
-                      <p className={`text-[11px] sm:text-[12px] font-normal truncate mt-0.5 transition-colors duration-200 ${
-                        isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
-                      }`}>
-                        {track.artist || track.author || "Unknown Artist"}
-                      </p>
-                    </div>
+              <div className="flex flex-col flex-1 min-h-[300px] lg:min-h-[780px] overflow-hidden bg-[#030303]">
+                <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar">
+                  {displayTracks.map((track, idx) => {
+                    const isActive = displayTrackIndex === idx;
+                    return (
+                      <button
+                        key={track.id || idx}
+                        onClick={() => {
+                          if (silentAudioRef.current) {
+                            silentAudioRef.current.play().catch(() => {});
+                          }
+                          expectedPlayingRef.current = true;
+                          if (isActive && hasInitializedWidget && widgetRef.current) {
+                            if (!isPlaying) {
+                               widgetRef.current.play();
+                            }
+                          } else {
+                            if (engineTracks.length > 0) {
+                              widgetRef.current?.skip(idx);
+                              widgetRef.current?.play();
+                            } else {
+                              setCurrentTrackIndex(idx);
+                            }
+                          }
+                          setIsPlaying(true);
+                        }}
+                        className={`group/track w-full flex items-center gap-3 sm:gap-4 px-3 py-1 sm:px-4 sm:py-1.5 transition-all text-left relative overflow-hidden rounded-xl ${
+                          isActive
+                            ? "bg-white/[0.08]"
+                            : "bg-transparent hover:bg-white/[0.04]"
+                        }`}
+                      >
+                        {/* Track Number & Hover/Active States (Spotify Style) */}
+                        <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                          {/* Default Track Number */}
+                          <span className={`text-[12px] font-medium transition-opacity duration-200 ${
+                            isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
+                          }`}>
+                            {idx + 1}
+                          </span>
+                          
+                          {/* Play/Pause/EQ Icon overlay */}
+                          <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                            isActive ? "opacity-100" : "opacity-0 group-hover/track:opacity-100"
+                          }`}>
+                             {isActive && isPlaying ? (
+                                <div className="flex gap-[2px] items-end h-[12px] shrink-0">
+                                  {[...Array(3)].map((_, i) => (
+                                    <motion.div
+                                      key={i}
+                                      animate={{ height: [3, 12, 3] }}
+                                      transition={{ duration: 0.45 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
+                                      className="w-[2px] bg-emerald-400 rounded-full"
+                                    />
+                                  ))}
+                                </div>
+                             ) : (
+                                <Play className={`w-4 h-4 ml-0.5 fill-current ${isActive ? "text-emerald-400" : "text-white"}`} />
+                             )}
+                          </div>
+                        </div>
+                        
+                        {/* Thumbnail */}
+                        <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                          {track.artwork_url || track.thumbnail || track.artwork ? (
+                            <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                          )}
+                          
+                          {/* Mobile Play Overlay (since number is hidden on mobile) */}
+                          <div className={`sm:hidden absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/track:opacity-100'}`}>
+                             {isActive && isPlaying ? (
+                                <div className="flex gap-[2px] items-end h-[12px] shrink-0">
+                                  {[...Array(3)].map((_, i) => (
+                                    <motion.div
+                                      key={i}
+                                      animate={{ height: [3, 12, 3] }}
+                                      transition={{ duration: 0.45 + i * 0.1, repeat: Infinity }}
+                                      className="w-[2px] bg-emerald-400 rounded-full"
+                                    />
+                                  ))}
+                                </div>
+                             ) : (
+                                <Play className="w-5 h-5 ml-0.5 fill-white" />
+                             )}
+                          </div>
+                        </div>
+                        
+                        {/* Track Info */}
+                        <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
+                          <p className={`text-[13px] sm:text-[14px] font-medium truncate leading-tight transition-colors duration-200 ${
+                            isActive ? "text-emerald-400" : "text-white"
+                          }`}>
+                            {track.title}
+                          </p>
+                          <p className={`text-[11px] sm:text-[12px] font-normal truncate mt-0.5 transition-colors duration-200 ${
+                            isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
+                          }`}>
+                            {track.artist || track.author || "Unknown Artist"}
+                          </p>
+                        </div>
+    
+                        {/* Duration / Options */}
+                        <div className="hidden sm:flex items-center gap-4 shrink-0 relative z-10 text-[12px] font-medium text-slate-400">
+                          {track.duration && (
+                             <span className="w-10 text-right group-hover/track:text-white transition-colors">
+                               {track.duration}
+                             </span>
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
 
-                    {/* Duration / Options */}
-                    <div className="hidden sm:flex items-center gap-4 shrink-0 relative z-10 text-[12px] font-medium text-slate-400">
-                      {track.duration && (
-                         <span className="w-10 text-right group-hover/track:text-white transition-colors">
-                           {track.duration}
-                         </span>
-                      )}
-                    </div>
-                  </button>
-                  );
-                })}
-                    </div>
-
-                    <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
-                      <span>Total de canciones: {displayTracks.length || 0}</span>
-                      <span className="text-emerald-500">Bienve Engine Premium</span>
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
+                <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                  <span>Total de canciones: {displayTracks.length || 0}</span>
+                  <span className="text-emerald-500">Bienve Engine Premium</span>
+                </div>
+              </div>
             </div>
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-transparent">

@@ -11,6 +11,7 @@ import {
   Sparkles,
   Disc,
   Plus,
+  Minus,
   Edit2,
   Trash2,
   X,
@@ -24,6 +25,7 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
+  Search,
 } from "lucide-react";
 import {
   collection,
@@ -212,10 +214,20 @@ export default function GymMusicPlayer() {
   // REALTIME ENGINE STATES
   const [engineTracks, setEngineTracks] = useState<any[]>([]);
   const [engineTrackIndex, setEngineTrackIndex] = useState(0);
+  
+  useEffect(() => {
+    engineTracksRef.current = engineTracks;
+  }, [engineTracks]);
+
+  useEffect(() => {
+    engineTrackIndexRef.current = engineTrackIndex;
+  }, [engineTrackIndex]);
+
   const [engineCurrentSound, setEngineCurrentSound] = useState<any>(null);
 
   const [showLibrary, setShowLibrary] = useState(false);
   const [showTracks, setShowTracks] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
@@ -252,9 +264,15 @@ export default function GymMusicPlayer() {
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
   const [isShuffle, setIsShuffle] = useState(false);
+  const isShuffleRef = useRef(isShuffle);
+  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+
   const widgetRef = useRef<any>(null);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const expectedPlayingRef = useRef(false);
+  const userSkippedRef = useRef(false);
+  const engineTracksRef = useRef<any[]>([]);
+  const engineTrackIndexRef = useRef(0);
 
   // Initialize security code from localStorage
   useEffect(() => {
@@ -264,50 +282,28 @@ export default function GymMusicPlayer() {
     }
   }, []);
 
-  // --- DERIVED UI STATES (GUARANTEE MINIMUM of 10+ SONGS ON PC/DESKTOP WITH SMOOTH SCROLL) ---
   const displayTracks = React.useMemo(() => {
-    let baseTracks: any[] = [];
-    
-    // If we have engineTracks loaded from the active SoundCloud set, start with those
+    // Exact fidelity: If engine tracks are playing from an active SoundCloud set widget session, show those.
     if (engineTracks && engineTracks.length > 0) {
-      baseTracks = [...engineTracks];
-    } else {
-      baseTracks = [...(selectedPlaylist?.tracks || ALL_DATABASE_TRACKS)];
+      return engineTracks;
     }
-    
-    const allUniqueTracks: any[] = [...baseTracks];
-    const trackKeys = new Set(baseTracks.map(t => t.url || t.soundcloudUrl || t.title));
-    
-    // Append from other playlists in our library to make the list rich and endless
-    if (allUniqueTracks.length < 15 && userPlaylists && userPlaylists.length > 0) {
-      for (const pl of userPlaylists) {
-        if (!pl || !pl.tracks) continue;
-        for (const track of pl.tracks) {
-          const key = track.url || track.soundcloudUrl || track.title;
-          if (key && !trackKeys.has(key)) {
-            trackKeys.add(key);
-            allUniqueTracks.push(track);
-            if (allUniqueTracks.length >= 15) break;
-          }
-        }
-        if (allUniqueTracks.length >= 15) break;
-      }
+    // Otherwise, faithfully display whatever tracks are in the current playlist.
+    return selectedPlaylist?.tracks || ALL_DATABASE_TRACKS;
+  }, [engineTracks, selectedPlaylist]);
+
+  const filteredDisplayTracks = React.useMemo(() => {
+    if (!searchQuery.trim()) {
+      return displayTracks.map((track, idx) => ({ track, idx }));
     }
-    
-    // Append from ALL_DATABASE_TRACKS if still needed to ensure a minimum full list
-    if (allUniqueTracks.length < 15) {
-      for (const track of ALL_DATABASE_TRACKS) {
-        const key = track.url || track.soundcloudUrl || track.title;
-        if (key && !trackKeys.has(key)) {
-          trackKeys.add(key);
-          allUniqueTracks.push(track);
-          if (allUniqueTracks.length >= 15) break;
-        }
-      }
-    }
-    
-    return allUniqueTracks;
-  }, [engineTracks, selectedPlaylist, userPlaylists]);
+    const lowerQuery = searchQuery.toLowerCase();
+    return displayTracks
+      .map((track, idx) => ({ track, idx }))
+      .filter(({ track }) => {
+        const titleMatch = track.title?.toLowerCase().includes(lowerQuery);
+        const artistMatch = track.artist?.toLowerCase().includes(lowerQuery);
+        return titleMatch || artistMatch;
+      });
+  }, [displayTracks, searchQuery]);
 
   const displayTrackIndex =
     engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
@@ -376,6 +372,7 @@ export default function GymMusicPlayer() {
         }
         const widget = widgetRef.current;
         try {
+          userSkippedRef.current = true;
           widget.skip(randomIndex);
           widget.play();
         } catch (e) {
@@ -401,6 +398,7 @@ export default function GymMusicPlayer() {
     if (engineTracks.length > 1 && widgetRef.current) {
       const widget = widgetRef.current;
       try {
+        userSkippedRef.current = true;
         widget.next();
         widget.play();
       } catch (e) {
@@ -434,6 +432,7 @@ export default function GymMusicPlayer() {
         }
         const widget = widgetRef.current;
         try {
+          userSkippedRef.current = true;
           widget.skip(randomIndex);
           widget.play();
         } catch (e) {
@@ -459,6 +458,7 @@ export default function GymMusicPlayer() {
     if (engineTracks.length > 1 && widgetRef.current) {
       const widget = widgetRef.current;
       try {
+        userSkippedRef.current = true;
         widget.prev();
         widget.play();
       } catch (e) {
@@ -571,10 +571,30 @@ export default function GymMusicPlayer() {
           expectedPlayingRef.current = true;
           setIsPlaying(true);
           setIsLoadingTrack(false);
-          widget.getCurrentSoundIndex((index: number) => setEngineTrackIndex(index));
+          widget.getCurrentSoundIndex((index: number) => {
+             const prevIndex = engineTrackIndexRef.current;
+             
+             // If we didn't manually skip, shuffle is ON, and it's a playlist
+             if (!userSkippedRef.current && isShuffleRef.current && engineTracksRef.current.length > 1) {
+                // If the widget automatically advanced sequentially (or looped to 0 naturally)
+                if (index === prevIndex + 1 || (prevIndex > 0 && index === 0)) {
+                    let randomIndex = Math.floor(Math.random() * engineTracksRef.current.length);
+                    if (randomIndex === index) {
+                       randomIndex = (randomIndex + 1) % engineTracksRef.current.length;
+                    }
+                    console.log("Shuffle intercept! Auto-play detected. Skipping to:", randomIndex);
+                    userSkippedRef.current = true; 
+                    widget.skip(randomIndex);
+                    return; // Early return so we don't update UI incorrectly until the skip completes
+                }
+             }
+             
+             userSkippedRef.current = false;
+             setEngineTrackIndex(index);
+          });
           widget.getCurrentSound((sound: any) => {
             setEngineCurrentSound(sound);
-            setDuration(sound.duration);
+            if (sound && sound.duration) setDuration(sound.duration);
           });
         });
 
@@ -667,22 +687,13 @@ export default function GymMusicPlayer() {
 
   const fetchMetadata = async (url: string) => {
     try {
-      const res = await fetch(
-        `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`,
-      );
+      const res = await fetch(`/api/oembed?url=${encodeURIComponent(url)}`);
       if (!res.ok) return null;
       
-      const text = await res.text();
-      if (!text || text.trim() === "") return null;
-      
-      try {
-        return JSON.parse(text);
-      } catch (parseError) {
-        console.warn("Metadata JSON parse error", parseError);
-        return null;
-      }
+      const data = await res.json();
+      return data;
     } catch (e) {
-      console.error("Metadata fetch error", e);
+      console.error("Metadata fetch error via proxy", e);
     }
     return null;
   };
@@ -993,36 +1004,6 @@ export default function GymMusicPlayer() {
 
     const handlePointerMove = (moveEvent: PointerEvent) => {
       updatePosition(moveEvent.clientX);
-    };
-
-    const handlePointerUp = (upEvent: PointerEvent) => {
-      container.releasePointerCapture(e.pointerId);
-      container.removeEventListener("pointermove", handlePointerMove);
-      container.removeEventListener("pointerup", handlePointerUp);
-    };
-
-    container.addEventListener("pointermove", handlePointerMove);
-    container.addEventListener("pointerup", handlePointerUp);
-  };
-
-  const handleVolumePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    const container = e.currentTarget;
-    const updateVolume = (clientX: number) => {
-      const rect = container.getBoundingClientRect();
-      const clickX = clientX - rect.left;
-      const width = rect.width;
-      if (width > 0) {
-        const pct = Math.max(0, Math.min(1, clickX / width));
-        const newVol = Math.round(pct * 100);
-        handleVolumeChange(newVol);
-      }
-    };
-
-    updateVolume(e.clientX);
-    container.setPointerCapture(e.pointerId);
-
-    const handlePointerMove = (moveEvent: PointerEvent) => {
-      updateVolume(moveEvent.clientX);
     };
 
     const handlePointerUp = (upEvent: PointerEvent) => {
@@ -1360,9 +1341,9 @@ export default function GymMusicPlayer() {
         {/* CONTAINER PLAYER + TRACKLIST */}
         <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
             
-          {/* COMPACT PLAYER BAR (Integrated at the top) */}
+          {/* PLAYER BAR */}
           <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
-            {/* Subtle bottom neon-accent decoration */}
+            {/* Subtle neon-accent decoration */}
             <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent" />
             
             {selectedPlaylist ? (
@@ -1425,20 +1406,20 @@ export default function GymMusicPlayer() {
                 <div className="flex flex-col w-full max-w-md gap-4 sm:gap-6 px-4 sm:px-0">
                   
                   {/* Controls Row - Premium 3-column layout to keep play button centered */}
-                  <div className="flex items-center justify-between w-full px-2">
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
                     
                     {/* Left Column: Shuffle Button */}
-                    <div className="flex-1 flex justify-start">
+                    <div className="flex justify-start">
                       <button
                         onClick={() => setIsShuffle(!isShuffle)}
                         title="Aleatorio"
-                        className={`group/shuffle relative p-2 transition-all transform active:scale-90 ${
+                        className={`group/shuffle relative p-1.5 sm:p-2 transition-all transform active:scale-90 ${
                           isShuffle ? "text-emerald-500" : "text-slate-500 hover:text-white"
                         }`}
                       >
-                        <Shuffle className="w-5 h-5" />
+                        <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
                         {isShuffle && (
-                          <div className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
+                          <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                         )}
                         {/* Tooltip-like label for Shuffle on hover */}
                         <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 text-[10px] py-1 px-2 rounded opacity-0 group-hover/shuffle:opacity-100 transition-opacity whitespace-nowrap pointer-events-none uppercase tracking-tighter">
@@ -1448,16 +1429,16 @@ export default function GymMusicPlayer() {
                     </div>
 
                     {/* Center Column: Primary Playback Controls */}
-                    <div className="flex-[2] flex items-center justify-center gap-3 sm:gap-7">
+                    <div className="flex items-center justify-center gap-1 sm:gap-6">
                       <button
                         onClick={handlePrev}
                         title="Anterior"
-                        className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                        className="p-1 sm:p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
                       >
-                        <SkipBack className="w-6 h-6 fill-current" />
+                        <SkipBack className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
                       </button>
 
-                      <div className="relative group flex-shrink-0">
+                      <div className="relative group flex-shrink-0 mx-1 sm:mx-0">
                         {/* Premium Outer Glow */}
                         <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
                         
@@ -1465,16 +1446,16 @@ export default function GymMusicPlayer() {
                           whileTap={{ scale: 0.9 }}
                           whileHover={{ scale: 1.05 }}
                           onClick={togglePlayback}
-                          className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
+                          className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
                             isPlaying 
                               ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
                               : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
                           }`}
                         >
                           {isPlaying ? (
-                            <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+                            <Pause className="w-5 h-5 sm:w-8 sm:h-8 fill-current" />
                           ) : (
-                            <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current ml-1" />
+                            <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-1" />
                           )}
                         </motion.button>
                       </div>
@@ -1482,31 +1463,38 @@ export default function GymMusicPlayer() {
                       <button
                         onClick={handleNext}
                         title="Siguiente"
-                        className="p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                        className="p-1 sm:p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
                       >
-                        <SkipForward className="w-6 h-6 fill-current" />
+                        <SkipForward className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
                       </button>
                     </div>
 
                     {/* Right Column: Optimized Volume Control */}
-                    <div className="flex-1 flex justify-end">
-                      <div className="relative flex items-center group/vol flex-shrink-0 cursor-pointer h-10 px-2 transition-all rounded-full hover:bg-white/5">
-                        <div className="w-0 group-hover/vol:w-20 sm:group-hover/vol:w-24 transition-all duration-500 ease-[cubic-bezier(0.23,1,0.32,1)] overflow-hidden flex items-center">
-                          <div 
-                            onPointerDown={handleVolumePointerDown}
-                            className="relative flex-1 h-1 bg-white/10 rounded-full select-none touch-none cursor-pointer mr-3 ml-2"
-                          >
-                            <div
-                              className="absolute top-0 bottom-0 left-0 bg-emerald-500 group-hover/vol:bg-emerald-400 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.3)] transition-all duration-200 pointer-events-none"
-                              style={{ width: `${volume}%` }}
-                            />
-                            <div 
-                              className="absolute top-1/2 w-2.5 h-2.5 bg-white rounded-full -translate-y-1/2 -translate-x-1/2 shadow-[0_2px_8px_rgba(0,0,0,0.8)] scale-0 group-hover/vol:scale-100 transition-transform duration-300 pointer-events-none"
-                              style={{ left: `${volume}%` }}
-                            />
-                          </div>
+                    <div className="flex justify-end min-w-0 pr-1">
+                      <div className="flex flex-col items-center gap-1 px-1.5 py-1 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
+                        {/* Plus (Up) */}
+                        <button
+                          onClick={() => handleVolumeChange(Math.min(100, volume + 10))}
+                          className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-white/10 active:scale-90 rounded-full transition-all flex-shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
+                        
+                        {/* Status (Middle) */}
+                        <div className="flex flex-col items-center gap-0.5 justify-center select-none overflow-hidden py-0.5">
+                          <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500/70" />
+                          <span className="text-[9px] sm:text-[11px] font-mono font-bold text-emerald-400 leading-none">
+                            {volume}%
+                          </span>
                         </div>
-                        <Volume2 className="w-4 h-4 sm:w-5 sm:h-5 text-slate-500 group-hover/vol:text-emerald-500 transition-colors" />
+
+                        {/* Minus (Down) */}
+                        <button
+                          onClick={() => handleVolumeChange(Math.max(0, volume - 10))}
+                          className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-white/10 active:scale-90 rounded-full transition-all flex-shrink-0"
+                        >
+                          <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        </button>
                       </div>
                     </div>
                   </div>
@@ -1560,31 +1548,57 @@ export default function GymMusicPlayer() {
           {selectedPlaylist ? (
             <div className="flex flex-col min-h-0 bg-black/40 flex-1">
               <div 
-                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex items-center justify-between shrink-0 bg-[#080809]/40"
+                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex flex-col gap-3 shrink-0 bg-[#080809]/40"
               >
-                <div className="space-y-0.5 text-left">
-                  <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                    LISTA DE REPRODUCCIÓN
-                    <span className="px-1.5 py-0.5 rounded pl-1 bg-emerald-500/10 text-[7px] text-emerald-400">
-                      {displayTracks.length} PISTAS
-                    </span>
-                  </p>
-                  <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate max-w-[240px]">
-                    {selectedPlaylist.name}
-                  </h3>
+                <div className="flex items-center justify-between w-full">
+                  <div className="space-y-0.5 text-left">
+                    <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                      LISTA DE REPRODUCCIÓN
+                      <span className="px-1.5 py-0.5 rounded pl-1 bg-emerald-500/10 text-[7px] text-emerald-400">
+                        {displayTracks.length} PISTAS
+                      </span>
+                    </p>
+                    <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate max-w-[240px]">
+                      {selectedPlaylist.name}
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
+
+                <div className="relative w-full">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="text"
+                    placeholder="Buscar canción o artista..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="w-full bg-[#111113] border border-white/5 rounded-full py-1.5 pl-9 pr-4 text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               </div>
 
-              <div className="flex flex-col flex-1 min-h-[300px] lg:min-h-[780px] overflow-hidden bg-[#030303]">
+              <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-[#030303]">
                 <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar">
-                  {displayTracks.map((track, idx) => {
-                    const isActive = displayTrackIndex === idx;
-                    return (
-                      <button
-                        key={track.id || idx}
+                  {filteredDisplayTracks.length === 0 ? (
+                    <div className="p-8 text-center text-white/30 text-xs font-medium">
+                      No se encontraron resultados para "{searchQuery}"
+                    </div>
+                  ) : (
+                    filteredDisplayTracks.map(({ track, idx }) => {
+                      const isActive = displayTrackIndex === idx;
+                      return (
+                        <button
+                          key={track.id || idx}
                         onClick={() => {
                           if (silentAudioRef.current) {
                             silentAudioRef.current.play().catch(() => {});
@@ -1596,6 +1610,7 @@ export default function GymMusicPlayer() {
                             }
                           } else {
                             if (engineTracks.length > 0) {
+                              userSkippedRef.current = true;
                               widgetRef.current?.skip(idx);
                               widgetRef.current?.play();
                             } else {
@@ -1604,16 +1619,16 @@ export default function GymMusicPlayer() {
                           }
                           setIsPlaying(true);
                         }}
-                        className={`group/track w-full flex items-center gap-3 sm:gap-4 px-3 py-1 sm:px-4 sm:py-1.5 transition-all text-left relative overflow-hidden rounded-xl ${
+                        className={`group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl ${
                           isActive
                             ? "bg-white/[0.08]"
                             : "bg-transparent hover:bg-white/[0.04]"
                         }`}
                       >
                         {/* Track Number & Hover/Active States (Spotify Style) */}
-                        <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                        <div className="hidden sm:flex items-center justify-center w-8 shrink-0 relative z-10">
                           {/* Default Track Number */}
-                          <span className={`text-[12px] font-medium transition-opacity duration-200 ${
+                          <span className={`text-[13px] font-medium transition-opacity duration-200 ${
                             isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
                           }`}>
                             {idx + 1}
@@ -1641,7 +1656,7 @@ export default function GymMusicPlayer() {
                         </div>
                         
                         {/* Thumbnail */}
-                        <div className="relative w-10 h-10 sm:w-11 sm:h-11 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                        <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
                           {track.artwork_url || track.thumbnail || track.artwork ? (
                             <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -1669,12 +1684,12 @@ export default function GymMusicPlayer() {
                         
                         {/* Track Info */}
                         <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
-                          <p className={`text-[13px] sm:text-[14px] font-medium truncate leading-tight transition-colors duration-200 ${
+                          <p className={`text-[13px] sm:text-[15px] font-medium truncate leading-tight transition-colors duration-200 ${
                             isActive ? "text-emerald-400" : "text-white"
                           }`}>
                             {track.title}
                           </p>
-                          <p className={`text-[11px] sm:text-[12px] font-normal truncate mt-0.5 transition-colors duration-200 ${
+                          <p className={`text-[11px] sm:text-[13px] font-normal truncate mt-0.5 transition-colors duration-200 ${
                             isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
                           }`}>
                             {track.artist || track.author || "Unknown Artist"}
@@ -1691,7 +1706,8 @@ export default function GymMusicPlayer() {
                         </div>
                       </button>
                     );
-                  })}
+                  })
+                  )}
                 </div>
 
                 <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">

@@ -250,9 +250,9 @@ function AppContent() {
 
       <main className={`w-full mx-auto ${
         activeTab === "music"
-          ? "max-w-7xl px-1 sm:px-4 md:px-6 h-[calc(100vh-170px)] sm:h-[calc(100vh-190px)] lg:h-[1100px] min-h-[500px] overflow-hidden"
-          : "max-w-4xl px-4 sm:px-6 lg:px-8"
-      } py-4 flex-1 flex flex-col gap-6`}>
+          ? "max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-[600px] h-[75vh] md:h-[calc(100vh-140px)] overflow-hidden"
+          : "max-w-4xl px-4 sm:px-6 lg:px-8 flex-1 py-4 flex flex-col"
+      } py-4 flex flex-col gap-6`}>
 
         <section className="flex flex-col gap-6 flex-1">
           <div

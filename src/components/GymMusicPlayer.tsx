@@ -283,7 +283,26 @@ export default function GymMusicPlayer() {
   }, []);
 
   const displayTracks = React.useMemo(() => {
-    // Exact fidelity: If engine tracks are playing from an active SoundCloud set widget session, show those.
+    const plTracks = selectedPlaylist?.tracks;
+    if (plTracks && plTracks.length > 1) {
+      if (engineTracks && engineTracks.length > 0) {
+        // Enforce alignment: use engineTracks structure but enrich names & artist from plTracks!
+        return engineTracks.map((et, idx) => {
+          const pt = plTracks[idx];
+          const hasInvalidTitle = !et.title || et.title.includes("SoundCloud Artist") || et.title === "SoundCloud";
+          const hasInvalidArtist = !et.artist || et.artist.includes("SoundCloud Artist") || et.artist === "SoundCloud";
+          
+          return {
+            ...et,
+            title: (pt && pt.title && (hasInvalidTitle || pt.title !== "Audio Importado")) ? pt.title : (et.title || "SoundCloud Track"),
+            artist: (pt && pt.artist && (hasInvalidArtist || pt.artist !== "SoundCloud")) ? pt.artist : (et.artist || "SoundCloud Artist"),
+            artwork_url: et.artwork_url || (pt && (pt as any).artwork_url),
+          };
+        });
+      }
+      return plTracks;
+    }
+
     if (engineTracks && engineTracks.length > 0) {
       return engineTracks;
     }
@@ -698,6 +717,45 @@ export default function GymMusicPlayer() {
     return null;
   };
 
+  // Automatic playlist self-healing and background tracks list retrieval
+  useEffect(() => {
+    if (!selectedPlaylist) return;
+    
+    const url = selectedPlaylist.tracks?.[0]?.url || selectedPlaylist.tracks?.[0]?.soundcloudUrl || "";
+    const isPlaylistUrl = url.includes("/sets/");
+    const hasOnlyOneTrack = selectedPlaylist.tracks && selectedPlaylist.tracks.length === 1;
+
+    if (isPlaylistUrl && hasOnlyOneTrack) {
+      console.log(`Healing playlist dynamically for: ${selectedPlaylist.name}`);
+      fetchMetadata(url).then(async (meta) => {
+        if (meta && meta.tracks && meta.tracks.length > 0) {
+          console.log(`Dynamic heal fetched ${meta.tracks.length} tracks for ${selectedPlaylist.name}`);
+          
+          const healedPlaylist = {
+            ...selectedPlaylist,
+            tracks: meta.tracks
+          };
+          setSelectedPlaylist(healedPlaylist);
+
+          try {
+            const { updateDoc, doc: fsDoc } = await import("firebase/firestore");
+            const ownerId = selectedPlaylist.ownerId || user?.uid;
+            if (ownerId && db) {
+              const playlistRef = fsDoc(db, "users", ownerId, "playlists", selectedPlaylist.id);
+              await updateDoc(playlistRef, {
+                tracks: meta.tracks,
+                updatedAt: new Date()
+              });
+              console.log(`Firestore record updated for playlist: ${selectedPlaylist.id}`);
+            }
+          } catch (persistErr) {
+            console.error("Could not persist healed tracks to Firestore:", persistErr);
+          }
+        }
+      });
+    }
+  }, [selectedPlaylist, user]);
+
   const handleAddNewCanalClick = () => {
     setAdminCode(savedSecurityCode || "");
     setCustomUrl("");
@@ -771,6 +829,17 @@ export default function GymMusicPlayer() {
         return;
       }
 
+      const tracksToSave = (isPlaylist && meta?.tracks && meta.tracks.length > 0)
+        ? meta.tracks
+        : [
+            {
+              id: `track_${Date.now()}`,
+              title: meta?.title || "Audio Importado",
+              artist: meta?.author_name || provider,
+              url: url,
+            },
+          ];
+
       const newPlDoc = {
         name: meta?.title || (isPlaylist ? `Nueva lista` : `Nuevo tema`),
         genre: provider,
@@ -780,14 +849,7 @@ export default function GymMusicPlayer() {
         adminSecret: adminCode, // Added to pass firestore rules
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-        tracks: [
-          {
-            id: `track_${Date.now()}`,
-            title: meta?.title || "Audio Importado",
-            artist: meta?.author_name || provider,
-            url: url,
-          },
-        ],
+        tracks: tracksToSave,
       };
       const docRef = await addDoc(
         collection(db, "users", currentUser.uid, "playlists"),

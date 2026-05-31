@@ -58,7 +58,6 @@ export interface MusicTrack {
   bpm: number;
   duration: string;
   url?: string;
-  soundcloudUrl?: string;
 }
 
 export interface MusicPlaylist {
@@ -67,6 +66,7 @@ export interface MusicPlaylist {
   genre: string;
   description: string;
   icon: string;
+  thumbnail_url?: string;
   tracks: MusicTrack[];
   ownerId?: string;
   createdAt?: any;

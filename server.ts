@@ -119,7 +119,7 @@ function parseSoundCloudTracks(html: string): Array<{ id: string; title: string;
   return tracks.filter(t => t.title && t.title !== "SoundCloud" && t.title !== "SoundCloud Go");
 }
 
-// Soundcloud oEmbed Proxy to bypass CORS issues
+// Soundcloud and Youtube oEmbed Proxy to bypass CORS issues
 app.get("/api/oembed", async (req, res) => {
   const url = req.query.url as string;
   if (!url) {
@@ -127,6 +127,23 @@ app.get("/api/oembed", async (req, res) => {
   }
 
   try {
+    if (url.includes("youtube.com") || url.includes("youtu.be")) {
+      const ytRes = await fetch(
+        `https://www.youtube.com/oembed?format=json&url=${encodeURIComponent(url)}`
+      );
+      if (!ytRes.ok) {
+         return res.status(ytRes.status).send(await ytRes.text());
+      }
+      const data = await ytRes.json() as any;
+      return res.json({
+        title: data.title,
+        author_name: data.author_name,
+        thumbnail_url: data.thumbnail_url,
+        provider_name: "YouTube",
+        tracks: []
+      });
+    }
+
     const scRes = await fetch(
       `https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`
     );

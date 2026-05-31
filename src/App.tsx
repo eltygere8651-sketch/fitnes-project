@@ -2,47 +2,22 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Music,
-  MessageSquare,
-  Layers,
   Play,
   LogOut,
   LogIn,
   Smartphone,
   Share2,
   X,
-  BookOpen,
   Download
 } from "lucide-react";
-import AIPersonalizedRoutine from "./components/AIPersonalizedRoutine";
-import AICoachChat from "./components/AICoachChat";
 import GymMusicPlayer from "./components/GymMusicPlayer";
-import Dashboard from "./components/Dashboard";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout } from "./lib/firebase";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 
-type TabType =
-  | "music"
-  | "dashboard"
-  | "book"
-  | "chat";
-
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
-  const [activeTab, setActiveTab] = useState<TabType>("music");
-  const [chatPrefilledExercise, setChatPrefilledExercise] = useState<
-    string | null
-  >(null);
-
-  const handleExerciseCompletedSimulated = (calories: number) => {
-    // Silent workout completed telemetry callback
-  };
-
-  const handleAskCoachForExerciseName = (exerciseName: string) => {
-    setChatPrefilledExercise(exerciseName);
-    setActiveTab("chat");
-  };
 
   // --- Progressive Web App (PWA) Install Logic ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
@@ -99,8 +74,8 @@ function AppContent() {
       id="premium-music-app"
       className="min-h-screen bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
     >
-      {/* PREMIUM STICKY HEADER & NAVIGATION */}
-      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-12 sm:pt-4 pb-1">
+      {/* PREMIUM STICKY HEADER & LOGO BRAND */}
+      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-12 sm:pt-4 pb-4">
         <div className="w-full mb-3 px-6 flex items-center justify-between">
           {/* LEFT: Nativo Optimizado (cleaner, smaller) */}
           <div className="flex-1 flex justify-start">
@@ -121,8 +96,7 @@ function AppContent() {
           {/* CENTER: LOGO BRAND */}
           <div className="flex flex-col items-center justify-center shrink-0">
             <div 
-              onClick={() => setActiveTab("music")} 
-              className="flex items-center gap-2.5 group cursor-pointer select-none"
+              className="flex items-center gap-2.5 group cursor-default select-none"
             >
               <div className="relative">
                 <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden relative">
@@ -170,149 +144,17 @@ function AppContent() {
             </button>
           </div>
         </div>
-
-        {/* COMPACT FLOATING NAVIGATION PILL ROW */}
-        <div className="pb-4 mt-1 flex justify-center w-full px-4 overflow-hidden">
-          <div className="flex bg-[#111]/80 backdrop-blur-md p-1.5 rounded-[22px] items-center gap-1 sm:gap-2 border border-white/5 shadow-2xl shrink-0 max-w-full overflow-x-auto scrollbar-none no-scrollbar">
-            {[
-              { id: "music", icon: <Play className="w-4 h-4" />, label: "PLAYER" },
-              { id: "dashboard", icon: <Layers className="w-4 h-4" />, label: "PANEL" },
-              { id: "book", icon: <BookOpen className="w-4 h-4" />, label: "RUTINA" },
-              { id: "chat", icon: <MessageSquare className="w-4 h-4" />, label: "COACH" },
-            ].map((tab) => {
-              const isSelected = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`h-11 px-4 sm:px-6 rounded-[18px] transition-all flex items-center gap-3 cursor-pointer relative overflow-hidden group shrink-0 ${
-                    isSelected
-                      ? "bg-white text-black shadow-[0_0_20px_rgba(255,255,255,0.15)] scale-[1.02]"
-                      : "text-slate-500 hover:text-white bg-transparent hover:bg-white/5"
-                  }`}
-                >
-                  <div className={`${isSelected ? "scale-110" : "group-hover:scale-110"} transition-transform duration-300`}>
-                    {tab.icon}
-                  </div>
-                  <span className={`text-[10px] font-brand font-black uppercase tracking-[0.1em] ${isSelected ? "opacity-100" : "opacity-0 w-0 group-hover:opacity-100 group-hover:w-auto overflow-hidden transition-all duration-300"}`}>
-                    {tab.label}
-                  </span>
-                  {isSelected && (
-                    <motion.div
-                      layoutId="activeTab"
-                      className="absolute inset-0 bg-white -z-10"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
       </nav>
 
-      {/* MOBILE NAVIGATION BAR (FOR TRUE PREMIUM FEEL ON TOUCH DEVICES) */}
-      <div className="sm:hidden fixed bottom-6 left-1/2 -translate-x-1/2 z-[60] w-[calc(100%-24px)] max-w-[420px]">
-        <div className="bg-[#0c0c0d]/90 backdrop-blur-3xl border border-white/10 rounded-[32px] p-1.5 flex items-center justify-between shadow-[0_20px_60px_rgba(0,0,0,0.8)] px-2">
-           {[
-              { id: "music", icon: <Play className="w-4.5 h-4.5" />, label: "PLAYER" },
-              { id: "dashboard", icon: <Layers className="w-4.5 h-4.5" />, label: "PANEL" },
-              { id: "chat", icon: <MessageSquare className="w-4.5 h-4.5" />, label: "COACH" },
-              { id: "book", icon: <BookOpen className="w-4.5 h-4.5" />, label: "RUTINA" },
-            ].map((tab) => {
-              const isSelected = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id as TabType)}
-                  className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-[22px] transition-all duration-300 relative group flex-1 ${
-                    isSelected ? "text-emerald-400" : "text-slate-500"
-                  }`}
-                >
-                  <div className={`${isSelected ? "scale-110 mb-0.5" : "group-active:scale-95 opacity-60"} transition-all duration-300 relative z-10`}>
-                    {tab.icon}
-                  </div>
-                  <span className={`text-[6.5px] font-black tracking-[0.1em] uppercase transition-all duration-300 relative z-10 ${isSelected ? "opacity-100 translate-y-0" : "opacity-0 translate-y-1 h-0 overflow-hidden"}`}>
-                    {tab.label}
-                  </span>
-                  {isSelected && (
-                    <motion.div 
-                      layoutId="mobileActiveTab"
-                      className="absolute inset-x-1 inset-y-1 bg-emerald-500/10 rounded-[18px] z-0"
-                      transition={{ type: "spring", bounce: 0.2, duration: 0.6 }}
-                    />
-                  )}
-                </button>
-              );
-            })}
-        </div>
-      </div>
-
-      <main className={`w-full mx-auto ${
-        activeTab === "music"
-          ? "max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-[600px] h-[75vh] md:h-[calc(100vh-140px)] overflow-hidden"
-          : "max-w-4xl px-4 sm:px-6 lg:px-8 flex-1 py-4 flex flex-col"
-      } py-4 flex flex-col gap-6`}>
-
+      <main className="w-full mx-auto max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-[600px] h-[75vh] md:h-[calc(100vh-140px)] overflow-hidden py-4 flex flex-col gap-6">
         <section className="flex flex-col gap-6 flex-1">
-          <div
-            className={`rounded-[32px] overflow-hidden flex-1 ${activeTab === "music" ? "bg-transparent border-transparent h-full" : "bg-[#111] border border-white/5 p-4 sm:p-6"} flex flex-col`}
-          >
-            <div className={`flex-1 relative ${activeTab === "music" ? "h-full overflow-hidden" : ""}`}>
-              {activeTab === "dashboard" && (
-                <Dashboard />
-              )}
-              {activeTab === "book" && (
-                <AIPersonalizedRoutine
-                  onAskCoachExercise={handleAskCoachForExerciseName}
-                  onWorkoutSuccess={handleExerciseCompletedSimulated}
-                />
-              )}
-              {activeTab === "chat" && (
-                <AICoachChat
-                  prefilledExercise={chatPrefilledExercise}
-                  onClosePrefill={() => setChatPrefilledExercise(null)}
-                />
-              )}
-
-              <div
-                className={
-                  activeTab === "music"
-                    ? "absolute inset-0 h-full w-full"
-                    : "pointer-events-none absolute inset-0 opacity-0 -z-10"
-                }
-              >
+          <div className="rounded-[32px] overflow-hidden flex-1 bg-transparent border-transparent h-full flex flex-col">
+            <div className="flex-1 relative h-full overflow-hidden">
+              <div className="absolute inset-0 h-full w-full">
                 <GymMusicPlayer />
               </div>
             </div>
           </div>
-
-          {activeTab !== "music" && (
-            <div className="bg-[#0c0c0d] rounded-2xl p-3.5 border border-white/5 flex items-center justify-between gap-4 shadow-2xl relative overflow-hidden group">
-              <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
-              <div className="flex items-center gap-4">
-                <div className="relative">
-                  <div className="w-10 h-10 bg-emerald-500/10 rounded-xl flex items-center justify-center text-emerald-500 border border-emerald-500/20 group-hover:shadow-[0_0_15px_rgba(16,185,129,0.3)] transition-shadow">
-                    <Music className="w-5 h-5 animate-pulse" />
-                  </div>
-                </div>
-                <div className="flex flex-col">
-                  <span className="text-[9px] font-brand font-black uppercase tracking-[0.1em] text-premium-gradient mb-0.5">
-                    BIENVE MUSIC ACTIVE
-                  </span>
-                  <p className="text-[11px] text-white font-bold truncate max-w-[200px]">
-                    Optimized Training Flow
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setActiveTab("music")}
-                className="text-[10px] font-black bg-emerald-500 text-black px-5 py-2.5 rounded-xl hover:bg-white transition-colors shadow-lg shadow-emerald-500/10 active:scale-95"
-              >
-                OPEN PLAYER
-              </button>
-            </div>
-          )}
         </section>
       </main>
 

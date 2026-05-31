@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
+import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Play,
@@ -8,6 +9,8 @@ import {
   Music,
   ListMusic,
   Volume2,
+  Volume1,
+  VolumeX,
   Sparkles,
   Disc,
   Plus,
@@ -26,6 +29,7 @@ import {
   ChevronDown,
   ChevronUp,
   Search,
+  ListPlus,
 } from "lucide-react";
 import {
   collection,
@@ -50,7 +54,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "INTERWORLD",
     bpm: 135,
     duration: "2:23",
-    soundcloudUrl: "https://soundcloud.com/interworld-music/metamorphosis",
+    url: "https://www.youtube.com/watch?v=H5b0pZ79XgQ",
   },
   {
     id: "phonk2",
@@ -58,7 +62,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "M83",
     bpm: 105,
     duration: "4:03",
-    soundcloudUrl: "https://soundcloud.com/m83/midnight-city",
+    url: "https://www.youtube.com/watch?v=dX3kSGcoD6M",
   },
   {
     id: "gym1",
@@ -66,7 +70,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Tiësto",
     bpm: 120,
     duration: "2:44",
-    soundcloudUrl: "https://soundcloud.com/tiesto/the-business",
+    url: "https://www.youtube.com/watch?v=nCg3upGToOk",
   },
   {
     id: "gym2",
@@ -74,7 +78,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Avicii",
     bpm: 126,
     duration: "3:20",
-    soundcloudUrl: "https://soundcloud.com/aviciiofficial/avicii-levels",
+    url: "https://www.youtube.com/watch?v=_ovdm2y5tZg",
   },
   {
     id: "gym3",
@@ -82,7 +86,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Martin Garrix",
     bpm: 128,
     duration: "5:04",
-    soundcloudUrl: "https://soundcloud.com/martingarrix/animals-original-mix",
+    url: "https://www.youtube.com/watch?v=gCYcHz2k5OI",
   },
   {
     id: "gym4",
@@ -90,7 +94,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Alan Walker",
     bpm: 90,
     duration: "3:32",
-    soundcloudUrl: "https://soundcloud.com/alanwalker/faded",
+    url: "https://www.youtube.com/watch?v=60ItHLz5WeA",
   },
   {
     id: "gym5",
@@ -98,7 +102,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "The Weeknd",
     bpm: 171,
     duration: "3:20",
-    soundcloudUrl: "https://soundcloud.com/theweeknd/blinding-lights",
+    url: "https://www.youtube.com/watch?v=4NRXx6U8ABQ",
   },
   {
     id: "gym6",
@@ -106,7 +110,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "PlayaPhonk",
     bpm: 151,
     duration: "2:27",
-    soundcloudUrl: "https://soundcloud.com/playaphonk/keraunos",
+    url: "https://www.youtube.com/watch?v=p79tLALf61c",
   },
   {
     id: "gym7",
@@ -114,7 +118,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Nadia Ali (Avicii Remix)",
     bpm: 126,
     duration: "3:38",
-    soundcloudUrl: "https://soundcloud.com/aviciiofficial/nadia-ali-rapture-avicii",
+    url: "https://www.youtube.com/watch?v=b09f_c3uCg0",
   },
   {
     id: "gym8",
@@ -122,7 +126,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Avicii",
     bpm: 124,
     duration: "4:07",
-    soundcloudUrl: "https://soundcloud.com/aviciiofficial/preview-avicii-wake-me-up",
+    url: "https://www.youtube.com/watch?v=IcrbM1l_BoI",
   },
   {
     id: "gym9",
@@ -130,7 +134,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Tiësto",
     bpm: 140,
     duration: "7:20",
-    soundcloudUrl: "https://soundcloud.com/tiesto/adagio-for-strings-original",
+    url: "https://www.youtube.com/watch?v=8To-Xih87JE",
   },
   {
     id: "gym10",
@@ -138,7 +142,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Zedd ft. Foxes",
     bpm: 128,
     duration: "4:31",
-    soundcloudUrl: "https://soundcloud.com/zedd/clarity",
+    url: "https://www.youtube.com/watch?v=IXXxciRUMzE",
   },
   {
     id: "gym11",
@@ -146,7 +150,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "Major Lazer & DJ Snake",
     bpm: 98,
     duration: "2:56",
-    soundcloudUrl: "https://soundcloud.com/majorlazer/lean-on",
+    url: "https://www.youtube.com/watch?v=YqeW9_5kURI",
   },
   {
     id: "gym12",
@@ -154,7 +158,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "David Guetta ft. Sia",
     bpm: 126,
     duration: "4:05",
-    soundcloudUrl: "https://soundcloud.com/davidguetta/titanium-feat-sia",
+    url: "https://www.youtube.com/watch?v=JRfuAAtPhic",
   },
   {
     id: "gym13",
@@ -162,7 +166,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "deadmau5",
     bpm: 128,
     duration: "6:12",
-    soundcloudUrl: "https://soundcloud.com/deadmau5/strobe-club-edit",
+    url: "https://www.youtube.com/watch?v=tKi9Z-f6qHY",
   },
   {
     id: "gym14",
@@ -170,7 +174,7 @@ const ALL_DATABASE_TRACKS: MusicTrack[] = [
     artist: "The xx",
     bpm: 120,
     duration: "2:08",
-    soundcloudUrl: "https://soundcloud.com/thexxofficial/intro",
+    url: "https://www.youtube.com/watch?v=sV4_wYedXyU",
   },
 ];
 
@@ -188,10 +192,53 @@ const getPlaylistGradientClass = (name: string) => {
   return gradients[hash % gradients.length];
 };
 
-const getEmbedUrl = (url: string, autoPlay: boolean = false) => {
-  const encodedUrl = encodeURIComponent(url);
-  const autoPlayParam = autoPlay ? "true" : "false";
-  return `https://w.soundcloud.com/player/?url=${encodedUrl}&color=%2310b981&auto_play=${autoPlayParam}&hide_related=true&show_comments=false&show_user=false&show_reposts=false&show_teaser=false&visual=false&show_playcount=false&buying=false&sharing=false&download=false&api_enable=true`;
+const calculatePlaylistDuration = (tracks: MusicTrack[]) => {
+  if (!tracks || tracks.length === 0) return "0 min";
+  
+  let totalSeconds = 0;
+  tracks.forEach(track => {
+    let secs = 0;
+    if (track.duration && typeof track.duration === "string" && track.duration.includes(":")) {
+      const parts = track.duration.split(":");
+      if (parts.length === 2) {
+        const m = parseInt(parts[0], 10);
+        const s = parseInt(parts[1], 10);
+        if (!isNaN(m) && !isNaN(s)) {
+          secs = m * 60 + s;
+        }
+      } else if (parts.length === 3) {
+        const h = parseInt(parts[0], 10);
+        const m = parseInt(parts[1], 10);
+        const s = parseInt(parts[2], 10);
+        if (!isNaN(h) && !isNaN(m) && !isNaN(s)) {
+          secs = h * 3600 + m * 60 + s;
+        }
+      }
+    } else if (track.duration && !isNaN(Number(track.duration))) {
+      const val = Number(track.duration);
+      if (val > 1000) {
+        secs = Math.floor(val / 1000);
+      } else {
+        secs = val;
+      }
+    }
+    
+    // Fallback to 3:30 (210s) if track exists but has no valid duration
+    if (secs === 0) {
+      secs = 210;
+    }
+    
+    totalSeconds += secs;
+  });
+
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  if (hours > 0) {
+    return `${hours} h ${minutes} min`;
+  }
+  return `${minutes} min ${seconds} s`;
 };
 
 export default function GymMusicPlayer() {
@@ -200,30 +247,24 @@ export default function GymMusicPlayer() {
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
   const [isTracklistOpen, setIsTracklistOpen] = useState(true);
-  const [currentTrackIndex, setCurrentTrackIndex] = useState(0);
+  const [currentTrackIndex, setCurrentTrackIndex] = useState(() => {
+    const saved = localStorage.getItem("gym_music_current_track_index");
+    return saved ? parseInt(saved, 10) : 0;
+  });
   const [isPlaying, setIsPlaying] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
   const [userPlaylists, setUserPlaylists] = useState<MusicPlaylist[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [addStep, setAddStep] = useState<"auth" | "form">("auth");
+  const [addMode, setAddMode] = useState<"import_set" | "create_empty" | "add_track">("import_set");
+  const [newPlaylistName, setNewPlaylistName] = useState("");
+  const [newPlaylistDesc, setNewPlaylistDesc] = useState("");
+  const [newPlaylistIcon, setNewPlaylistIcon] = useState("");
+  const [newPlaylistCover, setNewPlaylistCover] = useState("");
   const [adminCode, setAdminCode] = useState("");
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
 
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
-
-  // REALTIME ENGINE STATES
-  const [engineTracks, setEngineTracks] = useState<any[]>([]);
-  const [engineTrackIndex, setEngineTrackIndex] = useState(0);
-  
-  useEffect(() => {
-    engineTracksRef.current = engineTracks;
-  }, [engineTracks]);
-
-  useEffect(() => {
-    engineTrackIndexRef.current = engineTrackIndex;
-  }, [engineTrackIndex]);
-
-  const [engineCurrentSound, setEngineCurrentSound] = useState<any>(null);
 
   const [showLibrary, setShowLibrary] = useState(false);
   const [showTracks, setShowTracks] = useState(true);
@@ -231,9 +272,37 @@ export default function GymMusicPlayer() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
+  const [editingCover, setEditingCover] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
+  const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
+  const [trackListTab, setTrackListTab] = useState<"playlist" | "queue">("playlist");
+  const trackQueueRef = useRef<MusicTrack[]>([]);
+  
+  useEffect(() => {
+    trackQueueRef.current = trackQueue;
+  }, [trackQueue]);
+
+  // Memory preservation effects
+  useEffect(() => {
+    localStorage.setItem("gym_music_current_track_index", currentTrackIndex.toString());
+  }, [currentTrackIndex]);
+
+  useEffect(() => {
+    if (selectedPlaylist?.id) {
+      localStorage.setItem("gym_music_selected_playlist_id", selectedPlaylist.id);
+    }
+  }, [selectedPlaylist]);
+
+  const [overrideCurrentTrack, setOverrideCurrentTrack] = useState<MusicTrack | null>(null);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  const showNotification = useCallback((msg: string) => {
+    setNotification(msg);
+    setTimeout(() => setNotification(null), 3000);
+  }, []);
+
   const [isLoadingTrack, setIsLoadingTrack] = useState(false);
   const [securityAttempts, setSecurityAttempts] = useState(0);
   const [isBlocked, setIsBlocked] = useState(false);
@@ -256,10 +325,15 @@ export default function GymMusicPlayer() {
     localStorage.setItem("gym_music_blocked_until", blockedUntil.toString());
     alert("Acceso bloqueado por seguridad (1 hora).");
   };
-  const [volume, setVolume] = useState(70);
+  const [volume, setVolume] = useState(() => {
+    const savedVol = localStorage.getItem("gym_music_volume");
+    return savedVol !== null ? parseInt(savedVol, 10) : 70;
+  });
+  const [lastVolume, setLastVolume] = useState(() => volume > 0 ? volume : 70);
   const volumeRef = useRef(volume);
   useEffect(() => {
     volumeRef.current = volume;
+    localStorage.setItem("gym_music_volume", volume.toString());
   }, [volume]);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
@@ -267,12 +341,9 @@ export default function GymMusicPlayer() {
   const isShuffleRef = useRef(isShuffle);
   useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
 
-  const widgetRef = useRef<any>(null);
+  const youtubePlayerRef = useRef<any>(null);
   const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const expectedPlayingRef = useRef(false);
-  const userSkippedRef = useRef(false);
-  const engineTracksRef = useRef<any[]>([]);
-  const engineTrackIndexRef = useRef(0);
 
   // Initialize security code from localStorage
   useEffect(() => {
@@ -283,32 +354,8 @@ export default function GymMusicPlayer() {
   }, []);
 
   const displayTracks = React.useMemo(() => {
-    const plTracks = selectedPlaylist?.tracks;
-    if (plTracks && plTracks.length > 1) {
-      if (engineTracks && engineTracks.length > 0) {
-        // Enforce alignment: use engineTracks structure but enrich names & artist from plTracks!
-        return engineTracks.map((et, idx) => {
-          const pt = plTracks[idx];
-          const hasInvalidTitle = !et.title || et.title.includes("SoundCloud Artist") || et.title === "SoundCloud";
-          const hasInvalidArtist = !et.artist || et.artist.includes("SoundCloud Artist") || et.artist === "SoundCloud";
-          
-          return {
-            ...et,
-            title: (pt && pt.title && (hasInvalidTitle || pt.title !== "Audio Importado")) ? pt.title : (et.title || "SoundCloud Track"),
-            artist: (pt && pt.artist && (hasInvalidArtist || pt.artist !== "SoundCloud")) ? pt.artist : (et.artist || "SoundCloud Artist"),
-            artwork_url: et.artwork_url || (pt && (pt as any).artwork_url),
-          };
-        });
-      }
-      return plTracks;
-    }
-
-    if (engineTracks && engineTracks.length > 0) {
-      return engineTracks;
-    }
-    // Otherwise, faithfully display whatever tracks are in the current playlist.
     return selectedPlaylist?.tracks || ALL_DATABASE_TRACKS;
-  }, [engineTracks, selectedPlaylist]);
+  }, [selectedPlaylist]);
 
   const filteredDisplayTracks = React.useMemo(() => {
     if (!searchQuery.trim()) {
@@ -324,17 +371,12 @@ export default function GymMusicPlayer() {
       });
   }, [displayTracks, searchQuery]);
 
-  const displayTrackIndex =
-    engineTracks.length > 0 ? engineTrackIndex : currentTrackIndex;
+  const displayTrackIndex = overrideCurrentTrack ? -1 : currentTrackIndex;
 
-  const currentTrack =
+  const baseCurrentTrack =
     displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
-  const currentUrl = currentTrack.url || currentTrack.soundcloudUrl || "";
-
-  // Keep background JS context alive on iOS/Android via silent loop ambient audio synchronizer
-  const [hasInitializedWidget, setHasInitializedWidget] = useState(false);
-  const [initialIframeUrl] = useState(() => getEmbedUrl(currentUrl, false));
-  const loadedTrackUrlRef = useRef<string>(currentUrl);
+  const currentTrack = overrideCurrentTrack || baseCurrentTrack;
+  const currentUrl = currentTrack.url || "";
 
   useEffect(() => {
     if (!silentAudioRef.current) return;
@@ -349,12 +391,6 @@ export default function GymMusicPlayer() {
   }, [isPlaying]);
 
   const togglePlayback = useCallback(() => {
-    const widget = widgetRef.current;
-    if (!widget || !hasInitializedWidget) {
-      console.warn("Widget not ready");
-      return;
-    }
-
     if (silentAudioRef.current) {
       if (!isPlaying) {
         silentAudioRef.current.play().catch(() => {});
@@ -363,16 +399,9 @@ export default function GymMusicPlayer() {
       }
     }
 
-    if (isPlaying) {
-      expectedPlayingRef.current = false;
-      widget.toggle();
-      setIsPlaying(false);
-    } else {
-      expectedPlayingRef.current = true;
-      widget.toggle();
-      setIsPlaying(true);
-    }
-  }, [isPlaying, hasInitializedWidget]);
+    expectedPlayingRef.current = !isPlaying;
+    setIsPlaying(!isPlaying);
+  }, [isPlaying]);
 
   const handleNext = useCallback(() => {
     if (silentAudioRef.current) {
@@ -382,57 +411,52 @@ export default function GymMusicPlayer() {
     
     expectedPlayingRef.current = true;
 
+    if (trackQueueRef.current.length > 0) {
+      const nextTrack = trackQueueRef.current[0];
+      setOverrideCurrentTrack(nextTrack);
+      setIsPlaying(true);
+      setTrackQueue(trackQueueRef.current.slice(1));
+      showNotification(`Siguiente en cola: ${nextTrack.title}`);
+      return;
+    }
+
+    // Si la cola está vacía, limpiamos la pista forzada para volver al flujo de la lista de reproducción
+    setOverrideCurrentTrack(null);
+
     if (isShuffle) {
-      if (engineTracks.length > 1 && widgetRef.current) {
-        const currentIndex = engineTrackIndex;
-        let randomIndex = Math.floor(Math.random() * engineTracks.length);
-        if (randomIndex === currentIndex && engineTracks.length > 1) {
-          randomIndex = (randomIndex + 1) % engineTracks.length;
+      const tracksList = displayTracks;
+      if (tracksList.length > 1) {
+        const currentIndex = currentTrackIndex;
+        let randomIndex = Math.floor(Math.random() * tracksList.length);
+        if (randomIndex === currentIndex) {
+          randomIndex = (randomIndex + 1) % tracksList.length;
         }
-        const widget = widgetRef.current;
-        try {
-          userSkippedRef.current = true;
-          widget.skip(randomIndex);
-          widget.play();
-        } catch (e) {
-          console.warn("Skip failed", e);
-        }
+        setCurrentTrackIndex(randomIndex);
       } else {
-        const tracksList = displayTracks;
-        if (tracksList.length > 1) {
-          const currentIndex = currentTrackIndex;
-          let randomIndex = Math.floor(Math.random() * tracksList.length);
-          if (randomIndex === currentIndex) {
-            randomIndex = (randomIndex + 1) % tracksList.length;
-          }
-          setCurrentTrackIndex(randomIndex);
-        } else if (tracksList.length === 1) {
-          setCurrentTrackIndex(0);
+        // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
+        const allPlaylistsWithTracks = userPlaylists.filter(pl => pl.tracks && pl.tracks.length > 0);
+        if (allPlaylistsWithTracks.length > 0) {
+          const randomPl = allPlaylistsWithTracks[Math.floor(Math.random() * allPlaylistsWithTracks.length)];
+          setSelectedPlaylist(randomPl);
+          const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
+          setCurrentTrackIndex(randTrackIdx);
+        } else {
+          const randDbTrackIdx = Math.floor(Math.random() * ALL_DATABASE_TRACKS.length);
+          setCurrentTrackIndex(randDbTrackIdx);
         }
       }
       setIsPlaying(true);
       return;
     }
 
-    if (engineTracks.length > 1 && widgetRef.current) {
-      const widget = widgetRef.current;
-      try {
-        userSkippedRef.current = true;
-        widget.next();
-        widget.play();
-      } catch (e) {
-        console.warn("Next failed", e);
-      }
-    } else {
-      const tracksList = displayTracks;
-      if (currentTrackIndex < tracksList.length - 1) {
-        setCurrentTrackIndex((prev) => prev + 1);
-      } else if (tracksList.length > 0) {
-        setCurrentTrackIndex(0);
-      }
+    const tracksList = displayTracks;
+    if (currentTrackIndex < tracksList.length - 1) {
+      setCurrentTrackIndex((prev) => prev + 1);
+    } else if (tracksList.length > 0) {
+      setCurrentTrackIndex(0);
     }
     setIsPlaying(true);
-  }, [displayTracks, currentTrackIndex, engineTracks, isShuffle, engineTrackIndex]);
+  }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists]);
 
   const handlePrev = useCallback(() => {
     if (silentAudioRef.current) {
@@ -440,59 +464,43 @@ export default function GymMusicPlayer() {
       silentAudioRef.current.play().catch(() => {});
     }
 
+    setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
 
     if (isShuffle) {
-      if (engineTracks.length > 1 && widgetRef.current) {
-        const currentIndex = engineTrackIndex;
-        let randomIndex = Math.floor(Math.random() * engineTracks.length);
-        if (randomIndex === currentIndex && engineTracks.length > 1) {
-          randomIndex = (randomIndex + 1) % engineTracks.length;
+      const tracksList = displayTracks;
+      if (tracksList.length > 1) {
+        const currentIndex = currentTrackIndex;
+        let randomIndex = Math.floor(Math.random() * tracksList.length);
+        if (randomIndex === currentIndex) {
+          randomIndex = (randomIndex + 1) % tracksList.length;
         }
-        const widget = widgetRef.current;
-        try {
-          userSkippedRef.current = true;
-          widget.skip(randomIndex);
-          widget.play();
-        } catch (e) {
-          console.warn("Skip failed", e);
-        }
+        setCurrentTrackIndex(randomIndex);
       } else {
-        const tracksList = displayTracks;
-        if (tracksList.length > 1) {
-          const currentIndex = currentTrackIndex;
-          let randomIndex = Math.floor(Math.random() * tracksList.length);
-          if (randomIndex === currentIndex) {
-            randomIndex = (randomIndex + 1) % tracksList.length;
-          }
-          setCurrentTrackIndex(randomIndex);
-        } else if (tracksList.length === 1) {
-          setCurrentTrackIndex(0);
+        // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
+        const allPlaylistsWithTracks = userPlaylists.filter(pl => pl.tracks && pl.tracks.length > 0);
+        if (allPlaylistsWithTracks.length > 0) {
+          const randomPl = allPlaylistsWithTracks[Math.floor(Math.random() * allPlaylistsWithTracks.length)];
+          setSelectedPlaylist(randomPl);
+          const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
+          setCurrentTrackIndex(randTrackIdx);
+        } else {
+          const randDbTrackIdx = Math.floor(Math.random() * ALL_DATABASE_TRACKS.length);
+          setCurrentTrackIndex(randDbTrackIdx);
         }
       }
       setIsPlaying(true);
       return;
     }
 
-    if (engineTracks.length > 1 && widgetRef.current) {
-      const widget = widgetRef.current;
-      try {
-        userSkippedRef.current = true;
-        widget.prev();
-        widget.play();
-      } catch (e) {
-        console.warn("Prev failed", e);
-      }
-    } else {
-      const tracksList = displayTracks;
-      if (currentTrackIndex > 0) {
-        setCurrentTrackIndex((prev) => prev - 1);
-      } else if (tracksList.length > 0) {
-        setCurrentTrackIndex(tracksList.length - 1);
-      }
+    const tracksList = displayTracks;
+    if (currentTrackIndex > 0) {
+      setCurrentTrackIndex((prev) => prev - 1);
+    } else if (tracksList.length > 0) {
+      setCurrentTrackIndex(tracksList.length - 1);
     }
     setIsPlaying(true);
-  }, [currentTrackIndex, engineTracks, isShuffle, displayTracks, engineTrackIndex]);
+  }, [currentTrackIndex, isShuffle, displayTracks, userPlaylists]);
 
   // Fetch meta for custom UI
   useEffect(() => {
@@ -530,13 +538,47 @@ export default function GymMusicPlayer() {
           }
         }
 
+        // Clean any SoundCloud tracks from the playlist tracks array
+        const rawTracks = data.tracks || [];
+        const cleanedTracks = rawTracks.filter((track: any) => {
+          const url = track.url || "";
+          return !url.toLowerCase().includes("soundcloud.com") && !url.toLowerCase().includes("snd.sc");
+        });
+
         return {
           id: doc.id,
           ...data,
           ownerId: ownerId,
+          tracks: cleanedTracks,
         };
+      })
+      .filter((pl: any) => {
+        // Keep Martina Cumple playlist no matter what
+        const isMartina = pl.name?.toLowerCase().includes("martina");
+        if (isMartina) return true;
+
+        // Otherwise filter out SoundCloud playlists
+        const isSoundCloud = 
+          pl.name?.toLowerCase().includes("soundcloud") ||
+          pl.description?.toLowerCase().includes("soundcloud") ||
+          pl.genre?.toLowerCase().includes("soundcloud");
+          
+        if (isSoundCloud) return false;
+
+        // If it was created from a soundcloud import or had no youtube tracks, check
+        // but let's allow other personal custom playlists
+        return true;
       }) as MusicPlaylist[];
+
       setUserPlaylists(folders);
+      const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
+      if (savedPlaylistId && folders.length > 0) {
+        const found = folders.find((f) => f.id === savedPlaylistId);
+        if (found) {
+          setSelectedPlaylist(found);
+          return;
+        }
+      }
       if (!selectedPlaylist && folders.length > 0) {
         setSelectedPlaylist(folders[0]);
       }
@@ -554,156 +596,6 @@ export default function GymMusicPlayer() {
     handleNextRef.current = handleNext;
   }, [handleNext]);
 
-  const initWidget = useCallback((forcedUrl?: string) => {
-    const iframe = document.getElementById("sc-iframe") as HTMLIFrameElement;
-    if (iframe && (window as any).SC) {
-      if (!widgetRef.current) {
-        const widget = (window as any).SC.Widget(iframe);
-        widgetRef.current = widget;
-
-        widget.bind((window as any).SC.Widget.Events.READY, () => {
-          console.log("SoundCloud Widget READY");
-          setHasInitializedWidget(true);
-          setIsLoadingTrack(false);
-          widget.setVolume(volumeRef.current);
-          
-          widget.getSounds((sounds: any[]) => {
-            if (sounds && sounds.length > 0) {
-              setEngineTracks(
-                sounds.map((s: any) => ({
-                  id: s.id.toString(),
-                  title: s.title,
-                  artist: s.user?.username || "SoundCloud Artist",
-                  artwork_url: s.artwork_url,
-                })),
-              );
-            }
-          });
-
-          widget.getDuration((d: number) => setDuration(d));
-          if (isPlayingRef.current) {
-            widget.play();
-          }
-        });
-
-        widget.bind((window as any).SC.Widget.Events.PLAY, () => {
-          expectedPlayingRef.current = true;
-          setIsPlaying(true);
-          setIsLoadingTrack(false);
-          widget.getCurrentSoundIndex((index: number) => {
-             const prevIndex = engineTrackIndexRef.current;
-             
-             // If we didn't manually skip, shuffle is ON, and it's a playlist
-             if (!userSkippedRef.current && isShuffleRef.current && engineTracksRef.current.length > 1) {
-                // If the widget automatically advanced sequentially (or looped to 0 naturally)
-                if (index === prevIndex + 1 || (prevIndex > 0 && index === 0)) {
-                    let randomIndex = Math.floor(Math.random() * engineTracksRef.current.length);
-                    if (randomIndex === index) {
-                       randomIndex = (randomIndex + 1) % engineTracksRef.current.length;
-                    }
-                    console.log("Shuffle intercept! Auto-play detected. Skipping to:", randomIndex);
-                    userSkippedRef.current = true; 
-                    widget.skip(randomIndex);
-                    return; // Early return so we don't update UI incorrectly until the skip completes
-                }
-             }
-             
-             userSkippedRef.current = false;
-             setEngineTrackIndex(index);
-          });
-          widget.getCurrentSound((sound: any) => {
-            setEngineCurrentSound(sound);
-            if (sound && sound.duration) setDuration(sound.duration);
-          });
-        });
-
-        widget.bind((window as any).SC.Widget.Events.PAUSE, () => {
-          if (!expectedPlayingRef.current) {
-            setIsPlaying(false);
-          }
-        });
-
-        widget.bind((window as any).SC.Widget.Events.PLAY_PROGRESS, (data: any) => {
-          setPosition(data.currentPosition);
-        });
-
-        widget.bind((window as any).SC.Widget.Events.ERROR, () => {
-          console.warn("Track blocked or unavailable. Skipping to next.");
-          if (handleNextRef.current) handleNextRef.current();
-        });
-
-        widget.bind((window as any).SC.Widget.Events.FINISH, () => {
-          if (handleNextRef.current) handleNextRef.current();
-        });
-      }
-
-      // Smoothly load new URLs via Widget API
-      if (forcedUrl && widgetRef.current) {
-        // If not initialized yet, we can't 'load' reliably, so we'll wait for the READY event
-        // to handle the first track. But if it's already true, we load.
-        if (hasInitializedWidget && forcedUrl !== loadedTrackUrlRef.current) {
-          loadedTrackUrlRef.current = forcedUrl;
-          setIsLoadingTrack(true);
-          widgetRef.current.load(forcedUrl, {
-            auto_play: expectedPlayingRef.current,
-            show_artwork: false,
-            color: "#10b981",
-            callback: () => {
-              setIsLoadingTrack(false);
-              if (widgetRef.current) {
-                widgetRef.current.setVolume(volumeRef.current);
-                if (expectedPlayingRef.current) {
-                  const widget = widgetRef.current;
-                  try {
-                    widget.play();
-                  } catch (e) {
-                    console.warn("Play failed", e);
-                  }
-                }
-                widgetRef.current.getSounds((sounds: any[]) => {
-                  if (sounds && sounds.length > 0) {
-                    setEngineTracks(
-                      sounds.map((s: any) => ({
-                        id: s.id.toString(),
-                        title: s.title,
-                        artist: s.user?.username || "SoundCloud Artist",
-                        artwork_url: s.artwork_url,
-                      })),
-                    );
-                  }
-                });
-              }
-            }
-          });
-        }
-      }
-    }
-  }, [hasInitializedWidget]);
-
-  useEffect(() => {
-    if (!(window as any).SC) {
-      const script = document.createElement("script");
-      script.src = "https://w.soundcloud.com/player/api.js";
-      script.async = true;
-      script.onload = () => initWidget();
-      document.body.appendChild(script);
-    } else {
-      initWidget();
-    }
-  }, [initWidget]);
-
-  useEffect(() => {
-    if (widgetRef.current && hasInitializedWidget) {
-      widgetRef.current.setVolume(volume);
-    }
-  }, [volume, hasInitializedWidget]);
-
-  useEffect(() => {
-    if (hasInitializedWidget && currentUrl) {
-      initWidget(currentUrl);
-    }
-  }, [currentUrl, initWidget, hasInitializedWidget]);
-
   const fetchMetadata = async (url: string) => {
     try {
       const res = await fetch(`/api/oembed?url=${encodeURIComponent(url)}`);
@@ -717,48 +609,14 @@ export default function GymMusicPlayer() {
     return null;
   };
 
-  // Automatic playlist self-healing and background tracks list retrieval
-  useEffect(() => {
-    if (!selectedPlaylist) return;
-    
-    const url = selectedPlaylist.tracks?.[0]?.url || selectedPlaylist.tracks?.[0]?.soundcloudUrl || "";
-    const isPlaylistUrl = url.includes("/sets/");
-    const hasOnlyOneTrack = selectedPlaylist.tracks && selectedPlaylist.tracks.length === 1;
-
-    if (isPlaylistUrl && hasOnlyOneTrack) {
-      console.log(`Healing playlist dynamically for: ${selectedPlaylist.name}`);
-      fetchMetadata(url).then(async (meta) => {
-        if (meta && meta.tracks && meta.tracks.length > 0) {
-          console.log(`Dynamic heal fetched ${meta.tracks.length} tracks for ${selectedPlaylist.name}`);
-          
-          const healedPlaylist = {
-            ...selectedPlaylist,
-            tracks: meta.tracks
-          };
-          setSelectedPlaylist(healedPlaylist);
-
-          try {
-            const { updateDoc, doc: fsDoc } = await import("firebase/firestore");
-            const ownerId = selectedPlaylist.ownerId || user?.uid;
-            if (ownerId && db) {
-              const playlistRef = fsDoc(db, "users", ownerId, "playlists", selectedPlaylist.id);
-              await updateDoc(playlistRef, {
-                tracks: meta.tracks,
-                updatedAt: new Date()
-              });
-              console.log(`Firestore record updated for playlist: ${selectedPlaylist.id}`);
-            }
-          } catch (persistErr) {
-            console.error("Could not persist healed tracks to Firestore:", persistErr);
-          }
-        }
-      });
-    }
-  }, [selectedPlaylist, user]);
-
   const handleAddNewCanalClick = () => {
     setAdminCode(savedSecurityCode || "");
     setCustomUrl("");
+    setAddMode("import_set");
+    setNewPlaylistName("");
+    setNewPlaylistDesc("");
+    setNewPlaylistIcon("");
+    setNewPlaylistCover("");
     if (savedSecurityCode === "ho82788278") {
       setAddStep("form");
     } else {
@@ -791,7 +649,7 @@ export default function GymMusicPlayer() {
     }
   };
 
-  const handleAddPlaylist = async () => {
+  const handleProcessAdd = async () => {
     if (isBlocked) {
       alert("Acceso bloqueado.");
       return;
@@ -801,19 +659,6 @@ export default function GymMusicPlayer() {
       alert("Clave de administrador incorrecta");
       return;
     }
-
-    const url = customUrl.trim();
-    if (!url || !url.includes("soundcloud.com")) {
-      alert("Por favor inserta un enlace válido de SoundCloud");
-      return;
-    }
-
-    setIsFetchingMeta(true);
-    const meta = await fetchMetadata(url);
-    setIsFetchingMeta(false);
-
-    const isPlaylist = url.includes("/sets/");
-    const provider = "SoundCloud";
 
     try {
       let currentUser = user;
@@ -829,6 +674,84 @@ export default function GymMusicPlayer() {
         return;
       }
 
+      if (addMode === "create_empty") {
+        const name = newPlaylistName.trim();
+        if (!name) {
+          alert("Por favor inserta un nombre para la playlist");
+          return;
+        }
+
+        const promptBase = newPlaylistDesc.trim() ? `${name} ${newPlaylistDesc}` : name;
+        const prompt = encodeURIComponent(`${promptBase}, modern aesthetic, artistic music album cover art, spotify playlist style, vibrant colors, minimalist, no text`);
+        const generatedCoverUrl = `https://image.pollinations.ai/prompt/${prompt}?width=400&height=400&nologo=true`;
+
+        const newPlDoc = {
+          name: name,
+          genre: "Personalizado",
+          description: newPlaylistDesc.trim() || "Playlist creada manualmente",
+          icon: newPlaylistIcon.trim() || "📂",
+          thumbnail_url: newPlaylistCover.trim() || generatedCoverUrl,
+          ownerId: currentUser.uid,
+          adminSecret: adminCode,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          tracks: [],
+        };
+        const docRef = await addDoc(
+          collection(db, "users", currentUser.uid, "playlists"),
+          newPlDoc,
+        );
+        
+        setNewPlaylistName("");
+        setNewPlaylistDesc("");
+        setNewPlaylistIcon("");
+        setNewPlaylistCover("");
+        setIsAdding(false);
+        setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
+        setShowLibrary(false);
+        return;
+      }
+
+      const url = customUrl.trim();
+      if (!url || (!url.includes("youtube.com") && !url.includes("youtu.be"))) {
+        alert("Por favor inserta un enlace válido de YouTube");
+        return;
+      }
+
+      setIsFetchingMeta(true);
+      const meta = await fetchMetadata(url);
+      setIsFetchingMeta(false);
+
+      const provider = "YouTube";
+
+      if (addMode === "add_track") {
+        if (!selectedPlaylist?.id) {
+           alert("No hay ningún canal seleccionado.");
+           return;
+        }
+        const newTrack: MusicTrack = {
+          id: `track_${Date.now()}`,
+          title: meta?.title || "Audio Importado",
+          artist: meta?.author_name || provider,
+          bpm: 0,
+          duration: "",
+          url: url,
+        };
+        
+        const docRef = doc(db, "users", currentUser.uid, "playlists", selectedPlaylist.id);
+        const updatedTracks = [...(selectedPlaylist.tracks || []), newTrack];
+        await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+        
+        setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+        setCustomUrl("");
+        setIsAdding(false);
+        
+        return;
+      }
+
+      // Default: mode is "import_set" or anything else
+      // Original handleAddPlaylist behavior
+      const isPlaylist = url.includes("/sets/");
       const tracksToSave = (isPlaylist && meta?.tracks && meta.tracks.length > 0)
         ? meta.tracks
         : [
@@ -846,11 +769,12 @@ export default function GymMusicPlayer() {
         description: meta?.author_name || `Audio via ${provider}`,
         icon: isPlaylist ? "📂" : "🎵",
         ownerId: currentUser.uid,
-        adminSecret: adminCode, // Added to pass firestore rules
+        adminSecret: adminCode,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         tracks: tracksToSave,
       };
+      
       const docRef = await addDoc(
         collection(db, "users", currentUser.uid, "playlists"),
         newPlDoc,
@@ -864,8 +788,9 @@ export default function GymMusicPlayer() {
       setIsPlaying(true);
       setShowLibrary(false);
     } catch (error) {
-      console.error("Error adding playlist", error);
-      alert("Error al añadir playlist. Verifica los permisos.");
+      console.error("Error processing add", error);
+      alert("Error al procesar la solicitud. Verifica los permisos.");
+      setIsFetchingMeta(false);
     }
   };
 
@@ -873,6 +798,7 @@ export default function GymMusicPlayer() {
     setEditingId(pl.id);
     setEditingName(pl.name);
     setEditingDescription(pl.description || "");
+    setEditingCover(pl.thumbnail_url || "");
     setAuthCode(savedSecurityCode || "");
   };
 
@@ -923,9 +849,16 @@ export default function GymMusicPlayer() {
         return;
       }
       
+      const promptBase = editingDescription.trim() ? `${editingName} ${editingDescription}` : editingName;
+      const prompt = encodeURIComponent(`${promptBase}, modern aesthetic, artistic music album cover art, spotify playlist style, vibrant colors, minimalist, no text`);
+      const generatedCoverUrl = `https://image.pollinations.ai/prompt/${prompt}?width=400&height=400&nologo=true`;
+
+      const coverToSave = editingCover.trim() || generatedCoverUrl;
+
       await updateDoc(doc(db, "users", targetOwnerId, "playlists", editingId), {
         name: editingName,
         description: editingDescription,
+        thumbnail_url: coverToSave,
         updatedAt: serverTimestamp(),
       });
       setEditingId(null);
@@ -1016,6 +949,34 @@ export default function GymMusicPlayer() {
     }
   };
 
+  const handleDeleteTrack = async (trackToDelete: MusicTrack, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!selectedPlaylist?.id || selectedPlaylist.id === "all") return;
+    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin) {
+      showNotification("No tienes permisos para eliminar.");
+      return;
+    }
+
+    try {
+      const docRef = doc(db, "users", selectedPlaylist.ownerId, "playlists", selectedPlaylist.id);
+      const updatedTracks = selectedPlaylist.tracks.filter((t: any) => t.id !== trackToDelete.id);
+      await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+      setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+      showNotification(`"${trackToDelete.title}" eliminada`);
+    } catch (error) {
+      console.error("Error removing track:", error);
+      showNotification("Error al eliminar la canción.");
+    }
+  };
+
+  const handleAddToQueue = (track: MusicTrack, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setTrackQueue(q => [...q, track]);
+    showNotification(`Añadida a la cola: ${track.title}`);
+  };
+
   const selectPlaylist = (playlist: MusicPlaylist) => {
     if (silentAudioRef.current) {
       silentAudioRef.current.play().catch(() => {});
@@ -1024,24 +985,18 @@ export default function GymMusicPlayer() {
     setCustomUrl("");
     setSelectedPlaylist(playlist);
     setCurrentTrackIndex(0);
-    setEngineTracks([]);
-    setEngineTrackIndex(0);
-    setEngineCurrentSound(null);
     setPosition(0);
     setDuration(0);
     expectedPlayingRef.current = true;
     setIsPlaying(true);
     setShowLibrary(false);
-    if (widgetRef.current) {
-      // If widget is already ready but URL changes, mobile still trusts the gesture context here if load is immediate, but we rely on reinit
-    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newPos = parseInt(e.target.value);
     setPosition(newPos);
-    if (widgetRef.current) {
-      widgetRef.current.seekTo(newPos);
+    if (youtubePlayerRef.current) {
+      youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
     }
   };
 
@@ -1055,8 +1010,8 @@ export default function GymMusicPlayer() {
         const pct = Math.max(0, Math.min(1, clickX / width));
         const newPos = Math.round(pct * duration);
         setPosition(newPos);
-        if (widgetRef.current) {
-          widgetRef.current.seekTo(newPos);
+        if (youtubePlayerRef.current) {
+          youtubePlayerRef.current.seekTo(newPos / 1000, "seconds");
         }
       }
     };
@@ -1078,6 +1033,43 @@ export default function GymMusicPlayer() {
     container.addEventListener("pointerup", handlePointerUp);
   };
 
+  const handleVolumePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    const container = e.currentTarget;
+    const updateVolume = (clientX: number) => {
+      const rect = container.getBoundingClientRect();
+      const clickX = clientX - rect.left;
+      const width = rect.width;
+      if (width > 0) {
+        const pct = Math.max(0, Math.min(1, clickX / width));
+        const newVol = Math.round(pct * 100);
+        handleVolumeChange(newVol);
+      }
+    };
+
+    updateVolume(e.clientX);
+    container.setPointerCapture(e.pointerId);
+
+    const handlePointerMove = (moveEvent: PointerEvent) => {
+      const rect = container.getBoundingClientRect();
+      const clickX = moveEvent.clientX - rect.left;
+      const width = rect.width;
+      if (width > 0) {
+        const pct = Math.max(0, Math.min(1, clickX / width));
+        const newVol = Math.round(pct * 100);
+        handleVolumeChange(newVol);
+      }
+    };
+
+    const handlePointerUp = () => {
+      container.releasePointerCapture(e.pointerId);
+      container.removeEventListener("pointermove", handlePointerMove);
+      container.removeEventListener("pointerup", handlePointerUp);
+    };
+
+    container.addEventListener("pointermove", handlePointerMove);
+    container.addEventListener("pointerup", handlePointerUp);
+  };
+
   const formatTime = (ms: number) => {
     if (!ms || isNaN(ms)) return "0:00";
     const totalSeconds = Math.floor(ms / 1000);
@@ -1087,15 +1079,12 @@ export default function GymMusicPlayer() {
   };
 
   const displayTitle =
-    engineCurrentSound?.title || currentTrack?.title || "Waiting...";
+    currentTrack?.title || "Waiting...";
   const displayArtist =
-    engineCurrentSound?.user?.username ||
-    engineCurrentSound?.artist ||
     currentTrack?.artist ||
     "Original Arch";
   const displayArtwork =
-    engineCurrentSound?.artwork_url?.replace("large", "t500x500") ||
-    currentTrackMeta?.thumbnail_url?.replace("badge", "t500x500") ||
+    currentTrackMeta?.thumbnail_url ||
     "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 
   // USE STABLE HANDLERS FOR MEDIA SESSION TO PREVENT LOCK SCREEN LAG/RE-REGISTRATION ISSUES
@@ -1180,10 +1169,16 @@ export default function GymMusicPlayer() {
       ["previoustrack", prevHandler],
       ["nexttrack", nextHandler],
       ["seekforward", () => {
-        if (widgetRef.current) widgetRef.current.getPosition((p: number) => widgetRef.current.seekTo(p + 10000));
+        if (youtubePlayerRef.current) {
+          const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+          youtubePlayerRef.current.seekTo(currentSec + 10, "seconds");
+        }
       }],
       ["seekbackward", () => {
-        if (widgetRef.current) widgetRef.current.getPosition((p: number) => widgetRef.current.seekTo(Math.max(0, p - 10000)));
+        if (youtubePlayerRef.current) {
+          const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+          youtubePlayerRef.current.seekTo(Math.max(0, currentSec - 10), "seconds");
+        }
       }],
     ];
 
@@ -1198,8 +1193,10 @@ export default function GymMusicPlayer() {
     // Add SeekTo Support
     try {
       navigator.mediaSession.setActionHandler("seekto", (details) => {
-        if (details.seekTime !== undefined && widgetRef.current) {
-          widgetRef.current.seekTo(details.seekTime * 1000);
+        if (details.seekTime !== undefined) {
+          if (youtubePlayerRef.current) {
+            youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
+          }
         }
       });
     } catch (e) {}
@@ -1217,29 +1214,41 @@ export default function GymMusicPlayer() {
 
   const handleVolumeChange = (newVol: number) => {
     setVolume(newVol);
-    if (widgetRef.current) {
-      try {
-        widgetRef.current.setVolume(newVol);
-      } catch (e) {
-        console.warn("Widget volume set failed", e);
-      }
-    }
   };
-
-  const iframeSrc = React.useMemo(() => getEmbedUrl(currentUrl, isPlaying), [currentUrl]);
 
   // --- DERIVED UI STATES (already defined above) ---
 
   return (
     <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
-      {/* Invisible embedding of SoundCloud API optimized to prevent iOS Safari/Android active viewport suspension */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0">
-        <iframe
-          id="sc-iframe"
-          src={initialIframeUrl}
-          allow="autoplay; encrypted-media"
-          className="w-[300px] h-[300px]"
-        />
+      <AnimatePresence>
+        {notification && (
+          <motion.div
+            initial={{ opacity: 0, y: -20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -20 }}
+            className="absolute top-6 left-1/2 -translate-x-1/2 z-[100] bg-emerald-500 text-black px-6 py-3 rounded-full font-bold text-sm shadow-2xl flex items-center gap-2"
+          >
+            <Sparkles className="w-4 h-4" />
+            {notification}
+          </motion.div>
+        )}
+      </AnimatePresence>
+      {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
+      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0 flex">
+        {currentUrl && (
+          <ReactPlayer
+            ref={youtubePlayerRef}
+            url={currentUrl}
+            playing={isPlaying}
+            volume={volume / 100}
+            onEnded={() => handleNext()}
+            onProgress={(state) => setPosition(state.playedSeconds * 1000)}
+            onDuration={(dur) => setDuration(dur * 1000)}
+            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
+            width="300px"
+            height="300px"
+          />
+        )}
         <audio
           ref={silentAudioRef}
           loop
@@ -1345,16 +1354,22 @@ export default function GymMusicPlayer() {
                         >
                             {/* Dynamic Premium Cover Art */}
                             <div className={`relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-sm md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                                {/* Inner Gloss Sheen Overlay */}
-                                <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                                
-                                <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
-                                    {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
-                                        pl.icon
-                                    ) : (
-                                        <Headphones className="w-4 h-4 md:w-5 md:h-5 text-white/90" />
-                                    )}
-                                </span>
+                                {pl.thumbnail_url ? (
+                                    <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" />
+                                ) : (
+                                    <>
+                                        {/* Inner Gloss Sheen Overlay */}
+                                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                                        
+                                        <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                                            {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                                                pl.icon
+                                            ) : (
+                                                <Headphones className="w-4 h-4 md:w-5 md:h-5 text-white/90" />
+                                            )}
+                                        </span>
+                                    </>
+                                )}
  
                                 {/* Hover Play Indicator Overlay */}
                                 <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -1363,15 +1378,20 @@ export default function GymMusicPlayer() {
                             </div>
  
                             {/* Info */}
-                            <div className="min-w-0 text-center md:text-left">
-                                <p className={`text-[9px] md:text-[11px] font-black truncate leading-tight max-w-[70px] md:max-w-[130px] ${
-                                  isSelected ? 'text-emerald-400 font-extrabold' : 'text-slate-400 group-hover:text-white'
+                            <div className="min-w-0 text-center md:text-left flex flex-col justify-center">
+                                <p className={`text-[10px] md:text-[13px] font-bold truncate leading-snug max-w-[70px] md:max-w-[130px] ${
+                                  isSelected ? 'text-emerald-400' : 'text-white/90 group-hover:text-white'
                                 }`}>
                                     {pl.name}
                                 </p>
-                                <p className="hidden md:block text-[8px] text-slate-500 font-bold uppercase tracking-widest mt-0.5">
-                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'}
+                                <p className="hidden md:block text-[10px] md:text-[11.5px] text-slate-300 font-extrabold mt-0.5 truncate max-w-[130px]" title={`${pl.tracks?.length || 0} tracks, duration ${calculatePlaylistDuration(pl.tracks)}`}>
+                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'} • <span className="text-emerald-400 font-black">{calculatePlaylistDuration(pl.tracks)}</span>
                                 </p>
+                                {pl.description && (
+                                  <p className="hidden md:block text-[9.5px] md:text-[10.5px] text-slate-400 font-medium truncate max-w-[130px] mt-0.5 normal-case tracking-wide" title={pl.description}>
+                                    {pl.description}
+                                  </p>
+                                )}
                             </div>
                         </button>
                     )
@@ -1533,30 +1553,47 @@ export default function GymMusicPlayer() {
 
                     {/* Right Column: Optimized Volume Control */}
                     <div className="flex justify-end min-w-0 pr-1">
-                      <div className="flex flex-col items-center gap-1 px-1.5 py-1 rounded-2xl bg-white/5 border border-white/10 shadow-inner">
-                        {/* Plus (Up) */}
+                      <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/[0.08] transition-all duration-300 w-full max-w-[110px] sm:max-w-[150px] shadow-md select-none">
                         <button
-                          onClick={() => handleVolumeChange(Math.min(100, volume + 10))}
-                          className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-white/10 active:scale-90 rounded-full transition-all flex-shrink-0"
+                          onClick={() => {
+                            if (volume > 0) {
+                              setLastVolume(volume);
+                              handleVolumeChange(0);
+                            } else {
+                              handleVolumeChange(lastVolume > 0 ? lastVolume : 70);
+                            }
+                          }}
+                          className="text-slate-400 hover:text-emerald-400 p-0.5 sm:p-1 rounded-full hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
+                          title={volume > 0 ? "Silenciar" : "Activar sonido"}
                         >
-                          <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                          {volume === 0 ? (
+                            <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
+                          ) : volume < 50 ? (
+                            <Volume1 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500/80" />
+                          ) : (
+                            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
+                          )}
                         </button>
                         
-                        {/* Status (Middle) */}
-                        <div className="flex flex-col items-center gap-0.5 justify-center select-none overflow-hidden py-0.5">
-                          <Volume2 className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-500/70" />
-                          <span className="text-[9px] sm:text-[11px] font-mono font-bold text-emerald-400 leading-none">
-                            {volume}%
-                          </span>
+                        <div
+                          onPointerDown={handleVolumePointerDown}
+                          className="flex-1 relative flex items-center h-4 cursor-pointer select-none touch-none group/volume-slider min-w-[35px] sm:min-w-[65px]"
+                        >
+                          <div className="w-full h-1 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/volume-slider:h-1.5 transition-all">
+                            <div
+                              className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
+                              style={{ width: `${volume}%` }}
+                            />
+                          </div>
+                          <div
+                            className="absolute w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white rounded-full opacity-100 sm:opacity-0 sm:group-hover/volume-slider:opacity-100 transition-opacity shadow-[0_0_4px_rgba(255,255,255,0.7)] pointer-events-none"
+                            style={{ left: `calc(${volume}% - 4px)` }}
+                          />
                         </div>
 
-                        {/* Minus (Down) */}
-                        <button
-                          onClick={() => handleVolumeChange(Math.max(0, volume - 10))}
-                          className="p-1 text-slate-400 hover:text-emerald-500 hover:bg-white/10 active:scale-90 rounded-full transition-all flex-shrink-0"
-                        >
-                          <Minus className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
+                        <span className="text-[8px] sm:text-[10px] font-mono font-bold text-slate-400 w-5 sm:w-6 text-right shrink-0 select-none">
+                          {volume}
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1613,18 +1650,76 @@ export default function GymMusicPlayer() {
                 className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex flex-col gap-3 shrink-0 bg-[#080809]/40"
               >
                 <div className="flex items-center justify-between w-full">
-                  <div className="space-y-0.5 text-left">
-                    <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                      LISTA DE REPRODUCCIÓN
-                      <span className="px-1.5 py-0.5 rounded pl-1 bg-emerald-500/10 text-[7px] text-emerald-400">
-                        {displayTracks.length} PISTAS
-                      </span>
-                    </p>
-                    <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate max-w-[240px]">
-                      {selectedPlaylist.name}
-                    </h3>
+                  <div className="flex items-center gap-4 sm:gap-6 text-left">
+                    <button
+                      onClick={() => setTrackListTab("playlist")}
+                      className={`text-left transition-all relative ${trackListTab === "playlist" ? "opacity-100" : "opacity-40 hover:opacity-75"}`}
+                    >
+                      <p className="text-[9px] sm:text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
+                        LISTA DE REPRODUCCIÓN
+                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-[8.5px] sm:text-[10px] text-emerald-300 font-black border border-emerald-500/10">
+                          {displayTracks.length} PISTAS • {calculatePlaylistDuration(displayTracks)}
+                        </span>
+                      </p>
+                      <h3 className="text-sm sm:text-lg font-black text-white uppercase truncate max-w-[140px] sm:max-w-[240px] mt-0.5">
+                        {selectedPlaylist.name}
+                      </h3>
+                      {selectedPlaylist.description && (
+                        <p className="text-[10.5px] sm:text-xs text-slate-300 font-semibold truncate max-w-[140px] sm:max-w-[240px] tracking-wide mt-1 normal-case" title={selectedPlaylist.description}>
+                          {selectedPlaylist.description}
+                        </p>
+                      )}
+                    </button>
+
+                    <div className="w-[1px] h-8 bg-white/10" />
+
+                    <button
+                      onClick={() => setTrackListTab("queue")}
+                      className={`text-left transition-all relative ${trackListTab === "queue" ? "opacity-100" : "opacity-40 hover:opacity-75"}`}
+                    >
+                      <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
+                        COLA DE REPRODUCCIÓN
+                        {trackQueue.length > 0 && (
+                          <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[7px] animate-pulse">
+                            {trackQueue.length} COLA
+                          </span>
+                        )}
+                      </p>
+                      <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate">
+                        Siguientes pistas
+                      </h3>
+                    </button>
                   </div>
-                  <div className="flex items-center gap-3">
+
+                  <div className="flex items-center gap-2 sm:gap-3">
+                    {trackListTab === "queue" && trackQueue.length > 0 && (
+                      <button
+                        onClick={() => {
+                          setTrackQueue([]);
+                          showNotification("Cola vaciada con éxito");
+                        }}
+                        className="py-1 px-3 text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/30 hover:bg-red-500/20 rounded-full transition-all"
+                      >
+                        Vaciar Cola
+                      </button>
+                    )}
+                    <button
+                      onClick={() => {
+                        setAdminCode(savedSecurityCode || "");
+                        setCustomUrl("");
+                        setAddMode("add_track");
+                        if (savedSecurityCode === "ho82788278") {
+                          setAddStep("form");
+                        } else {
+                          setAddStep("auth");
+                        }
+                        setIsAdding(true);
+                      }}
+                      title="Añadir pista a esta lista"
+                      className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
                     <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
                   </div>
                 </div>
@@ -1633,7 +1728,7 @@ export default function GymMusicPlayer() {
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input
                     type="text"
-                    placeholder="Buscar canción o artista..."
+                    placeholder={trackListTab === "queue" ? "Buscar en tu cola..." : "Buscar canción o artista..."}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     className="w-full bg-[#111113] border border-white/5 rounded-full py-1.5 pl-9 pr-4 text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
@@ -1651,7 +1746,89 @@ export default function GymMusicPlayer() {
 
               <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-[#030303]">
                 <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar">
-                  {filteredDisplayTracks.length === 0 ? (
+                  {trackListTab === "queue" ? (
+                    (() => {
+                      const lowerQuery = searchQuery.toLowerCase().trim();
+                      const filteredQueue = lowerQuery 
+                        ? trackQueue.filter(track => 
+                            track.title?.toLowerCase().includes(lowerQuery) || 
+                            track.artist?.toLowerCase().includes(lowerQuery)
+                          )
+                        : trackQueue;
+
+                      if (filteredQueue.length === 0) {
+                        return (
+                          <div className="p-12 text-center text-slate-400 text-xs font-medium space-y-3">
+                            <ListMusic className="w-8 h-8 text-slate-600 mx-auto animate-pulse" />
+                            <p>{searchQuery ? "No se encontraron coincidencias en la cola." : "No hay canciones en la cola de reproducción."}</p>
+                            {!searchQuery && (
+                              <p className="text-[10px] text-slate-500">
+                                Añade canciones a la cola usando el botón <span className="inline-flex items-center text-emerald-400 bg-emerald-500/10 px-1 py-0.5 rounded"><ListPlus className="w-3.5 h-3.5" /></span> en las pistas.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      }
+
+                      return filteredQueue.map((track, idx) => {
+                        return (
+                          <div
+                            key={`queue_${track.id || idx}_${idx}`}
+                            onClick={() => {
+                              if (silentAudioRef.current) {
+                                silentAudioRef.current.play().catch(() => {});
+                              }
+                              expectedPlayingRef.current = true;
+                              setOverrideCurrentTrack(track);
+                              setIsPlaying(true);
+                              setTrackQueue(prev => prev.filter((_, i) => i !== idx));
+                              showNotification(`Reproduciendo: ${track.title}`);
+                            }}
+                            role="button"
+                            className="group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl cursor-pointer bg-transparent hover:bg-white/[0.04]"
+                          >
+                            <div className="hidden sm:flex items-center justify-center w-8 shrink-0 relative z-10">
+                              <span className="text-[13px] font-medium text-slate-500 group-hover/track:text-emerald-400 transition-colors">
+                                {idx + 1}
+                              </span>
+                            </div>
+
+                            <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                              {track.artwork_url || track.thumbnail || track.artwork ? (
+                                <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                              )}
+                            </div>
+
+                            <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
+                              <p className="text-[13px] sm:text-[15px] font-medium truncate leading-tight text-white group-hover/track:text-emerald-400 transition-colors">
+                                {track.title}
+                              </p>
+                              <p className="text-[11px] sm:text-[13px] font-normal truncate mt-0.5 text-slate-400">
+                                {track.artist || track.author || "Unknown Artist"}
+                              </p>
+                            </div>
+
+                            <div className="flex items-center gap-2 relative z-20">
+                              <button
+                                onClick={(e) => {
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  setTrackQueue(prev => prev.filter((_, i) => i !== idx));
+                                  showNotification(`Quitada de la cola: ${track.title}`);
+                                }}
+                                className="p-2 sm:p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer"
+                                title="Quitar de la cola"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()
+                  ) : filteredDisplayTracks.length === 0 ? (
                     <div className="p-8 text-center text-white/30 text-xs font-medium">
                       No se encontraron resultados para "{searchQuery}"
                     </div>
@@ -1659,29 +1836,23 @@ export default function GymMusicPlayer() {
                     filteredDisplayTracks.map(({ track, idx }) => {
                       const isActive = displayTrackIndex === idx;
                       return (
-                        <button
+                        <div
                           key={track.id || idx}
                         onClick={() => {
                           if (silentAudioRef.current) {
                             silentAudioRef.current.play().catch(() => {});
                           }
                           expectedPlayingRef.current = true;
-                          if (isActive && hasInitializedWidget && widgetRef.current) {
-                            if (!isPlaying) {
-                               widgetRef.current.play();
-                            }
+                          setOverrideCurrentTrack(null);
+                          if (isActive) {
+                            setIsPlaying(!isPlaying);
                           } else {
-                            if (engineTracks.length > 0) {
-                              userSkippedRef.current = true;
-                              widgetRef.current?.skip(idx);
-                              widgetRef.current?.play();
-                            } else {
-                              setCurrentTrackIndex(idx);
-                            }
+                            setCurrentTrackIndex(idx);
+                            setIsPlaying(true);
                           }
-                          setIsPlaying(true);
                         }}
-                        className={`group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl ${
+                        role="button"
+                        className={`group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl cursor-pointer ${
                           isActive
                             ? "bg-white/[0.08]"
                             : "bg-transparent hover:bg-white/[0.04]"
@@ -1758,6 +1929,18 @@ export default function GymMusicPlayer() {
                           </p>
                         </div>
     
+                        {/* Actions Hover (Queue / Delete) */}
+                        <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover/track:opacity-100 transition-opacity mr-2 relative z-20">
+                          <button onClick={(e) => handleAddToQueue(track, e)} className="p-2 sm:p-1.5 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Añadir a la cola">
+                            <ListPlus className="w-4 h-4" />
+                          </button>
+                          {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin) && (
+                            <button onClick={(e) => handleDeleteTrack(track, e)} className="p-2 sm:p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer" title="Eliminar de la playlist">
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
                         {/* Duration / Options */}
                         <div className="hidden sm:flex items-center gap-4 shrink-0 relative z-10 text-[12px] font-medium text-slate-400">
                           {track.duration && (
@@ -1766,7 +1949,7 @@ export default function GymMusicPlayer() {
                              </span>
                           )}
                         </div>
-                      </button>
+                      </div>
                     );
                   })
                   )}
@@ -1867,27 +2050,36 @@ export default function GymMusicPlayer() {
                       }`}
                     >
                       <div className={`w-full aspect-square rounded-xl bg-gradient-to-tr ${getPlaylistGradientClass(pl.name)} flex items-center justify-center text-xl shadow-lg relative overflow-hidden shrink-0 transition-transform duration-500`}>
-                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                        <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
-                          {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
-                            pl.icon
-                          ) : (
-                            <Headphones className="w-6 h-6 text-white/90" />
-                          )}
-                        </span>
+                        {pl.thumbnail_url ? (
+                          <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" />
+                        ) : (
+                          <>
+                            <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                            <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                              {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                                pl.icon
+                              ) : (
+                                <Headphones className="w-6 h-6 text-white/90" />
+                              )}
+                            </span>
+                          </>
+                        )}
                         
                         {/* Indicador de pistas flotante */}
-                        <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 bg-black/60 backdrop-blur-md rounded text-[7px] font-black text-white/80 uppercase">
-                          {pl.tracks.length} P
+                        <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-emerald-300 uppercase tracking-widest border border-emerald-500/20 shadow-md">
+                          {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
                         </div>
                       </div>
                       
-                      <div className="flex-1 mt-1 overflow-hidden">
-                        <p className="text-[10px] font-black truncate uppercase tracking-tight text-white/90">
+                      <div className="flex-1 mt-2 overflow-hidden flex flex-col justify-start">
+                        <p className="text-xs sm:text-[14px] font-bold truncate text-white leading-tight">
                           {pl.name}
                         </p>
-                        <p className="text-[8px] text-slate-500 font-bold uppercase truncate tracking-widest mt-0.5 opacity-50">
-                          {pl.description || "Archive"}
+                        <p className="text-[10.5px] sm:text-[12px] text-slate-300 font-medium truncate mt-1 normal-case tracking-wide opacity-100" title={pl.description || "Sin descripción"}>
+                          {pl.description || "Canal personalizado de música"}
+                        </p>
+                        <p className="text-[10.5px] sm:text-[11.5px] text-emerald-400 font-extrabold tracking-wide mt-1 flex items-center gap-1">
+                          {pl.tracks.length} {pl.tracks.length === 1 ? 'Tema' : 'Temas'} • <span>{calculatePlaylistDuration(pl.tracks)}</span>
                         </p>
                       </div>
                     </div>
@@ -1986,6 +2178,19 @@ export default function GymMusicPlayer() {
                       onChange={(e) => setEditingDescription(e.target.value)}
                       placeholder="Breve descripción..."
                       className="w-full bg-black/40 border border-white/5 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium h-32 resize-none"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                      URL de la Foto de Portada (Déjalo en blanco para auto-generar)
+                    </label>
+                    <input
+                      type="text"
+                      value={editingCover}
+                      onChange={(e) => setEditingCover(e.target.value)}
+                      placeholder="https://..."
+                      className="w-full bg-black/40 border border-white/5 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium"
                     />
                   </div>
 
@@ -2149,7 +2354,7 @@ export default function GymMusicPlayer() {
                       {addStep === 'auth' ? 'Acceso Maestro' : 'Sincronizar Canal'}
                     </h2>
                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
-                      {addStep === 'auth' ? 'Verificación de Identidad' : 'Pegar Enlace SoundCloud'}
+                      {addStep === 'auth' ? 'Verificación de Identidad' : 'Pegar Enlace YouTube'}
                     </p>
                   </div>
                 </div>
@@ -2191,38 +2396,122 @@ export default function GymMusicPlayer() {
                   </div>
                 ) : (
                   <div className="space-y-10">
-                    <div className="space-y-5">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
-                        URL de la Playlist / Canción
-                      </label>
-                      <div className="relative group">
-                        <input
-                          type="text"
-                          placeholder="https://soundcloud.com/usuario/sets/playlist"
-                          value={customUrl}
-                          onChange={(e) => setCustomUrl(e.target.value)}
-                          disabled={isFetchingMeta}
-                          onKeyDown={(e) => e.key === 'Enter' && handleAddPlaylist()}
-                          className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-6 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium pr-16 shadow-inner"
-                          autoFocus
-                        />
-                        <div className="absolute right-7 top-1/2 -translate-y-1/2">
-                          <Sparkles className={`w-5 h-5 transition-all ${customUrl ? 'text-emerald-500 animate-pulse' : 'text-slate-700'}`} />
+                    {/* Add Mode Toggle */}
+                    {addMode !== "add_track" && (
+                      <div className="flex gap-2 p-1 bg-white/5 rounded-2xl">
+                        <button
+                          onClick={() => setAddMode("import_set")}
+                          className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${addMode === "import_set" ? "bg-emerald-500 text-black shadow-lg" : "text-slate-400 hover:text-white"}`}
+                        >
+                          Importar de YouTube
+                        </button>
+                        <button
+                          onClick={() => setAddMode("create_empty")}
+                          className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${addMode === "create_empty" ? "bg-emerald-500 text-black shadow-lg" : "text-slate-400 hover:text-white"}`}
+                        >
+                          Crear Playlist
+                        </button>
+                      </div>
+                    )}
+
+                    {addMode === "create_empty" ? (
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block mb-2">
+                            Nombre de la Nueva Playlist
+                          </label>
+                          <div className="relative group">
+                            <input
+                              type="text"
+                              placeholder="Mi Nueva Playlist..."
+                              value={newPlaylistName}
+                              onChange={(e) => setNewPlaylistName(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleProcessAdd()}
+                              className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-4 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium shadow-inner"
+                              autoFocus
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block mb-2">
+                            Descripción (Opcional)
+                          </label>
+                          <div className="relative group">
+                            <input
+                              type="text"
+                              placeholder="Ej. Temazos para correr..."
+                              value={newPlaylistDesc}
+                              onChange={(e) => setNewPlaylistDesc(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleProcessAdd()}
+                              className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-4 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium shadow-inner"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block mb-2">
+                            Icono o Emoji (Opcional)
+                          </label>
+                          <div className="relative group">
+                            <input
+                              type="text"
+                              placeholder="Ej. 🏃‍♂️ o 🚀"
+                              value={newPlaylistIcon}
+                              onChange={(e) => setNewPlaylistIcon(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleProcessAdd()}
+                              className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-4 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium shadow-inner"
+                            />
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block mb-2">
+                            URL de la Foto de Portada (Opcional)
+                          </label>
+                          <div className="relative group">
+                            <input
+                              type="text"
+                              placeholder="https://..."
+                              value={newPlaylistCover}
+                              onChange={(e) => setNewPlaylistCover(e.target.value)}
+                              onKeyDown={(e) => e.key === 'Enter' && handleProcessAdd()}
+                              className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-4 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium shadow-inner"
+                            />
+                          </div>
                         </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-5">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                          {addMode === "add_track" ? "URL de la Canción (YouTube)" : "URL de la Playlist / Canción"}
+                        </label>
+                        <div className="relative group">
+                          <input
+                            type="text"
+                            placeholder="https://www.youtube.com/watch?v=..."
+                            value={customUrl}
+                            onChange={(e) => setCustomUrl(e.target.value)}
+                            disabled={isFetchingMeta}
+                            onKeyDown={(e) => e.key === 'Enter' && handleProcessAdd()}
+                            className="w-full bg-black/40 border border-white/5 group-hover:border-emerald-500/30 rounded-[30px] px-8 py-6 text-sm outline-none focus:border-emerald-500/50 focus:bg-black/60 transition-all font-medium pr-16 shadow-inner"
+                            autoFocus
+                          />
+                          <div className="absolute right-7 top-1/2 -translate-y-1/2">
+                            <Sparkles className={`w-5 h-5 transition-all ${customUrl ? 'text-emerald-500 animate-pulse' : 'text-slate-700'}`} />
+                          </div>
+                        </div>
+                      </div>
+                    )}
 
                     <div className="pt-2">
                       <button
-                        onClick={handleAddPlaylist}
-                        disabled={isFetchingMeta || !customUrl}
+                        onClick={handleProcessAdd}
+                        disabled={isFetchingMeta || (addMode === "create_empty" ? !newPlaylistName : !customUrl)}
                         className="w-full bg-emerald-500 text-black py-6 rounded-[30px] text-xs font-black uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:bg-white hover:shadow-white/20 active:scale-[0.98] disabled:opacity-50 disabled:grayscale transition-all flex items-center justify-center gap-4 group"
                       >
                         {isFetchingMeta ? (
                           <Loader2 className="w-6 h-6 animate-spin" />
                         ) : (
                           <>
-                            Completar Sincronización
+                            {addMode === "create_empty" ? "Crear Playlist" : (addMode === "add_track" ? "Añadir Canción" : "Completar Sincronización")}
                             <SkipForward className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                           </>
                         )}

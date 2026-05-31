@@ -11,7 +11,6 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
-    "@distube/ytdl-core": "^4.16.12",
     "@firebase/eslint-plugin-security-rules": "^0.0.2",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
@@ -22,13 +21,11 @@
     "firebase": "^12.13.0",
     "lucide-react": "^0.546.0",
     "motion": "^12.23.24",
-    "play-dl": "^1.9.7",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "react-player": "^2.16.1",
     "vite": "^6.2.3",
-    "youtube-dl-exec": "^3.1.7",
-    "youtube-ext": "^1.1.25"
+    "youtubei.js": "^17.0.1"
   },
   "devDependencies": {
     "@types/cookie-parser": "^1.4.10",

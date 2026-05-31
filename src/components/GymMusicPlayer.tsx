@@ -365,6 +365,45 @@ export default function GymMusicPlayer() {
     };
   }, [isPlaying]);
 
+// Continuous sub-audible HTML5 Audio trick for locks/backgrounding
+  const fallbackSilentAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    let audioCtx: AudioContext | null = null;
+    let osc: OscillatorNode | null = null;
+    let gain: GainNode | null = null;
+
+    if (isPlaying) {
+      if (fallbackSilentAudioRef.current) {
+        fallbackSilentAudioRef.current.play().catch(() => {});
+      }
+      try {
+        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioCtxClass) {
+          audioCtx = new AudioCtxClass();
+          osc = audioCtx.createOscillator();
+          gain = audioCtx.createGain();
+          osc.frequency.setValueAtTime(20, audioCtx.currentTime); // Inaudible
+          gain.gain.setValueAtTime(0.005, audioCtx.currentTime);
+          osc.connect(gain);
+          gain.connect(audioCtx.destination);
+          osc.start();
+        }
+      } catch (e) {}
+    } else {
+      if (fallbackSilentAudioRef.current) {
+        fallbackSilentAudioRef.current.pause();
+      }
+    }
+
+    return () => {
+      try {
+        if (osc) { osc.stop(); osc.disconnect(); }
+        if (audioCtx) { audioCtx.close(); }
+      } catch (err) {}
+    };
+  }, [isPlaying]);
+
   // Document Visibility & Screen Unlock Event handling to synchronize playback
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1276,13 +1315,22 @@ export default function GymMusicPlayer() {
               youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },
               file: { 
                 forceAudio: true, 
-                attributes: { playsInline: true }
+                attributes: { playsInline: true, id: 'native-audio' }
               } 
             }}
             width="300px"
             height="300px"
+            playsinline={true}
           />
         )}
+        <audio
+          ref={fallbackSilentAudioRef}
+          loop
+          playsInline
+          preload="auto"
+          src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
+          className="hidden"
+        />
       </div>
       {/* 1. COMPACT HEADER */}
       <div className="flex justify-between items-center px-6 py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">

@@ -243,6 +243,22 @@ const calculatePlaylistDuration = (tracks: MusicTrack[]) => {
 
 export default function GymMusicPlayer() {
   const { user, loading: authLoading, setAuthModalOpen } = useFirebase();
+  
+  // --- Page Visibility State for Power Saving ---
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const isEcoMode = true;
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      setIsPageVisible(document.visibilityState === "visible");
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
@@ -1144,18 +1160,33 @@ export default function GymMusicPlayer() {
     handlersRef.current = { togglePlayback, handleNext, handlePrev };
   }, [togglePlayback, handleNext, handlePrev]);
 
-  // Sync Position State with Lock Screen
+  // Sync Position State with Lock Screen - THROTTLED ECO OPTIMAL
+  const lastSyncTrackRef = useRef<number>(-1);
+  const lastSyncIsPlayingRef = useRef<boolean>(false);
+  const lastSessionSyncTimeRef = useRef<number>(0);
+
   useEffect(() => {
-    if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
-      try {
-        navigator.mediaSession.setPositionState({
-          duration: (duration || 0) / 1000,
-          playbackRate: 1,
-          position: (position || 0) / 1000,
-        });
-      } catch (e) {}
+    const now = Date.now();
+    const isPlayingChanged = lastSyncIsPlayingRef.current !== isPlaying;
+    const isNewTrack = lastSyncTrackRef.current !== currentTrackIndex;
+    // Throttle rate is 8 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem with high-frequency updates)
+    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 8000 : 3000);
+
+    if (isPlayingChanged || isNewTrack || isThrottleTimeoutPassed) {
+      if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: (duration || 0) / 1000,
+            playbackRate: 1,
+            position: (position || 0) / 1000,
+          });
+          lastSessionSyncTimeRef.current = now;
+          lastSyncTrackRef.current = currentTrackIndex;
+          lastSyncIsPlayingRef.current = isPlaying;
+        } catch (e) {}
+      }
     }
-  }, [position, duration]);
+  }, [position, duration, isPlaying, currentTrackIndex, isEcoMode]);
 
   // Media Session API Integration for background playback
   useEffect(() => {
@@ -1283,9 +1314,18 @@ export default function GymMusicPlayer() {
             url={currentUrl}
             playing={isPlaying}
             volume={volume / 100}
+            progressInterval={isEcoMode ? 4000 : 1000}
             onEnded={() => handleNext()}
-            onProgress={(state) => setPosition(state.playedSeconds * 1000)}
-            onDuration={(dur) => setDuration(dur * 1000)}
+            onProgress={(state) => {
+              if (document.visibilityState === "visible") {
+                setPosition(state.playedSeconds * 1000);
+              }
+            }}
+            onDuration={(dur) => {
+              if (document.visibilityState === "visible") {
+                setDuration(dur * 1000);
+              }
+            }}
             config={{ 
               youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },
               file: { 
@@ -1310,13 +1350,11 @@ export default function GymMusicPlayer() {
       {/* 1. COMPACT HEADER */}
       <div className="flex justify-between items-center px-3 py-3 sm:px-6 sm:py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-          <motion.div
-            animate={{ rotate: isPlaying ? 360 : 0 }}
-            transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20"
+          <div
+            className={`hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 ${isPlaying && isPageVisible && !isEcoMode ? "animate-[spin_12s_linear_infinite] will-change-transform" : ""}`}
           >
             <Music className="w-4 h-4 text-emerald-500" />
-          </motion.div>
+          </div>
           <div className="min-w-0">
             <p className="text-[8px] sm:text-[9px] font-black tracking-[0.3em] uppercase text-emerald-500 mb-0.5 opacity-70">
               Bienve App Music
@@ -1470,7 +1508,7 @@ export default function GymMusicPlayer() {
         </div>
 
         {/* CONTAINER PLAYER + TRACKLIST */}
-        <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-[#070708]">
+        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]">
             
           {/* PLAYER BAR */}
           <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
@@ -1485,7 +1523,7 @@ export default function GymMusicPlayer() {
                   <div className="flex items-center justify-center gap-3 sm:gap-4 max-w-full">
                     <div className="relative shrink-0">
                       <AnimatePresence>
-                        {isPlaying && (
+                        {isPlaying && !isEcoMode && (
                           <motion.div
                             initial={{ scale: 0.8, opacity: 0 }}
                             animate={{ scale: 1.1, opacity: 1 }}
@@ -1494,16 +1532,12 @@ export default function GymMusicPlayer() {
                           />
                         )}
                       </AnimatePresence>
-                      <motion.div
-                        animate={{ 
-                          rotate: isPlaying ? 360 : 0,
-                          scale: isPlaying ? [1, 1.02, 1] : 1
-                        }}
-                        transition={{ 
-                          rotate: { duration: 20, repeat: Infinity, ease: "linear" },
-                          scale: { duration: 4, repeat: Infinity, ease: "easeInOut" }
-                        }}
-                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"}`}
+                      <div
+                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${
+                          isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"
+                        } ${
+                          isPlaying && isPageVisible && !isEcoMode ? "animate-disc-spin animate-disc-pulse" : ""
+                        }`}
                       >
                         <img
                           src={displayArtwork}
@@ -1515,7 +1549,7 @@ export default function GymMusicPlayer() {
                           <div className="w-3 h-3 bg-[#080809] rounded-full border border-white/20 shadow-inner" />
                           <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/10" />
                         </div>
-                      </motion.div>
+                      </div>
                     </div>
                   <div className="flex flex-col min-w-0 shrink justify-center">
                     <div className="flex items-center gap-1.5 overflow-hidden">
@@ -1794,7 +1828,7 @@ export default function GymMusicPlayer() {
               </div>
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar relative">
+                <div className="flex-1 overflow-y-auto p-1 sm:p-3 premium-scrollbar relative">
                   {trackListTab === "queue" ? (
                     (() => {
                       const lowerQuery = searchQuery.toLowerCase().trim();
@@ -1819,182 +1853,186 @@ export default function GymMusicPlayer() {
                         );
                       }
 
-                      return filteredQueue.map((track, idx) => {
-                        return (
-                          <div
-                            key={`queue_${track.id || idx}_${idx}`}
-                            onClick={() => {
-                              expectedPlayingRef.current = true;
-                              setOverrideCurrentTrack(track);
-                              setIsPlaying(true);
-                              setTrackQueue(prev => prev.filter((_, i) => i !== idx));
-                              showNotification(`Reproduciendo: ${track.title}`);
-                            }}
-                            role="button"
-                            className="group/track w-full flex items-center gap-2 sm:gap-4 px-2 py-1.5 sm:px-4 sm:py-2 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer bg-transparent hover:bg-white/[0.04]"
-                          >
-                            <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
-                              <span className="text-xs font-medium text-slate-500 group-hover/track:text-emerald-400 transition-colors">
-                                {idx + 1}
-                              </span>
-                            </div>
-
-                            <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
-                              {track.artwork_url || track.thumbnail || track.artwork ? (
-                                <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                              ) : (
-                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
-                              )}
-                            </div>
-
-                            <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
-                              <p className="text-xs sm:text-sm font-medium truncate leading-tight text-white group-hover/track:text-emerald-400 transition-colors">
-                                {track.title}
-                              </p>
-                              <p className="text-[10px] sm:text-xs font-normal truncate mt-0.5 text-slate-400">
-                                {track.artist || track.author || "Unknown Artist"}
-                              </p>
-                            </div>
-
-                            <div className="flex items-center gap-2 relative z-20">
-                              <button
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
+                      return (
+                        <div className="flex flex-col gap-1 w-full">
+                          {filteredQueue.map((track, idx) => {
+                            return (
+                              <div
+                                key={`queue_${track.id || idx}_${idx}`}
+                                onClick={() => {
+                                  expectedPlayingRef.current = true;
+                                  setOverrideCurrentTrack(track);
+                                  setIsPlaying(true);
                                   setTrackQueue(prev => prev.filter((_, i) => i !== idx));
-                                  showNotification(`Quitada de la cola: ${track.title}`);
+                                  showNotification(`Reproduciendo: ${track.title}`);
                                 }}
-                                className="p-2 sm:p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer"
-                                title="Quitar de la cola"
+                                role="button"
+                                className="group/track w-full flex items-center gap-2 sm:gap-3 px-2 py-1 sm:px-3 sm:py-1 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer bg-transparent hover:bg-white/[0.04]"
                               >
-                                <X className="w-4 h-4" />
-                              </button>
-                            </div>
-                          </div>
-                        );
-                      });
+                                <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                                  <span className="text-[11px] font-medium text-slate-500 group-hover/track:text-emerald-400 transition-colors">
+                                    {idx + 1}
+                                  </span>
+                                </div>
+
+                                <div className="relative w-7 h-7 sm:w-8 sm:h-8 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                                  {track.artwork_url || track.thumbnail || track.artwork ? (
+                                    <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                    <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                                  )}
+                                </div>
+
+                                <div className="flex-1 min-w-0 pr-3 relative z-10 flex flex-col justify-center">
+                                  <p className="text-[11px] sm:text-xs font-semibold truncate leading-tight text-white group-hover/track:text-emerald-400 transition-colors uppercase tracking-wide">
+                                    {track.title}
+                                  </p>
+                                  <p className="text-[9.5px] sm:text-[10px] font-normal truncate mt-0.5 text-slate-400 group-hover/track:text-white transition-colors">
+                                    {track.artist || track.author || "Unknown Artist"}
+                                  </p>
+                                </div>
+
+                                <div className="flex items-center gap-1.5 relative z-20">
+                                  <button
+                                    onClick={(e) => {
+                                      e.preventDefault();
+                                      e.stopPropagation();
+                                      setTrackQueue(prev => prev.filter((_, i) => i !== idx));
+                                      showNotification(`Quitada de la cola: ${track.title}`);
+                                    }}
+                                    className="p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer"
+                                    title="Quitar de la cola"
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
                     })()
                   ) : filteredDisplayTracks.length === 0 ? (
                     <div className="p-8 text-center text-white/30 text-xs font-medium">
                       No se encontraron resultados para "{searchQuery}"
                     </div>
                   ) : (
-                    filteredDisplayTracks.map(({ track, idx }) => {
-                      const isActive = displayTrackIndex === idx;
-                      return (
-                        <div
-                          key={track.id || idx}
-                        onClick={() => {
-                          expectedPlayingRef.current = true;
-                          setOverrideCurrentTrack(null);
-                          if (isActive) {
-                            setIsPlaying(!isPlaying);
-                          } else {
-                            setCurrentTrackIndex(idx);
-                            setIsPlaying(true);
-                          }
-                        }}
-                        role="button"
-                        className={`group/track w-full flex items-center gap-2 sm:gap-4 px-2 py-1.5 sm:px-4 sm:py-2 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer ${
-                          isActive
-                            ? "bg-white/[0.08]"
-                            : "bg-transparent hover:bg-white/[0.04]"
-                        }`}
-                      >
-                        {/* Track Number & Hover/Active States (Spotify Style) */}
-                        <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
-                          {/* Default Track Number */}
-                          <span className={`text-xs font-medium transition-opacity duration-200 ${
-                            isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
-                          }`}>
-                            {idx + 1}
-                          </span>
-                          
-                          {/* Play/Pause/EQ Icon overlay */}
-                          <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                            isActive ? "opacity-100" : "opacity-0 group-hover/track:opacity-100"
-                          }`}>
-                             {isActive && isPlaying ? (
-                                <div className="flex gap-[2px] items-end h-[12px] shrink-0">
-                                  {[...Array(3)].map((_, i) => (
-                                    <motion.div
-                                      key={i}
-                                      animate={{ height: [3, 12, 3] }}
-                                      transition={{ duration: 0.45 + i * 0.1, repeat: Infinity, ease: "easeInOut" }}
-                                      className="w-[2px] bg-emerald-400 rounded-full"
-                                    />
-                                  ))}
-                                </div>
-                             ) : (
-                                <Play className={`w-4 h-4 ml-0.5 fill-current ${isActive ? "text-emerald-400" : "text-white"}`} />
-                             )}
-                          </div>
-                        </div>
-                        
-                        {/* Thumbnail */}
-                        <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
-                          {track.artwork_url || track.thumbnail || track.artwork ? (
-                            <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
-                          )}
-                          
-                          {/* Mobile Play Overlay (since number is hidden on mobile) */}
-                          <div className={`sm:hidden absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/track:opacity-100'}`}>
-                             {isActive && isPlaying ? (
-                                <div className="flex gap-[2px] items-end h-[12px] shrink-0">
-                                  {[...Array(3)].map((_, i) => (
-                                    <motion.div
-                                      key={i}
-                                      animate={{ height: [3, 12, 3] }}
-                                      transition={{ duration: 0.45 + i * 0.1, repeat: Infinity }}
-                                      className="w-[2px] bg-emerald-400 rounded-full"
-                                    />
-                                  ))}
-                                </div>
-                             ) : (
-                                <Play className="w-4 h-4 ml-0.5 fill-white" />
-                             )}
-                          </div>
-                        </div>
-                        
-                        {/* Track Info */}
-                        <div className="flex-1 min-w-0 pr-2 sm:pr-4 relative z-10 flex flex-col justify-center">
-                          <p className={`text-xs sm:text-sm font-medium truncate leading-tight transition-colors duration-200 ${
-                            isActive ? "text-emerald-400" : "text-white"
-                          }`}>
-                            {track.title}
-                          </p>
-                          <p className={`text-[10px] sm:text-xs font-normal truncate mt-0.5 transition-colors duration-200 ${
-                            isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
-                          }`}>
-                            {track.artist || track.author || "Unknown Artist"}
-                          </p>
-                        </div>
+                    <div className="flex flex-col gap-1 w-full">
+                      {filteredDisplayTracks.map(({ track, idx }) => {
+                        const isActive = displayTrackIndex === idx;
+                        return (
+                          <div
+                            key={track.id || idx}
+                            onClick={() => {
+                              expectedPlayingRef.current = true;
+                              setOverrideCurrentTrack(null);
+                              if (isActive) {
+                                setIsPlaying(!isPlaying);
+                              } else {
+                                setCurrentTrackIndex(idx);
+                                setIsPlaying(true);
+                              }
+                            }}
+                            role="button"
+                            className={`group/track w-full flex items-center gap-2 sm:gap-3 px-2 py-1 sm:px-3 sm:py-1 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer ${
+                              isActive
+                                ? "bg-white/[0.08] shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-emerald-500"
+                                : "bg-transparent hover:bg-white/[0.04]"
+                            }`}
+                          >
+                            {/* Track Number & Hover/Active States (Spotify Style) */}
+                            <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                              {/* Default Track Number */}
+                              <span className={`text-[11px] font-medium transition-opacity duration-200 ${
+                                isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
+                              }`}>
+                                {idx + 1}
+                              </span>
+                              
+                              {/* Play/Pause/EQ Icon overlay */}
+                              <div className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                                isActive ? "opacity-100" : "opacity-0 group-hover/track:opacity-100"
+                              }`}>
+                                 {isActive && isPlaying ? (
+                                    <div className="flex gap-[2px] items-end h-[11px] shrink-0">
+                                      {[...Array(3)].map((_, i) => (
+                                        <div
+                                          key={i}
+                                          className={`w-[2px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
+                                          style={{ height: "11px", transformOrigin: "bottom" }}
+                                        />
+                                      ))}
+                                    </div>
+                                 ) : (
+                                    <Play className={`w-3.5 h-3.5 ml-0.5 fill-current ${isActive ? "text-emerald-400" : "text-white"}`} />
+                                 )}
+                              </div>
+                            </div>
+                            
+                            {/* Thumbnail */}
+                            <div className="relative w-7 h-7 sm:w-8 sm:h-8 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                              {track.artwork_url || track.thumbnail || track.artwork ? (
+                                <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
+                              )}
+                              
+                              {/* Mobile Play Overlay (since number is hidden on mobile) */}
+                              <div className={`sm:hidden absolute inset-0 bg-black/40 flex items-center justify-center transition-all duration-300 ${isActive ? 'opacity-100' : 'opacity-0 group-hover/track:opacity-100'}`}>
+                                 {isActive && isPlaying ? (
+                                    <div className="flex gap-[2px] items-end h-[11px] shrink-0">
+                                      {[...Array(3)].map((_, i) => (
+                                        <div
+                                          key={i}
+                                          className={`w-[2px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
+                                          style={{ height: "11px", transformOrigin: "bottom" }}
+                                        />
+                                      ))}
+                                    </div>
+                                 ) : (
+                                    <Play className="w-3.5 h-3.5 ml-0.5 fill-white" />
+                                 )}
+                              </div>
+                            </div>
+                            
+                            {/* Track Info */}
+                            <div className="flex-1 min-w-0 pr-1.5 sm:pr-3 relative z-10 flex flex-col justify-center">
+                              <p className={`text-[11.5px] sm:text-xs font-semibold truncate leading-tight transition-colors duration-200 uppercase tracking-wide ${
+                                isActive ? "text-emerald-400 font-extrabold" : "text-white"
+                              }`}>
+                                {track.title}
+                              </p>
+                              <p className={`text-[9.5px] sm:text-[10px] font-normal truncate mt-0.5 transition-colors duration-200 ${
+                                isActive ? "text-emerald-500/80 font-bold" : "text-slate-400 group-hover/track:text-white"
+                              }`}>
+                                {track.artist || track.author || "Unknown Artist"}
+                              </p>
+                            </div>
+        
+                            {/* Actions Hover (Queue / Delete) */}
+                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover/track:opacity-100 transition-opacity mr-1.5 relative z-20">
+                              <button onClick={(e) => handleAddToQueue(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Añadir a la cola">
+                                <ListPlus className="w-3.5 h-3.5" />
+                              </button>
+                              {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin) && (
+                                <button onClick={(e) => handleDeleteTrack(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer" title="Eliminar de la playlist">
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
     
-                        {/* Actions Hover (Queue / Delete) */}
-                        <div className="flex items-center gap-2 opacity-100 sm:opacity-0 sm:group-hover/track:opacity-100 transition-opacity mr-2 relative z-20">
-                          <button onClick={(e) => handleAddToQueue(track, e)} className="p-2 sm:p-1.5 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Añadir a la cola">
-                            <ListPlus className="w-4 h-4" />
-                          </button>
-                          {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin) && (
-                            <button onClick={(e) => handleDeleteTrack(track, e)} className="p-2 sm:p-1.5 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer" title="Eliminar de la playlist">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          )}
-                        </div>
-
-                        {/* Duration / Options */}
-                        <div className="hidden sm:flex items-center gap-4 shrink-0 relative z-10 text-[12px] font-medium text-slate-400">
-                          {track.duration && (
-                             <span className="w-10 text-right group-hover/track:text-white transition-colors">
-                               {track.duration}
-                             </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })
+                            {/* Duration / Options */}
+                            <div className="hidden sm:flex items-center gap-2 shrink-0 relative z-10 text-[10.5px] font-medium text-slate-400">
+                              {track.duration && (
+                                 <span className="w-9 text-right group-hover/track:text-white transition-colors">
+                                   {track.duration}
+                                 </span>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   )}
                 </div>
 

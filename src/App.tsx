@@ -19,6 +19,20 @@ import { AuthModal } from "./components/AuthModal";
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
 
+  // --- Page Visibility State for Power Saving ---
+  const [isPageVisible, setIsPageVisible] = useState(true);
+  const isEcoMode = true;
+
+  useEffect(() => {
+    const handleVisibility = () => {
+      setIsPageVisible(document.visibilityState === "visible");
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
   // --- Progressive Web App (PWA) Install Logic ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -78,7 +92,7 @@ function AppContent() {
       <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-4 pb-2 sm:pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
         <div className="w-full mb-1 sm:mb-3 px-3 sm:px-6 flex items-center justify-between">
           {/* LEFT: Nativo Optimizado (cleaner, smaller) */}
-          <div className="flex-1 flex justify-start">
+          <div className="flex-1 flex justify-start items-center gap-2">
              {!isStandalone && (
                <button
                   onClick={handleInstallPress}
@@ -91,6 +105,8 @@ function AppContent() {
                   </span>
                </button>
              )}
+
+
           </div>
 
           {/* CENTER: LOGO BRAND */}
@@ -100,21 +116,25 @@ function AppContent() {
             >
               <div className="relative">
                 <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_15px_rgba(16,185,129,0.35)] group-hover:scale-105 transition-transform duration-300 overflow-hidden relative">
-                  {/* High Intensity Energy Layers */}
-                  <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
-                  <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-30 z-20" />
-                  
-                  {/* Lightning Arcs */}
-                  <div className="absolute left-1/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.2s' }} />
-                  <div className="absolute left-2/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.7s' }} />
-                  <div className="absolute left-3/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '1.2s' }} />
+                  {isPageVisible && !isEcoMode && (
+                    <>
+                      {/* High Intensity Energy Layers */}
+                      <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
+                      <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-30 z-20" />
+                      
+                      {/* Lightning Arcs */}
+                      <div className="absolute left-1/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.2s' }} />
+                      <div className="absolute left-2/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '0.7s' }} />
+                      <div className="absolute left-3/4 top-0 bottom-0 lightning-arc energy-glow z-30" style={{ animationDelay: '1.2s' }} />
+                    </>
+                  )}
 
                   <img src="/icon-512.png" alt="Logo" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
                   <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20 z-40" />
                 </div>
               </div>
               <div className="flex flex-col">
-                <span className="text-2xl font-brand font-black tracking-[-0.02em] text-premium-gradient uppercase italic leading-none drop-shadow-[0_0_15px_rgba(16,185,129,0.3)] select-none">
+                <span className={`text-2xl font-brand font-black tracking-[-0.02em] uppercase italic leading-none select-none ${isEcoMode ? "text-emerald-400" : "text-premium-gradient drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]"}`}>
                   BIENVE
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
@@ -147,9 +167,9 @@ function AppContent() {
       </nav>
 
       <main className="w-full mx-auto max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-0 overflow-hidden py-2 sm:py-4 flex flex-col gap-6">
-        <section className="flex flex-col gap-6 flex-1 h-full overflow-hidden">
-          <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent h-full flex flex-col overflow-hidden">
-            <div className="flex-1 w-full h-full relative overflow-hidden">
+        <section className="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
+          <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent min-h-0 flex flex-col overflow-hidden">
+            <div className="flex-1 w-full min-h-0 relative overflow-hidden">
               <GymMusicPlayer />
             </div>
           </div>
@@ -197,13 +217,17 @@ function AppContent() {
               <div className="p-6 pb-4 flex justify-between items-start border-b border-white/5 bg-[#0e0e10]/60">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_20px_rgba(16,185,129,0.4)] overflow-hidden relative group/hero">
-                    {/* High Intensity Energy Layers */}
-                    <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
-                    <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-40 z-20" />
-                    
-                    {/* Lightning Arcs */}
-                    <div className="absolute left-1/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.1s' }} />
-                    <div className="absolute left-2/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.5s' }} />
+                    {isPageVisible && (
+                      <>
+                        {/* High Intensity Energy Layers */}
+                        <div className="absolute inset-0 bg-white energy-glow pointer-events-none mix-blend-overlay z-10" />
+                        <div className="absolute inset-0 bg-emerald-400 energy-sweep pointer-events-none mix-blend-screen opacity-40 z-20" />
+                        
+                        {/* Lightning Arcs */}
+                        <div className="absolute left-1/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.1s' }} />
+                        <div className="absolute left-2/3 top-0 bottom-0 lightning-arc energy-glow z-20" style={{ animationDelay: '0.5s' }} />
+                      </>
+                    )}
 
                     <img src="/icon-512.png" alt="App Icon" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
                   </div>

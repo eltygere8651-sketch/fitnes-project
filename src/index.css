@@ -41,39 +41,81 @@
 
 @keyframes bolt-flicker {
   0%, 18%, 22%, 25%, 53%, 57%, 100% { 
-    opacity: 0.1; 
-    filter: brightness(1) blur(0px);
+    opacity: 0.15; 
   }
   20%, 24%, 55% { 
-    opacity: 1; 
-    filter: brightness(3) blur(2px) drop-shadow(0 0 15px #10b981);
+    opacity: 0.9; 
   }
 }
 
 @keyframes energy-sweep {
-  0% { transform: translateY(100%) skewY(-20deg); opacity: 0; }
-  50% { opacity: 0.5; }
-  100% { transform: translateY(-100%) skewY(-20deg); opacity: 0; }
+  0% { transform: translateY(100%) skewY(-15deg); opacity: 0; }
+  50% { opacity: 0.4; }
+  100% { transform: translateY(-100%) skewY(-15deg); opacity: 0; }
 }
 
 .energy-glow {
-  animation: bolt-flicker 2s infinite;
+  animation: bolt-flicker 3s infinite;
+  will-change: opacity;
 }
 
 .energy-sweep {
-  animation: energy-sweep 1.5s ease-in-out infinite;
+  animation: energy-sweep 2.5s ease-in-out infinite;
+  will-change: transform;
 }
 
 .lightning-arc {
-  background: linear-gradient(to bottom, transparent, #fff, transparent);
+  background: linear-gradient(to bottom, transparent, rgba(255, 255, 255, 0.8), transparent);
   width: 2px;
-  filter: blur(1px) drop-shadow(0 0 5px #10b981);
 }
 
 @keyframes text-shine {
   0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
+  100% { background-position: 200% 50%; }
+}
+
+/* HIGH-PERFORMANCE GPU-ACCELERATED AUDIO VISUALS */
+@keyframes disc-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes disc-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.02); }
+}
+
+.animate-disc-spin {
+  animation: disc-spin 16s linear infinite;
+  will-change: transform;
+}
+
+.animate-disc-pulse {
+  animation: disc-pulse 3s ease-in-out infinite;
+  will-change: transform;
+}
+
+@keyframes eq-scale-0 {
+  0%, 100% { transform: scaleY(0.2); }
+  50% { transform: scaleY(0.85); }
+}
+@keyframes eq-scale-1 {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1.0); }
+}
+@keyframes eq-scale-2 {
+  0%, 100% { transform: scaleY(0.15); }
+  50% { transform: scaleY(0.7); }
+}
+
+.animate-eq-bar-0 {
+  animation: eq-scale-0 0.5s ease-in-out infinite;
+}
+.animate-eq-bar-1 {
+  animation: eq-scale-1 0.6s ease-in-out infinite;
+}
+.animate-eq-bar-2 {
+  animation: eq-scale-2 0.55s ease-in-out infinite;
 }
 
 .text-premium-gradient {

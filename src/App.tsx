@@ -72,11 +72,11 @@ function AppContent() {
   return (
     <div
       id="premium-music-app"
-      className="min-h-screen bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
+      className="h-[100dvh] overflow-hidden bg-[#080809] text-white font-sans selection:bg-emerald-500 selection:text-black flex flex-col justify-between"
     >
       {/* PREMIUM STICKY HEADER & LOGO BRAND */}
-      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-12 sm:pt-4 pb-4">
-        <div className="w-full mb-3 px-6 flex items-center justify-between">
+      <nav id="main-navigation" className="sticky top-0 z-50 bg-[#080809]/95 backdrop-blur-md border-b border-white/5 flex flex-col shrink-0 pt-4 pb-2 sm:pb-4" style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))' }}>
+        <div className="w-full mb-1 sm:mb-3 px-3 sm:px-6 flex items-center justify-between">
           {/* LEFT: Nativo Optimizado (cleaner, smaller) */}
           <div className="flex-1 flex justify-start">
              {!isStandalone && (
@@ -146,19 +146,17 @@ function AppContent() {
         </div>
       </nav>
 
-      <main className="w-full mx-auto max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-[600px] h-[75vh] md:h-[calc(100vh-140px)] overflow-hidden py-4 flex flex-col gap-6">
-        <section className="flex flex-col gap-6 flex-1">
-          <div className="rounded-[32px] overflow-hidden flex-1 bg-transparent border-transparent h-full flex flex-col">
-            <div className="flex-1 relative h-full overflow-hidden">
-              <div className="absolute inset-0 h-full w-full">
-                <GymMusicPlayer />
-              </div>
+      <main className="w-full mx-auto max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-0 overflow-hidden py-2 sm:py-4 flex flex-col gap-6">
+        <section className="flex flex-col gap-6 flex-1 h-full overflow-hidden">
+          <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent h-full flex flex-col overflow-hidden">
+            <div className="flex-1 w-full h-full relative overflow-hidden">
+              <GymMusicPlayer />
             </div>
           </div>
         </section>
       </main>
 
-      <footer className="py-8 text-center mt-auto">
+      <footer className="hidden sm:block py-2 sm:py-4 text-center shrink-0">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
           <p>2026 BIENVE MUSIC APP • ALL RIGHTS RESERVED</p>
           <div className="flex items-center gap-4">

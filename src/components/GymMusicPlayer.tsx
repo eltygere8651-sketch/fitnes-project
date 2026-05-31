@@ -365,43 +365,18 @@ export default function GymMusicPlayer() {
     };
   }, [isPlaying]);
 
-// Continuous sub-audible HTML5 Audio trick for locks/backgrounding
+
+
+  // Maintain mobile audio focus natively
   const fallbackSilentAudioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    let audioCtx: AudioContext | null = null;
-    let osc: OscillatorNode | null = null;
-    let gain: GainNode | null = null;
-
-    if (isPlaying) {
-      if (fallbackSilentAudioRef.current) {
-        fallbackSilentAudioRef.current.play().catch(() => {});
-      }
-      try {
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtxClass) {
-          audioCtx = new AudioCtxClass();
-          osc = audioCtx.createOscillator();
-          gain = audioCtx.createGain();
-          osc.frequency.setValueAtTime(20, audioCtx.currentTime); // Inaudible
-          gain.gain.setValueAtTime(0.005, audioCtx.currentTime);
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.start();
-        }
-      } catch (e) {}
-    } else {
-      if (fallbackSilentAudioRef.current) {
-        fallbackSilentAudioRef.current.pause();
-      }
+    if (isPlaying && fallbackSilentAudioRef.current) {
+      // Intentionally ignore promise rejection to avoid console spam / loops
+      fallbackSilentAudioRef.current.play().catch(() => {});
+    } else if (!isPlaying && fallbackSilentAudioRef.current) {
+      fallbackSilentAudioRef.current.pause();
     }
-
-    return () => {
-      try {
-        if (osc) { osc.stop(); osc.disconnect(); }
-        if (audioCtx) { audioCtx.close(); }
-      } catch (err) {}
-    };
   }, [isPlaying]);
 
   // Document Visibility & Screen Unlock Event handling to synchronize playback
@@ -1333,32 +1308,32 @@ export default function GymMusicPlayer() {
         />
       </div>
       {/* 1. COMPACT HEADER */}
-      <div className="flex justify-between items-center px-6 py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
-        <div className="flex items-center gap-4 min-w-0 flex-1">
+      <div className="flex justify-between items-center px-3 py-3 sm:px-6 sm:py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <motion.div
             animate={{ rotate: isPlaying ? 360 : 0 }}
             transition={{ duration: 12, repeat: Infinity, ease: "linear" }}
-            className="bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20"
+            className="hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20"
           >
             <Music className="w-4 h-4 text-emerald-500" />
           </motion.div>
           <div className="min-w-0">
-            <p className="text-[9px] font-black tracking-[0.3em] uppercase text-emerald-500 mb-0.5 opacity-70">
+            <p className="text-[8px] sm:text-[9px] font-black tracking-[0.3em] uppercase text-emerald-500 mb-0.5 opacity-70">
               Bienve App Music
             </p>
-            <h2 className="text-sm font-black tracking-tight text-white truncate max-w-[200px] sm:max-w-md uppercase">
+            <h2 className="text-xs sm:text-sm font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-md uppercase">
               {displayTitle}
             </h2>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 shrink-0">
+        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
           <button
             onClick={() => {
               setShowLibrary(!showLibrary);
               setIsAdding(false);
             }}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase ${
+            className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-xl transition-all border text-[10px] font-black uppercase ${
               showLibrary
                 ? "bg-white text-black border-white shadow-lg"
                 : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
@@ -1380,7 +1355,7 @@ export default function GymMusicPlayer() {
 
           <button
             onClick={handleAddNewCanalClick}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
+            className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
               isAdding
                 ? "bg-emerald-500 text-black border-emerald-400"
                 : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
@@ -1818,8 +1793,8 @@ export default function GymMusicPlayer() {
                 </div>
               </div>
 
-              <div className="flex flex-col flex-1 min-h-0 overflow-hidden bg-[#030303]">
-                <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar">
+              <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
+                <div className="flex-1 overflow-y-auto p-1 sm:p-3 space-y-0 premium-scrollbar relative">
                   {trackListTab === "queue" ? (
                     (() => {
                       const lowerQuery = searchQuery.toLowerCase().trim();
@@ -1856,15 +1831,15 @@ export default function GymMusicPlayer() {
                               showNotification(`Reproduciendo: ${track.title}`);
                             }}
                             role="button"
-                            className="group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl cursor-pointer bg-transparent hover:bg-white/[0.04]"
+                            className="group/track w-full flex items-center gap-2 sm:gap-4 px-2 py-1.5 sm:px-4 sm:py-2 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer bg-transparent hover:bg-white/[0.04]"
                           >
-                            <div className="hidden sm:flex items-center justify-center w-8 shrink-0 relative z-10">
-                              <span className="text-[13px] font-medium text-slate-500 group-hover/track:text-emerald-400 transition-colors">
+                            <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
+                              <span className="text-xs font-medium text-slate-500 group-hover/track:text-emerald-400 transition-colors">
                                 {idx + 1}
                               </span>
                             </div>
 
-                            <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                            <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
                               {track.artwork_url || track.thumbnail || track.artwork ? (
                                 <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
@@ -1873,10 +1848,10 @@ export default function GymMusicPlayer() {
                             </div>
 
                             <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
-                              <p className="text-[13px] sm:text-[15px] font-medium truncate leading-tight text-white group-hover/track:text-emerald-400 transition-colors">
+                              <p className="text-xs sm:text-sm font-medium truncate leading-tight text-white group-hover/track:text-emerald-400 transition-colors">
                                 {track.title}
                               </p>
-                              <p className="text-[11px] sm:text-[13px] font-normal truncate mt-0.5 text-slate-400">
+                              <p className="text-[10px] sm:text-xs font-normal truncate mt-0.5 text-slate-400">
                                 {track.artist || track.author || "Unknown Artist"}
                               </p>
                             </div>
@@ -1920,16 +1895,16 @@ export default function GymMusicPlayer() {
                           }
                         }}
                         role="button"
-                        className={`group/track w-full flex items-center gap-3 sm:gap-6 px-3 py-1.5 sm:px-6 sm:py-3 transition-all text-left relative overflow-hidden rounded-xl sm:rounded-2xl cursor-pointer ${
+                        className={`group/track w-full flex items-center gap-2 sm:gap-4 px-2 py-1.5 sm:px-4 sm:py-2 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer ${
                           isActive
                             ? "bg-white/[0.08]"
                             : "bg-transparent hover:bg-white/[0.04]"
                         }`}
                       >
                         {/* Track Number & Hover/Active States (Spotify Style) */}
-                        <div className="hidden sm:flex items-center justify-center w-8 shrink-0 relative z-10">
+                        <div className="hidden sm:flex items-center justify-center w-6 shrink-0 relative z-10">
                           {/* Default Track Number */}
-                          <span className={`text-[13px] font-medium transition-opacity duration-200 ${
+                          <span className={`text-xs font-medium transition-opacity duration-200 ${
                             isActive ? "opacity-0 text-emerald-400" : "opacity-100 group-hover/track:opacity-0 text-slate-400"
                           }`}>
                             {idx + 1}
@@ -1957,7 +1932,7 @@ export default function GymMusicPlayer() {
                         </div>
                         
                         {/* Thumbnail */}
-                        <div className="relative w-10 h-10 sm:w-12 sm:h-12 bg-white/5 rounded-md flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                        <div className="relative w-8 h-8 sm:w-10 sm:h-10 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
                           {track.artwork_url || track.thumbnail || track.artwork ? (
                             <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" />
                           ) : (
@@ -1978,19 +1953,19 @@ export default function GymMusicPlayer() {
                                   ))}
                                 </div>
                              ) : (
-                                <Play className="w-5 h-5 ml-0.5 fill-white" />
+                                <Play className="w-4 h-4 ml-0.5 fill-white" />
                              )}
                           </div>
                         </div>
                         
                         {/* Track Info */}
-                        <div className="flex-1 min-w-0 pr-4 relative z-10 flex flex-col justify-center">
-                          <p className={`text-[13px] sm:text-[15px] font-medium truncate leading-tight transition-colors duration-200 ${
+                        <div className="flex-1 min-w-0 pr-2 sm:pr-4 relative z-10 flex flex-col justify-center">
+                          <p className={`text-xs sm:text-sm font-medium truncate leading-tight transition-colors duration-200 ${
                             isActive ? "text-emerald-400" : "text-white"
                           }`}>
                             {track.title}
                           </p>
-                          <p className={`text-[11px] sm:text-[13px] font-normal truncate mt-0.5 transition-colors duration-200 ${
+                          <p className={`text-[10px] sm:text-xs font-normal truncate mt-0.5 transition-colors duration-200 ${
                             isActive ? "text-emerald-500/80" : "text-slate-400 group-hover/track:text-white"
                           }`}>
                             {track.artist || track.author || "Unknown Artist"}

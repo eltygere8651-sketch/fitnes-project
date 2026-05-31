@@ -808,7 +808,8 @@ export default function GymMusicPlayer() {
           url: url,
         };
         
-        const docRef = doc(db, "users", currentUser.uid, "playlists", selectedPlaylist.id);
+        const targetOwnerId = selectedPlaylist.ownerId || currentUser.uid;
+        const docRef = doc(db, "users", targetOwnerId, "playlists", selectedPlaylist.id);
         const updatedTracks = [...(selectedPlaylist.tracks || []), newTrack];
         await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
         

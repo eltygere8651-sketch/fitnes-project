@@ -365,98 +365,6 @@ export default function GymMusicPlayer() {
     };
   }, [isPlaying]);
 
-  // Dynamically generate a long silent WAV track (15 seconds) to prevent battery-saver engine suspension
-  useEffect(() => {
-    if (silentAudioRef.current) {
-      try {
-        const generateSilentWavUrl = (seconds = 15) => {
-          const sampleRate = 8000;
-          const numChannels = 1;
-          const bitsPerSample = 8;
-          const dataSize = sampleRate * numChannels * (bitsPerSample / 8) * seconds;
-          const fileSize = 44 + dataSize;
-          const buffer = new ArrayBuffer(fileSize);
-          const view = new DataView(buffer);
-
-          const writeString = (offset: number, str: string) => {
-            for (let i = 0; i < str.length; i++) {
-              view.setUint8(offset + i, str.charCodeAt(i));
-            }
-          };
-
-          writeString(0, 'RIFF');
-          view.setUint32(4, fileSize - 8, true);
-          writeString(8, 'WAVE');
-          writeString(12, 'fmt ');
-          view.setUint32(16, 16, true);
-          view.setUint16(20, 1, true);
-          view.setUint16(22, numChannels, true);
-          view.setUint32(24, sampleRate, true);
-          view.setUint32(28, sampleRate * numChannels * (bitsPerSample / 8), true);
-          view.setUint16(32, numChannels * (bitsPerSample / 8), true);
-          view.setUint16(34, bitsPerSample, true);
-          writeString(36, 'data');
-          view.setUint32(40, dataSize, true);
-
-          // Silence is represented by the byte 128 (0x80) in 8-bit unsigned PCM
-          const silenceByte = 128;
-          for (let i = 44; i < fileSize; i++) {
-            view.setUint8(i, silenceByte);
-          }
-
-          const blob = new Blob([buffer], { type: 'audio/wav' });
-          return URL.createObjectURL(blob);
-        };
-
-        const silenceUrl = generateSilentWavUrl(15);
-        silentAudioRef.current.src = silenceUrl;
-        silentAudioRef.current.load();
-        silentAudioRef.current.loop = true;
-      } catch (err) {
-        console.warn("Silent audio init bypass skipped:", err);
-      }
-    }
-  }, []);
-
-  // Web Audio Context Keep-Alive (Continuous sub-audible oscillator trick for locks/backgrounding)
-  useEffect(() => {
-    let audioCtx: AudioContext | null = null;
-    let osc: OscillatorNode | null = null;
-    let gain: GainNode | null = null;
-
-    if (isPlaying) {
-      try {
-        const AudioCtxClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioCtxClass) {
-          audioCtx = new AudioCtxClass();
-          osc = audioCtx.createOscillator();
-          gain = audioCtx.createGain();
-          
-          osc.frequency.setValueAtTime(20, audioCtx.currentTime); // Inaudible lower limit of human hearing
-          gain.gain.setValueAtTime(0.0001, audioCtx.currentTime); // Whisper quiet, literally inaudible but active signal
-          
-          osc.connect(gain);
-          gain.connect(audioCtx.destination);
-          osc.start();
-        }
-      } catch (e) {
-        console.warn("Web Audio API keep-alive could not start:", e);
-      }
-    }
-
-    return () => {
-      try {
-        if (osc) {
-          osc.stop();
-          osc.disconnect();
-        }
-        if (audioCtx) {
-          audioCtx.close();
-        }
-      } catch (err) {}
-    };
-  }, [isPlaying]);
-
   // Document Visibility & Screen Unlock Event handling to synchronize playback
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -471,6 +379,8 @@ export default function GymMusicPlayer() {
               const intPlayer = youtubePlayerRef.current.getInternalPlayer();
               if (intPlayer && typeof intPlayer.playVideo === "function") {
                 intPlayer.playVideo();
+              } else if (intPlayer && typeof intPlayer.play === "function") {
+                intPlayer.play();
               }
             } catch (err) {
               console.warn("Resync player error:", err);
@@ -503,7 +413,6 @@ export default function GymMusicPlayer() {
   useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
 
   const youtubePlayerRef = useRef<any>(null);
-  const silentAudioRef = useRef<HTMLAudioElement | null>(null);
   const expectedPlayingRef = useRef(false);
 
   // Initialize security code from localStorage
@@ -539,37 +448,12 @@ export default function GymMusicPlayer() {
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
   const currentUrl = currentTrack.url || "";
 
-  useEffect(() => {
-    if (!silentAudioRef.current) return;
-    silentAudioRef.current.volume = 0.05; // Non-zero volume is more reliable for lock screen sessions
-    if (isPlaying) {
-      silentAudioRef.current.play().catch((err) => {
-        console.warn("Silent audio context initialization deferred for interaction click:", err);
-      });
-    } else {
-      silentAudioRef.current.pause();
-    }
-  }, [isPlaying]);
-
   const togglePlayback = useCallback(() => {
-    if (silentAudioRef.current) {
-      if (!isPlaying) {
-        silentAudioRef.current.play().catch(() => {});
-      } else {
-        silentAudioRef.current.pause();
-      }
-    }
-
     expectedPlayingRef.current = !isPlaying;
     setIsPlaying(!isPlaying);
   }, [isPlaying]);
 
   const handleNext = useCallback(() => {
-    if (silentAudioRef.current) {
-      silentAudioRef.current.currentTime = 0;
-      silentAudioRef.current.play().catch(() => {});
-    }
-    
     expectedPlayingRef.current = true;
 
     if (trackQueueRef.current.length > 0) {
@@ -620,11 +504,6 @@ export default function GymMusicPlayer() {
   }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists]);
 
   const handlePrev = useCallback(() => {
-    if (silentAudioRef.current) {
-      silentAudioRef.current.currentTime = 0;
-      silentAudioRef.current.play().catch(() => {});
-    }
-
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
 
@@ -1139,9 +1018,6 @@ export default function GymMusicPlayer() {
   };
 
   const selectPlaylist = (playlist: MusicPlaylist) => {
-    if (silentAudioRef.current) {
-      silentAudioRef.current.play().catch(() => {});
-    }
     setIsLoadingTrack(true);
     setCustomUrl("");
     setSelectedPlaylist(playlist);
@@ -1299,7 +1175,6 @@ export default function GymMusicPlayer() {
 
     // Define handlers that use the latest state via handlersRef to avoid stale closures
     const playHandler = () => {
-      if (silentAudioRef.current) silentAudioRef.current.play().catch(() => {});
       handlersRef.current.togglePlayback();
     };
 
@@ -1308,18 +1183,10 @@ export default function GymMusicPlayer() {
     };
 
     const nextHandler = () => {
-      if (silentAudioRef.current) {
-        silentAudioRef.current.currentTime = 0;
-        silentAudioRef.current.play().catch(() => {});
-      }
       handlersRef.current.handleNext();
     };
 
     const prevHandler = () => {
-      if (silentAudioRef.current) {
-        silentAudioRef.current.currentTime = 0;
-        silentAudioRef.current.play().catch(() => {});
-      }
       handlersRef.current.handlePrev();
     };
 
@@ -1405,19 +1272,17 @@ export default function GymMusicPlayer() {
             onEnded={() => handleNext()}
             onProgress={(state) => setPosition(state.playedSeconds * 1000)}
             onDuration={(dur) => setDuration(dur * 1000)}
-            config={{ youtube: { playerVars: { origin: window.location.origin } } }}
+            config={{ 
+              youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },
+              file: { 
+                forceAudio: true, 
+                attributes: { playsInline: true }
+              } 
+            }}
             width="300px"
             height="300px"
           />
         )}
-        <audio
-          ref={silentAudioRef}
-          loop
-          playsInline
-          preload="auto"
-          src="data:audio/wav;base64,UklGRqAAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YVAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD8Pw=="
-          className="hidden"
-        />
       </div>
       {/* 1. COMPACT HEADER */}
       <div className="flex justify-between items-center px-6 py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
@@ -1936,9 +1801,6 @@ export default function GymMusicPlayer() {
                           <div
                             key={`queue_${track.id || idx}_${idx}`}
                             onClick={() => {
-                              if (silentAudioRef.current) {
-                                silentAudioRef.current.play().catch(() => {});
-                              }
                               expectedPlayingRef.current = true;
                               setOverrideCurrentTrack(track);
                               setIsPlaying(true);
@@ -2000,9 +1862,6 @@ export default function GymMusicPlayer() {
                         <div
                           key={track.id || idx}
                         onClick={() => {
-                          if (silentAudioRef.current) {
-                            silentAudioRef.current.play().catch(() => {});
-                          }
                           expectedPlayingRef.current = true;
                           setOverrideCurrentTrack(null);
                           if (isActive) {

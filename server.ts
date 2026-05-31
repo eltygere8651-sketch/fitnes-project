@@ -3,6 +3,7 @@ import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import youtubedl from "youtube-dl-exec";
 
 dotenv.config();
 
@@ -181,6 +182,7 @@ app.get("/api/oembed", async (req, res) => {
   }
 });
 
+// Output raw audio stream removed due to bot blocks
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({

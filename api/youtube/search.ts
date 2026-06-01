@@ -23,7 +23,6 @@ export default async function handler(req: any, res: any) {
   // Check eco-friendly cache
   const cached = searchCache.get(normalizedQuery);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
-    console.log("Serving YouTube search from Vercel cache:", normalizedQuery);
     return res.json(cached.data);
   }
 
@@ -32,41 +31,102 @@ export default async function handler(req: any, res: any) {
       yt = await Innertube.create({ cache: new UniversalCache(false) }); 
     }
   } catch (err) {
-    console.error("YouTube Init Error:", err);
     return res.status(503).json({ error: "Service unavailable" });
   }
 
   try {
-    const results = await yt.search(query, { type: 'video' });
-    const videos = results.videos ? results.videos.map((v: any) => {
-      try {
-        const title = v.title?.text || v.title?.toString() || "Untitled";
-        const author = v.author?.name || v.author?.toString() || "Unknown Artist";
-        const duration = v.duration?.text || v.duration?.toString() || "";
-        const id = v.id || v.video_id;
-        const thumbnail = v.thumbnails?.[0]?.url || "";
-
-        if (id && title) {
-          return {
-            id,
-            title,
-            artist: author,
-            duration,
-            url: `https://www.youtube.com/watch?v=${id}`,
-            thumbnail
-          };
-        }
-      } catch (e) {
-        return null;
-      }
-      return null;
-    }).filter(Boolean) : [];
+    const isPlaylistSearch = /playlist|lista|mix|top|album|canciones/i.test(normalizedQuery);
+    let resultsObj: any;
+    let extraItems: any[] = [];
     
-    if (videos.length > 0) {
-      searchCache.set(normalizedQuery, { data: videos, timestamp: Date.now() });
+    if (isPlaylistSearch) {
+       const [resAll, resPl] = await Promise.all([
+           yt.search(query),
+           yt.search(query, { type: 'playlist' })
+       ]);
+       resultsObj = resAll;
+       if (resPl.playlists) extraItems = resPl.playlists;
+       else if (resPl.results) extraItems = resPl.results;
+    } else {
+       resultsObj = await yt.search(query);
+    }
+
+    const combinedItems = [...(resultsObj.results || []), ...extraItems];
+    const parsedResults: any[] = [];
+    const seenIds = new Set<string>();
+    
+    if (combinedItems.length > 0) {
+      for (const item of combinedItems) {
+        if (item.type === 'Video') {
+           try {
+             const title = item.title?.text || item.title?.toString() || "Untitled";
+             const author = item.author?.name || item.author?.toString() || "Unknown Artist";
+             const duration = item.duration?.text || item.duration?.toString() || "";
+             const id = item.id || item.video_id;
+             const thumbnail = item.thumbnails?.[0]?.url || "";
+    
+             if (id && title && !seenIds.has(id)) {
+               seenIds.add(id);
+               parsedResults.push({
+                 id,
+                 title: title,
+                 artist: author,
+                 duration,
+                 url: `https://www.youtube.com/watch?v=${id}`,
+                 thumbnail,
+                 isPlaylist: false
+               });
+             }
+           } catch(e) {}
+        } else if (item.type === 'LockupView' && item.content_type === 'PLAYLIST') {
+           try {
+             const title = item.metadata?.title?.text || "Playlist";
+             const author = item.metadata?.metadata?.metadata_rows?.[0]?.metadata_parts?.[0]?.text?.text || "YouTube";
+             const id = item.content_id;
+             const thumbnail = item.content_image?.primary_thumbnail?.image?.[0]?.url || "";
+             
+             if (id && title && !seenIds.has(id)) {
+               seenIds.add(id);
+               parsedResults.push({
+                 id,
+                 title: title,
+                 artist: author,
+                 duration: "PLAYLIST",
+                 url: `https://www.youtube.com/playlist?list=${id}`,
+                 thumbnail,
+                 isPlaylist: true
+               });
+             }
+           } catch(e) {}
+        } else if (item.type === 'Playlist' || item.type === 'CompactPlaylist') {
+            try {
+             const title = item.title?.text || "Playlist";
+             const author = item.author?.name || item.author?.toString() || "YouTube";
+             const id = item.id || item.playlist_id;
+             const thumbnail = item.thumbnails?.[0]?.url || "";
+             
+             if (id && title && !seenIds.has(id)) {
+               seenIds.add(id);
+               parsedResults.push({
+                 id,
+                 title: title,
+                 artist: author,
+                 duration: "PLAYLIST",
+                 url: `https://www.youtube.com/playlist?list=${id}`,
+                 thumbnail,
+                 isPlaylist: true
+               });
+             }
+           } catch(e) {}
+        }
+      }
     }
     
-    res.json(videos);
+    if (parsedResults.length > 0) {
+      searchCache.set(normalizedQuery, { data: parsedResults, timestamp: Date.now() });
+    }
+    
+    res.json(parsedResults);
   } catch (error) {
     console.error("YouTube search error:", error);
     res.status(500).json({ error: "Internal YouTube search error" });

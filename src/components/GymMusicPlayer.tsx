@@ -287,7 +287,6 @@ export default function GymMusicPlayer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
-  const [isShowingGlobalResults, setIsShowingGlobalResults] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
@@ -300,7 +299,7 @@ export default function GymMusicPlayer() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
-  const [trackListTab, setTrackListTab] = useState<"playlist" | "queue">("playlist");
+  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("playlist");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
   useEffect(() => {
@@ -1109,8 +1108,8 @@ export default function GymMusicPlayer() {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
     
+    setTrackListTab("search");
     setIsSearchingYT(true);
-    setIsShowingGlobalResults(true);
     try {
       const resp = await fetch(`/api/youtube/search?q=${encodeURIComponent(searchQuery)}`);
       if (!resp.ok) throw new Error("Search failed");
@@ -1137,15 +1136,6 @@ export default function GymMusicPlayer() {
     }
 
     try {
-      const newTrack: MusicTrack = {
-        id: `yt_${ytTrack.id}_${Date.now()}`,
-        title: ytTrack.title,
-        artist: ytTrack.artist,
-        url: ytTrack.url,
-        duration: ytTrack.duration || "N/A",
-        bpm: 120, // Default BPM
-      };
-
       const targetOwnerId = selectedPlaylist.ownerId || user?.uid;
       if (!targetOwnerId) {
         showNotification("Error: no se pudo identificar al dueño de la lista.");
@@ -1153,7 +1143,44 @@ export default function GymMusicPlayer() {
       }
       
       const docRef = doc(db, "users", targetOwnerId, "playlists", selectedPlaylist.id);
-      const updatedTracks = [...(selectedPlaylist.tracks || []), newTrack];
+      let updatedTracks = [...(selectedPlaylist.tracks || [])];
+      
+      if (ytTrack.isPlaylist) {
+         showNotification("Extrayendo canciones de la playlist...");
+         try {
+           const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
+           if (res.ok) {
+             const tracks = await res.json();
+             const newTracks = tracks.map((t: any, i: number) => ({
+                id: `yt_${t.id}_${Date.now()}_${i}`,
+                title: t.title,
+                artist: t.artist,
+                url: t.url,
+                duration: t.duration || "N/A",
+                bpm: 120,
+             }));
+             updatedTracks = [...updatedTracks, ...newTracks];
+             showNotification(`Se han añadido ${newTracks.length} canciones.`);
+           } else {
+             throw new Error("No se pudo obtener las canciones");
+           }
+         } catch(e) {
+           showNotification("Error al procesar playlist.");
+           return;
+         }
+      } else {
+        const newTrack: MusicTrack = {
+          id: `yt_${ytTrack.id}_${Date.now()}`,
+          title: ytTrack.title,
+          artist: ytTrack.artist,
+          url: ytTrack.url,
+          duration: ytTrack.duration || "N/A",
+          bpm: 120,
+        };
+        updatedTracks.push(newTrack);
+        showNotification("Canción añadida.");
+      }
+
       await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
 
       setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
@@ -1856,134 +1883,135 @@ export default function GymMusicPlayer() {
               <div 
                 className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex flex-col gap-3 shrink-0 bg-[#080809]/40"
               >
-                <div className="flex items-center justify-between w-full">
-                  <div className="flex items-center gap-4 sm:gap-6 text-left">
-                    <button
-                      onClick={() => setTrackListTab("playlist")}
-                      className={`text-left transition-all relative ${trackListTab === "playlist" ? "opacity-100" : "opacity-40 hover:opacity-75"}`}
-                    >
-                      <p className="text-[9px] sm:text-[11px] font-extrabold text-emerald-400 uppercase tracking-wider flex items-center gap-2">
-                        LISTA DE REPRODUCCIÓN
-                        <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-[8.5px] sm:text-[10px] text-emerald-300 font-black border border-emerald-500/10">
-                          {displayTracks.length} PISTAS • {calculatePlaylistDuration(displayTracks)}
-                        </span>
-                      </p>
-                      <h3 className="text-sm sm:text-lg font-black text-white uppercase truncate max-w-[140px] sm:max-w-[240px] mt-0.5">
-                        {selectedPlaylist.name}
-                      </h3>
-                      {selectedPlaylist.description && (
-                        <p className="text-[10.5px] sm:text-xs text-slate-300 font-semibold truncate max-w-[140px] sm:max-w-[240px] tracking-wide mt-1 normal-case" title={selectedPlaylist.description}>
-                          {selectedPlaylist.description}
-                        </p>
-                      )}
-                    </button>
-
-                    <div className="w-[1px] h-8 bg-white/10" />
-
-                    <button
-                      onClick={() => setTrackListTab("queue")}
-                      className={`text-left transition-all relative ${trackListTab === "queue" ? "opacity-100" : "opacity-40 hover:opacity-75"}`}
-                    >
-                      <p className="text-[8px] font-black text-emerald-500 uppercase tracking-widest flex items-center gap-2">
-                        COLA DE REPRODUCCIÓN
-                        {trackQueue.length > 0 && (
-                          <span className="px-1.5 py-0.5 rounded bg-emerald-500 text-black font-black text-[7px] animate-pulse">
-                            {trackQueue.length} COLA
-                          </span>
-                        )}
-                      </p>
-                      <h3 className="text-xs sm:text-sm font-black text-white uppercase truncate">
-                        Siguientes pistas
-                      </h3>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2 sm:gap-3">
-                    {trackListTab === "queue" && trackQueue.length > 0 && (
+                <div className="flex flex-col gap-3 sm:gap-4 w-full">
+                  {/* Premium Tabs Area */}
+                  <div className="flex items-center justify-between pb-2 w-full gap-2 relative">
+                    {/* Scrollable Tabs */}
+                    <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0 pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <button
                         onClick={() => {
-                          setTrackQueue([]);
-                          showNotification("Cola vaciada con éxito");
+                          setTrackListTab("playlist");
+                          setSearchQuery("");
                         }}
-                        className="py-1 px-3 text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/30 hover:bg-red-500/20 rounded-full transition-all"
+                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center shrink-0 rounded-full ${trackListTab === "playlist" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
                       >
-                        Vaciar Cola
+                        <span className="block max-w-[120px] sm:max-w-[200px] truncate" title={selectedPlaylist.name || "Lista actual"}>
+                          {selectedPlaylist.name || "Lista actual"}
+                        </span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTrackListTab("search");
+                          setSearchQuery("");
+                        }}
+                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center shrink-0 rounded-full ${trackListTab === "search" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
+                      >
+                        Explorar
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setTrackListTab("queue");
+                          setSearchQuery("");
+                        }}
+                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0 rounded-full ${trackListTab === "queue" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
+                      >
+                        Siguientes
+                        {trackQueue.length > 0 && (
+                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${trackListTab === "queue" ? "bg-black/20 text-black" : "bg-white/20 text-white"}`}>
+                            {trackQueue.length}
+                          </span>
+                        )}
+                      </button>
+                    </div>
+
+                    {/* Action buttons on the right (Fixed) */}
+                    <div className="flex items-center gap-2 shrink-0">
+                       {trackListTab === "queue" && trackQueue.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setTrackQueue([]);
+                            showNotification("Cola vaciada con éxito");
+                          }}
+                          className="py-1 px-3 text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/30 hover:bg-red-500/20 rounded-full transition-all whitespace-nowrap"
+                        >
+                          Vaciar
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          setAdminCode(savedSecurityCode || "");
+                          setCustomUrl("");
+                          setAddMode("add_track");
+                          if (savedSecurityCode === "ho82788278") {
+                            setAddStep("form");
+                          } else {
+                            setAddStep("auth");
+                          }
+                          setIsAdding(true);
+                        }}
+                        title="Añadir pista a esta lista"
+                        className="p-1.5 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition-all shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Search Bar matching Tab */}
+                  <div className="relative w-full group">
+                    <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                      <Search className={`w-4 h-4 transition-colors ${searchQuery ? 'text-emerald-500' : 'text-slate-500 group-focus-within:text-emerald-500'}`} />
+                    </div>
+                    <form onSubmit={(e) => {
+                      e.preventDefault();
+                      setTrackListTab("search");
+                      handleYoutubeSearch(e);
+                    }}>
+                      <input
+                        type="text"
+                        placeholder={
+                          trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
+                          trackListTab === "queue" ? "¿Qué hay en la cola?" :
+                          "Buscar en internet..."
+                        }
+                        value={searchQuery}
+                        onChange={(e) => {
+                          setSearchQuery(e.target.value);
+                          if (!e.target.value && trackListTab === "search") {
+                            setYoutubeResults([]);
+                          }
+                        }}
+                        className="w-full bg-[#111113] border border-white/5 rounded-full py-2 sm:py-2.5 pl-9 pr-10 text-[11px] sm:text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/30 focus:bg-white/[0.05] focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
+                      />
+                    </form>
+                    {searchQuery && (
+                      <button
+                        onClick={() => {
+                          setSearchQuery("");
+                          if (trackListTab === "search") {
+                            setYoutubeResults([]);
+                          }
+                        }}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1 transition-colors"
+                      >
+                        <X className="w-3.5 h-3.5" />
                       </button>
                     )}
-                    <button
-                      onClick={() => {
-                        setAdminCode(savedSecurityCode || "");
-                        setCustomUrl("");
-                        setAddMode("add_track");
-                        if (savedSecurityCode === "ho82788278") {
-                          setAddStep("form");
-                        } else {
-                          setAddStep("auth");
-                        }
-                        setIsAdding(true);
-                      }}
-                      title="Añadir pista a esta lista"
-                      className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black transition-all"
-                    >
-                      <Plus className="w-4 h-4" />
-                    </button>
-                    <Disc className="w-4 h-4 text-emerald-500/20 animate-spin-slow shrink-0" />
                   </div>
-                </div>
-
-                <div className="relative w-full group">
-                  <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                    <Search className={`w-4 h-4 transition-colors ${searchQuery ? 'text-emerald-500' : 'text-slate-500 group-focus-within:text-emerald-500'}`} />
-                  </div>
-                  <form onSubmit={handleYoutubeSearch}>
-                    <input
-                      type="text"
-                      placeholder="¿Qué quieres escuchar?"
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        if (!e.target.value) {
-                          setIsShowingGlobalResults(false);
-                          setYoutubeResults([]);
-                        }
-                      }}
-                      className="w-full bg-[#111113] border border-white/5 rounded-full py-2 pl-9 pr-10 text-[11px] sm:text-xs text-white placeholder-white/20 focus:outline-none focus:border-emerald-500/30 focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium py-2 sm:py-2.5"
-                    />
-                  </form>
-                  {searchQuery && (
-                    <button
-                      onClick={() => {
-                        setSearchQuery("");
-                        setIsShowingGlobalResults(false);
-                        setYoutubeResults([]);
-                      }}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white p-1"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  )}
                 </div>
               </div>
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-1 sm:p-3 premium-scrollbar relative">
-                  {isShowingGlobalResults ? (
+                  {trackListTab === "search" ? (
                     <div className="space-y-1">
                       <div className="flex items-center justify-between px-2 py-2 mb-1">
                         <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           Resultados de Búsqueda
                         </span>
-                        <button 
-                          onClick={() => {
-                            setIsShowingGlobalResults(false);
-                            setSearchQuery("");
-                            setYoutubeResults([]);
-                          }}
-                          className="text-[9px] font-bold text-slate-500 hover:text-white"
-                        >
-                          CERRAR
-                        </button>
                       </div>
                       
                       {isSearchingYT && (
@@ -1994,7 +2022,9 @@ export default function GymMusicPlayer() {
 
                       {!isSearchingYT && youtubeResults.length === 0 && (
                         <div className="py-12 flex flex-col items-center justify-center text-center px-4">
-                          <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-widest">No se encontraron resultados</p>
+                          <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-widest">
+                            {searchQuery ? "No se encontraron resultados" : "Busca cualquier canción en internet para empezar"}
+                          </p>
                         </div>
                       )}
 
@@ -2014,11 +2044,16 @@ export default function GymMusicPlayer() {
                           </div>
                           
                           <div className="flex-1 min-w-0">
-                            <h4 className="text-[11px] font-bold text-white truncate leading-tight group-hover/yt:text-emerald-400 transition-colors uppercase tracking-tight">
+                            <h4 className="text-[11px] font-bold text-white truncate leading-tight group-hover/yt:text-emerald-400 transition-colors uppercase tracking-tight flex items-center gap-1.5">
+                              {ytTrack.isPlaylist && (
+                                <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded font-black shrink-0">
+                                  PLAYLIST
+                                </span>
+                              )}
                               {ytTrack.title}
                             </h4>
                             <p className="text-[10px] text-slate-500 truncate mt-0.5 font-bold uppercase tracking-widest">
-                              {ytTrack.artist} • {ytTrack.duration}
+                              {ytTrack.artist} {ytTrack.duration && `• ${ytTrack.duration}`}
                             </p>
                           </div>
 
@@ -2031,16 +2066,42 @@ export default function GymMusicPlayer() {
                                <ListPlus className="w-4 h-4" />
                              </button>
                              <button
-                               onClick={(e) => {
-                                 const track: MusicTrack = {
-                                   id: `yt_temp_${ytTrack.id}`,
-                                   title: ytTrack.title,
-                                   artist: ytTrack.artist,
-                                   url: ytTrack.url,
-                                   duration: ytTrack.duration,
-                                   bpm: 120
-                                 };
-                                 handleAddToQueue(track, e);
+                               onClick={async (e) => {
+                                 if (ytTrack.isPlaylist) {
+                                   showNotification("Cargando playlist...");
+                                   try {
+                                     const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
+                                     if (res.ok) {
+                                       const tracks = await res.json();
+                                       if (tracks.length > 0) {
+                                          const queueTracks = tracks.map((t: any, i: number) => ({
+                                            id: `yt_temp_${t.id}_${i}`,
+                                            title: t.title,
+                                            artist: t.artist,
+                                            url: t.url,
+                                            duration: t.duration,
+                                            bpm: 120
+                                          }));
+                                          handleAddToQueue(queueTracks[0], e);
+                                          if (queueTracks.length > 1) {
+                                            setTrackQueue(prev => [...prev, ...queueTracks.slice(1)]);
+                                          }
+                                       }
+                                     }
+                                   } catch (err) {
+                                     showNotification("Error reproduciendo playlist");
+                                   }
+                                 } else {
+                                   const track: MusicTrack = {
+                                     id: `yt_temp_${ytTrack.id}`,
+                                     title: ytTrack.title,
+                                     artist: ytTrack.artist,
+                                     url: ytTrack.url,
+                                     duration: ytTrack.duration,
+                                     bpm: 120
+                                   };
+                                   handleAddToQueue(track, e);
+                                 }
                                }}
                                title="Escuchar ahora"
                                className="p-1.5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all"

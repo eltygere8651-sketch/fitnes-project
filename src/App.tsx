@@ -176,9 +176,11 @@ function AppContent() {
         </section>
       </main>
 
-      <footer className="hidden sm:block py-2 sm:py-4 text-center shrink-0">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
-          <p>2026 FLUX PLAYER • <span className="text-emerald-500 font-black tracking-[0.4em]">CRAFTED BY BIENVE</span></p>
+      <footer className="hidden sm:block py-4 sm:py-6 text-center shrink-0 border-t border-white/5 bg-black/20">
+        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-[0.3em] font-bold">
+          <p className="text-white">
+            2026 FLUX PLAYER • <span className="text-emerald-400 font-black tracking-[0.4em] drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">CRAFTED BY BIENVE</span>
+          </p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <div

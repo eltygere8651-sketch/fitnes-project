@@ -1998,9 +1998,9 @@ export default function GymMusicPlayer() {
                         </div>
                       )}
 
-                      {youtubeResults.map((ytTrack) => (
+                      {youtubeResults.map((ytTrack, idx) => (
                         <div 
-                          key={ytTrack.id}
+                          key={`yt-${ytTrack.id}-${idx}`}
                           className="group/yt flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] hover:bg-emerald-500/[0.05] border border-transparent hover:border-emerald-500/10 transition-all cursor-default"
                         >
                           <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-black/40">

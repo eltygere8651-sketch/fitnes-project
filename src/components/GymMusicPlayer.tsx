@@ -289,6 +289,10 @@ export default function GymMusicPlayer() {
   const [editingName, setEditingName] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
   const [editingCover, setEditingCover] = useState("");
+  const [editingTrack, setEditingTrack] = useState<MusicTrack | null>(null);
+  const [editingTrackTitle, setEditingTrackTitle] = useState("");
+  const [editingTrackArtist, setEditingTrackArtist] = useState("");
+  const [editingTrackDescription, setEditingTrackDescription] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
@@ -1024,7 +1028,9 @@ export default function GymMusicPlayer() {
     event.preventDefault();
     event.stopPropagation();
     if (!selectedPlaylist?.id || selectedPlaylist.id === "all") return;
-    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin) {
+    
+    const isMasterAdmin = savedSecurityCode === "ho82788278";
+    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin && !isMasterAdmin) {
       showNotification("No tienes permisos para eliminar.");
       return;
     }
@@ -1038,6 +1044,61 @@ export default function GymMusicPlayer() {
     } catch (error) {
       console.error("Error removing track:", error);
       showNotification("Error al eliminar la canción.");
+    }
+  };
+
+  const startEditingTrack = (track: MusicTrack, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setEditingTrack(track);
+    setEditingTrackTitle(track.title || "");
+    setEditingTrackArtist(track.artist || "");
+    setEditingTrackDescription(track.description || "");
+  };
+
+  const saveTrackEdit = async () => {
+    if (!editingTrack || !selectedPlaylist?.id || selectedPlaylist.id === "all") return;
+    
+    const isMasterAdmin = savedSecurityCode === "ho82788278";
+    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin && !isMasterAdmin) {
+      showNotification("No tienes permisos para editar.");
+      return;
+    }
+
+    try {
+      const tracksCopy = [...selectedPlaylist.tracks];
+      const idx = tracksCopy.findIndex(t => t.id === editingTrack.id);
+      if (idx === -1) {
+        alert("Canción no encontrada en esta playlist.");
+        return;
+      }
+
+      tracksCopy[idx] = {
+        ...tracksCopy[idx],
+        title: editingTrackTitle.trim(),
+        artist: editingTrackArtist.trim(),
+        description: editingTrackDescription.trim() || "",
+      };
+
+      const ownerIdToUse = selectedPlaylist.ownerId || user?.uid;
+      if (!ownerIdToUse) {
+        alert("Error: no se detectó el ownerId.");
+        return;
+      }
+
+      const docRef = doc(db, "users", ownerIdToUse, "playlists", selectedPlaylist.id);
+      await updateDoc(docRef, { tracks: tracksCopy, updatedAt: serverTimestamp() });
+
+      setSelectedPlaylist({
+        ...selectedPlaylist,
+        tracks: tracksCopy,
+      });
+
+      showNotification("Canción actualizada.");
+      setEditingTrack(null);
+    } catch (error: any) {
+      console.error("Error saving track edit:", error);
+      alert(`Error al guardar: ${error.message || "Permiso denegado."}`);
     }
   };
 
@@ -2003,22 +2064,41 @@ export default function GymMusicPlayer() {
                               }`}>
                                 {track.title}
                               </p>
-                              <p className={`text-[9.5px] sm:text-[10px] font-normal truncate mt-0.5 transition-colors duration-200 ${
-                                isActive ? "text-emerald-500/80 font-bold" : "text-slate-400 group-hover/track:text-white"
-                              }`}>
-                                {track.artist || track.author || "Unknown Artist"}
-                              </p>
+                              <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                                <p className={`text-[9.5px] sm:text-[10px] font-normal truncate transition-colors duration-200 ${
+                                  isActive ? "text-emerald-500/80 font-bold" : "text-slate-400 group-hover/track:text-white"
+                                }`}>
+                                  {track.artist || track.author || "Unknown Artist"}
+                                </p>
+                                {track.description && (
+                                  <>
+                                    <span className="text-[9px] text-zinc-600 shrink-0">•</span>
+                                    <p className="text-[9.5px] sm:text-[10px] text-emerald-400/60 font-medium truncate italic shrink-1" title={track.description}>
+                                      {track.description}
+                                    </p>
+                                  </>
+                                )}
+                              </div>
                             </div>
         
-                            {/* Actions Hover (Queue / Delete) */}
-                            <div className="flex items-center gap-1.5 opacity-100 sm:opacity-0 sm:group-hover/track:opacity-100 transition-opacity mr-1.5 relative z-20">
+                            {/* Actions (Queue / Edit / Delete) */}
+                            <div className="flex items-center gap-1.5 relative z-20 mr-1.5">
                               <button onClick={(e) => handleAddToQueue(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Añadir a la cola">
                                 <ListPlus className="w-3.5 h-3.5" />
                               </button>
-                              {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin) && (
-                                <button onClick={(e) => handleDeleteTrack(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer" title="Eliminar de la playlist">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                              {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (
+                                isAdmin ||
+                                savedSecurityCode === "ho82788278" ||
+                                (user && selectedPlaylist.ownerId === user?.uid)
+                              ) && (
+                                <>
+                                  <button onClick={(e) => startEditingTrack(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Editar canción / renombrar">
+                                    <Edit2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button onClick={(e) => handleDeleteTrack(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer" title="Eliminar de la playlist">
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </>
                               )}
                             </div>
     
@@ -2303,6 +2383,101 @@ export default function GymMusicPlayer() {
                 <div className="pt-2">
                   <button
                     onClick={saveEdit}
+                    className="w-full bg-emerald-500 text-black py-6 rounded-[30px] text-xs font-black uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:bg-white active:scale-[0.98] transition-all flex items-center justify-center gap-4 group"
+                  >
+                    Guardar Cambios
+                    <Save className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* OVERLAY: EDIT TRACK MODAL */}
+      <AnimatePresence>
+        {editingTrack && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            className="fixed inset-0 z-[105] flex items-center justify-center p-4 sm:p-6 bg-black/85"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: -40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -40, scale: 0.95 }}
+              className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-[40px] p-6 sm:p-12 shadow-[0_0_100px_rgba(16,185,129,0.1)] relative text-left"
+            >
+              <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/20 blur-[120px] rounded-full" />
+              
+              <div className="flex justify-between items-center mb-10 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="p-2.5 bg-emerald-500/10 rounded-xl">
+                    <Edit2 className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-black uppercase text-white tracking-[0.3em]">
+                      Editar Canción
+                    </h2>
+                    <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">
+                      Renombrar y agregar descripción
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setEditingTrack(null)}
+                  className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl text-slate-400 hover:text-white transition-all transform hover:rotate-90"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="space-y-8 relative z-10">
+                <div className="space-y-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                      Nombre / Título de la Canción
+                    </label>
+                    <input
+                      type="text"
+                      value={editingTrackTitle}
+                      onChange={(e) => setEditingTrackTitle(e.target.value)}
+                      placeholder="Ej. Phonk Remix"
+                      className="w-full bg-black/40 border border-white/5 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium text-white"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                      Artista / Distribuidor / Autor
+                    </label>
+                    <input
+                      type="text"
+                      value={editingTrackArtist}
+                      onChange={(e) => setEditingTrackArtist(e.target.value)}
+                      placeholder="Ej. M83"
+                      className="w-full bg-black/40 border border-white/5 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium text-white"
+                    />
+                  </div>
+
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em] px-3 block">
+                      Descripción o Detalles
+                    </label>
+                    <textarea
+                      value={editingTrackDescription}
+                      onChange={(e) => setEditingTrackDescription(e.target.value)}
+                      placeholder="Escribe una nota, descripción o dedicatoria para esta canción..."
+                      className="w-full bg-black/40 border border-white/5 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-emerald-500/50 transition-all font-medium h-32 resize-none text-white"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    onClick={saveTrackEdit}
                     className="w-full bg-emerald-500 text-black py-6 rounded-[30px] text-xs font-black uppercase tracking-[0.2em] shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:bg-white active:scale-[0.98] transition-all flex items-center justify-center gap-4 group"
                   >
                     Guardar Cambios

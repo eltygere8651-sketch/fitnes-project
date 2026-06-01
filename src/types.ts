@@ -58,6 +58,7 @@ export interface MusicTrack {
   bpm: number;
   duration: string;
   url?: string;
+  description?: string;
 }
 
 export interface MusicPlaylist {

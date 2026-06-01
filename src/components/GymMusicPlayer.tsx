@@ -46,6 +46,7 @@ import {
 import { db, loginWithGoogle, logout } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
+import { UserManagementAdmin } from "./UserManagementAdmin";
 
 const ALL_DATABASE_TRACKS: MusicTrack[] = [
   {
@@ -242,7 +243,7 @@ const calculatePlaylistDuration = (tracks: MusicTrack[]) => {
 };
 
 export default function GymMusicPlayer() {
-  const { user, loading: authLoading, setAuthModalOpen } = useFirebase();
+  const { user, loading: authLoading, setAuthModalOpen, accessData } = useFirebase();
   
   // --- Page Visibility State for Power Saving ---
   const [isPageVisible, setIsPageVisible] = useState(true);
@@ -263,6 +264,7 @@ export default function GymMusicPlayer() {
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
   const [isTracklistOpen, setIsTracklistOpen] = useState(true);
+  const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(() => {
     const saved = localStorage.getItem("gym_music_current_track_index");
     return saved ? parseInt(saved, 10) : 0;
@@ -1636,8 +1638,28 @@ export default function GymMusicPlayer() {
                 })}
             </div>
 
-            {/* ACCESO ADMIN BANNER */}
-            {!user && (
+            {isAdmin && (
+              <div className="p-2 md:p-3 md:mt-2 border-t border-white/5 bg-purple-500/5 flex flex-col items-stretch gap-2 shrink-0">
+                <div className="hidden md:block text-left shrink-0">
+                  <p className="text-[8px] font-black uppercase text-purple-400 tracking-wider">
+                    Panel Maestro
+                  </p>
+                  <p className="text-[8px] text-slate-500 font-bold mt-0.5">
+                    Gestionar suscripciones
+                  </p>
+                </div>
+                <button
+                  onClick={() => setIsAdminPanelOpen(true)}
+                  className="py-1.5 md:py-2 bg-purple-500 hover:bg-purple-400 text-black font-black uppercase tracking-wider text-[10px] rounded-lg md:rounded-xl transition-all cursor-pointer shadow-md flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <Shield className="w-3.5 h-3.5 md:w-4 md:h-4" />
+                  <span>Usuarios</span>
+                </button>
+              </div>
+            )}
+
+            {/* User Session & Status */}
+            {!user ? (
               <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-emerald-500/5 flex flex-col items-stretch gap-2 shrink-0">
                 <div className="hidden md:block text-left shrink-0">
                   <p className="text-[8px] font-black uppercase text-emerald-400 tracking-wider">
@@ -1653,6 +1675,23 @@ export default function GymMusicPlayer() {
                 >
                   <Shield className="w-3.5 h-3.5 md:w-4 md:h-4" />
                   <span>Entrar</span>
+                </button>
+              </div>
+            ) : (
+              <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-black/20 flex flex-col items-stretch gap-2 shrink-0">
+                <div className="hidden md:block text-left shrink-0">
+                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-300">
+                    Suscripción Activa
+                  </p>
+                  <p className="text-[9px] text-emerald-400 font-bold mt-0.5">
+                    {accessData?.daysRemaining || 0} Días restantes
+                  </p>
+                </div>
+                <button
+                  onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"}
+                  className="py-1.5 md:py-2 bg-white/5 hover:bg-white/10 text-white font-bold uppercase tracking-wider text-[9px] rounded-lg md:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 border border-white/10"
+                >
+                  Contactar Soporte
                 </button>
               </div>
             )}
@@ -3003,6 +3042,49 @@ export default function GymMusicPlayer() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
+      
+      {accessData && !accessData.isValid && (
+        <div className="absolute inset-0 z-[99999] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center overscroll-none">
+          <Shield className="w-16 h-16 text-emerald-500 mb-6" />
+          <h2 className="text-3xl font-black mb-2 uppercase tracking-wider text-white">
+            {accessData.plan === "none" && !accessData.trialStart ? "Acceso Restringido" : "Acceso Suspendido"}
+          </h2>
+          <p className="text-slate-400 max-w-md mx-auto mb-8 text-sm font-medium leading-relaxed">
+            {accessData.plan === "none" && !accessData.trialStart 
+              ? "Para evitar abusos con multi-cuentas, el acceso es manual. Solicita tu prueba gratuita de 7 días al administrador para acceder a todas las funciones."
+              : "Tu período de prueba o suscripción ha expirado. Por favor, selecciona un plan para continuar disfrutando de Gym Music."}
+          </p>
+          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 w-full max-w-sm mb-6 flex flex-col gap-3 shadow-2xl">
+             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Prueba Gratis (7 Días)</span>
+                <span className="text-emerald-400 font-black text-sm">GRATIS</span>
+             </div>
+             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5 mt-2">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 31 Días</span>
+                <span className="text-emerald-400 font-black text-sm">$4.99</span>
+             </div>
+             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 3 Meses</span>
+                <span className="text-emerald-400 font-black text-sm">$12.99</span>
+             </div>
+             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 6 Meses</span>
+                <span className="text-emerald-400 font-black text-sm">$22.99</span>
+             </div>
+             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
+                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 12 Meses</span>
+                <span className="text-emerald-400 font-black text-sm">$39.99</span>
+             </div>
+          </div>
+
+          <button onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} className="bg-emerald-500 text-black px-8 py-4 rounded-full font-black uppercase text-xs tracking-widest shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer">
+            Contactar Soporte
+          </button>
+        </div>
+      )}
+
     </div>
   );
 }

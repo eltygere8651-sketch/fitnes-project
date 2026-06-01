@@ -1,11 +1,12 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
-import { loginWithGoogle, loginWithEmail } from "../lib/firebase";
+import { loginWithGoogle, loginWithEmail, signupWithEmail } from "../lib/firebase";
 import { X, LogIn, Mail, Lock, Shield, Sparkles, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useFirebase();
+  const [isSignUp, setIsSignUp] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -56,8 +57,13 @@ export const AuthModal: React.FC = () => {
     setSuccessMsg(null);
 
     try {
-      await loginWithEmail(email.trim(), password);
-      setSuccessMsg("¡Sesión iniciada con éxito!");
+      if (isSignUp) {
+        await signupWithEmail(email.trim(), password);
+        setSuccessMsg("¡Cuenta creada y sesión iniciada!");
+      } else {
+        await loginWithEmail(email.trim(), password);
+        setSuccessMsg("¡Sesión iniciada con éxito!");
+      }
       setTimeout(() => {
         setAuthModalOpen(false);
         window.location.reload();
@@ -67,7 +73,11 @@ export const AuthModal: React.FC = () => {
       const code = err?.code || "";
       let friendlyMessage = "Error de autenticación.";
 
-      if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
+      if (code === "auth/email-already-in-use") {
+        friendlyMessage = "Este correo electrónico ya está registrado.";
+      } else if (code === "auth/weak-password") {
+        friendlyMessage = "La contraseña debe tener al menos 6 caracteres.";
+      } else if (code === "auth/invalid-credential" || code === "auth/wrong-password" || code === "auth/user-not-found") {
         friendlyMessage = "Correo o contraseña incorrectos.";
       } else if (code === "auth/invalid-email") {
         friendlyMessage = "Formato de correo electrónico no válido.";
@@ -112,27 +122,47 @@ export const AuthModal: React.FC = () => {
             </button>
           </div>
 
-          {/* Header content (Static) */}
+           {/* Header content (Static) */}
           <div className="p-6 pb-4 text-center shrink-0 border-b border-white/5">
             <h2 className="text-xl font-black uppercase tracking-wider text-emerald-400">
-              ACCESO ADMINISTRADOR
+              {isSignUp ? "CREAR CUENTA" : "ACCESO GESTIÓN"}
             </h2>
             <p className="text-[11px] text-slate-400 mt-1 px-4 leading-relaxed font-bold">
-              Introduce tus credenciales para gestionar el sistema.
+              {isSignUp 
+                ? "Regístrate para solicitar tu acceso de prueba gratuita de 7 días." 
+                : "Introduce tus credenciales para acceder a la aplicación."}
             </p>
           </div>
 
           {/* Scrollable content container for perfect mobile/iOS viewport support */}
           <div className="overflow-y-auto px-6 pb-6 pt-4 space-y-4 max-h-[62vh] scrollbar-thin scrollbar-thumb-white/5 flex flex-col items-center">
             
-            {/* Login Tab Display Only */}
+            {/* Login/Signup Tab */}
             <div className="flex bg-white/5 p-1 rounded-xl gap-1 border border-white/[0.03] w-full mb-2">
-              <div
-                className="flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all text-center flex items-center justify-center gap-1 bg-emerald-500 text-black shadow-lg"
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(false);
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all text-center flex items-center justify-center gap-1 ${!isSignUp ? "bg-emerald-500 text-black shadow-lg" : "text-slate-400 hover:text-white"}`}
               >
                 <Shield className="w-3.5 h-3.5 shrink-0" />
                 <span>Iniciar Sesión</span>
-              </div>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsSignUp(true);
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 py-2 px-1 text-[9px] font-black uppercase tracking-wider rounded-lg transition-all text-center flex items-center justify-center gap-1.5 ${isSignUp ? "bg-emerald-500 text-black shadow-lg" : "text-slate-400 hover:text-white"}`}
+              >
+                <UserPlus className="w-3.5 h-3.5 shrink-0" />
+                <span>Registrarse</span>
+              </button>
             </div>
 
             {/* Email + Password Form */}
@@ -211,8 +241,8 @@ export const AuthModal: React.FC = () => {
                   <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
                 ) : (
                   <>
-                    <LogIn className="w-4 h-4" />
-                    Entrar al Sistema
+                    {isSignUp ? <UserPlus className="w-4 h-4" /> : <LogIn className="w-4 h-4" />}
+                    <span>{isSignUp ? "Registrarse en Gym Music" : "Entrar al Sistema"}</span>
                   </>
                 )}
               </button>

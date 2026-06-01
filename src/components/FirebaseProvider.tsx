@@ -3,6 +3,14 @@ import { onAuthStateChanged, User } from "firebase/auth";
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
+export interface UserAccessData {
+  trialStart: number | null; // Timestamp ms
+  subscriptionEnd: number | null; // Timestamp ms
+  plan: 'free' | '1mo' | '3mo' | '6mo' | '12mo' | null;
+  isValid: boolean;
+  daysRemaining: number;
+}
+
 interface FirebaseContextType {
   user: User | null;
   loading: boolean;
@@ -11,6 +19,7 @@ interface FirebaseContextType {
   clearAuthError: () => void;
   isAuthModalOpen: boolean;
   setAuthModalOpen: (val: boolean) => void;
+  accessData: UserAccessData | null;
 }
 
 const FirebaseContext = createContext<FirebaseContextType>({
@@ -21,6 +30,7 @@ const FirebaseContext = createContext<FirebaseContextType>({
   clearAuthError: () => {},
   isAuthModalOpen: false,
   setAuthModalOpen: () => {},
+  accessData: null,
 });
 
 export const useFirebase = () => useContext(FirebaseContext);
@@ -33,6 +43,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [authError, setAuthError] = useState<any | null>(null);
   const [isAuthModalOpen, setAuthModalOpen] = useState(false);
+  const [accessData, setAccessData] = useState<UserAccessData | null>(null);
 
   const clearAuthError = () => setAuthError(null);
 
@@ -51,21 +62,67 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
       if (u) {
         const syncProfile = async (retryCount = 0) => {
-          // Only sync profile if user is the admin to avoid permission errors
-          if (u.email !== "eltygere8651@gmail.com") return;
-          
           try {
             const userRef = doc(db, "users", u.uid);
-            await setDoc(
-              userRef,
-              {
-                email: u.email,
-                displayName: u.displayName,
+            const userSnap = await getDoc(userRef);
+            
+            let tStart: number | null = null;
+            let subEnd: number | null = null;
+            let planType: any = null;
+            
+            const now = Date.now();
+            
+            if (!userSnap.exists()) {
+              // Create user doc without trial
+              await setDoc(userRef, {
+                email: u.email || "anonymous",
+                displayName: u.displayName || "Usuario",
                 photoURL: u.photoURL,
                 lastLogin: serverTimestamp(),
-              },
-              { merge: true },
-            );
+                trialStart: null,
+                plan: "none"
+              });
+              tStart = null;
+              planType = "none";
+            } else {
+              const data = userSnap.data();
+              // Update last login
+              await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
+              
+              tStart = data.trialStart || null;
+              subEnd = data.subscriptionEnd || null;
+              planType = data.plan || "free";
+            }
+            
+            let isValid = false;
+            let daysRemaining = 0;
+            const msPerDay = 1000 * 60 * 60 * 24;
+            
+            // Si es admin nunca caduca o si es master (si su email coincide)
+            if (u.email === "eltygere8651@gmail.com") {
+               isValid = true;
+               daysRemaining = 999;
+            } else if (subEnd && subEnd > now) {
+               // Plan activo
+               isValid = true;
+               daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
+            } else if (planType === "free" && tStart) {
+               // Evaluar Trial (7 días)
+               const trialEnd = tStart + 7 * msPerDay;
+               if (trialEnd > now) {
+                 isValid = true;
+                 daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
+               }
+            }
+            
+            setAccessData({
+              trialStart: tStart,
+              subscriptionEnd: subEnd,
+              plan: planType,
+              isValid,
+              daysRemaining
+            });
+
           } catch (e) {
             console.error("Profile sync attempt failed", e);
             if (retryCount < 2) {
@@ -74,6 +131,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
           }
         };
         syncProfile();
+      } else {
+        setAccessData(null);
       }
       setUser(u);
       setLoading(false);
@@ -86,7 +145,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   }, []);
 
   return (
-    <FirebaseContext.Provider value={{ user, loading, isOnline, authError, clearAuthError, isAuthModalOpen, setAuthModalOpen }}>
+    <FirebaseContext.Provider value={{ user, loading, isOnline, authError, clearAuthError, isAuthModalOpen, setAuthModalOpen, accessData }}>
       {children}
     </FirebaseContext.Provider>
   );

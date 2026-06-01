@@ -26,13 +26,19 @@ service cloud.firestore {
 
     // 1. User Profiles
     match /users/{userId} {
-      // El admin puede ver perfiles (o el propio usuario si existiera)
-      allow get: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // El usuario puede leer su propio perfil, admin puede leer todos
+      allow get, list: if isSignedIn() && (request.auth.uid == userId || isAdmin());
       
-      // SOLO el admin puede crear o actualizar perfiles (Registros Bloqueados para otros)
-      allow create, update: if isAdmin() && (request.auth.uid == userId);
+      // Permitir que el usuario cree su propio perfil inicial
+      allow create: if isSignedIn() && (request.auth.uid == userId);
       
-      // Permitimos que el admin se borre si fuera necesario (opcional)
+      // Permitir que el usuario actualice su perfil, protegiendo campos sensibles
+      allow update: if isAdmin() || (
+        isSignedIn() && request.auth.uid == userId &&
+        (!request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(['trialStart', 'subscriptionEnd', 'plan', 'role']))
+      );
+      
       allow delete: if isAdmin() && (request.auth.uid == userId);
     }
 

@@ -135,12 +135,12 @@ function AppContent() {
               </div>
               <div className="flex flex-col">
                 <span className={`text-2xl font-brand font-black tracking-[-0.02em] uppercase italic leading-none select-none ${isEcoMode ? "text-emerald-400" : "text-premium-gradient drop-shadow-[0_0_15px_rgba(16,185,129,0.3)]"}`}>
-                  BIENVE
+                  FLUX
                 </span>
                 <div className="flex items-center gap-1.5 mt-1">
                   <div className="h-[1px] w-3 bg-emerald-500/30" />
                   <span className="text-[7.5px] font-black tracking-[0.35em] text-emerald-400 uppercase leading-none opacity-80">
-                    MUSIC APP
+                    PLAYER
                   </span>
                   <div className="h-[1px] w-3 bg-emerald-500/30" />
                 </div>
@@ -178,7 +178,7 @@ function AppContent() {
 
       <footer className="hidden sm:block py-2 sm:py-4 text-center shrink-0">
         <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] text-slate-500 font-bold uppercase tracking-[0.3em]">
-          <p>2026 BIENVE MUSIC APP • ALL RIGHTS RESERVED</p>
+          <p>2026 FLUX PLAYER • <span className="text-emerald-500 font-black tracking-[0.4em]">CRAFTED BY BIENVE</span></p>
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-1.5">
               <div
@@ -253,7 +253,7 @@ function AppContent() {
                 <p className="text-xs text-slate-300 leading-relaxed text-center">
                   Instala{" "}
                   <strong className="text-emerald-500 font-bold">
-                    Bienve Music App
+                    Flux Player
                   </strong>{" "}
                   directamente en tu pantalla de inicio móvil. Disfruta de un
                   acceso rápido, persistente, rendimiento optimizado y

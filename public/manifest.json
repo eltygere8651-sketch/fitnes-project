@@ -1,7 +1,7 @@
 {
-  "name": "Bienve Music App",
-  "short_name": "BienveMusic",
-  "description": "Entrenamiento con música de alto rendimiento y asesoría kinebiológica en tiempo real.",
+  "name": "Flux Player",
+  "short_name": "FluxPlayer",
+  "description": "Una experiencia musical fluida y premium con integración de YouTube.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#080809",

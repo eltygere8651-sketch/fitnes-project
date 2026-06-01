@@ -2,6 +2,7 @@ import express from "express";
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { Innertube } from 'youtubei.js';
 import dotenv from "dotenv";
 
 dotenv.config();
@@ -13,6 +14,18 @@ const PORT = 3000;
 
 // Minimal AI Setup
 let aiClient: GoogleGenAI | null = null;
+let yt: Innertube | null = null;
+
+async function initYoutube() {
+  try {
+    yt = await Innertube.create();
+    console.log("YouTube InnerTube initialized");
+  } catch (err) {
+    console.error("YouTube InnerTube Error:", err);
+  }
+}
+initYoutube();
+
 try {
   if (process.env.GEMINI_API_KEY) {
     aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
@@ -24,6 +37,52 @@ try {
 // Simple Coach Endpoint (Minimal)
 app.post("/api/ai/coach", async (req, res) => {
   res.json({ reply: "Entrena con foco. La música está lista." });
+});
+
+// YouTube Search Endpoint
+app.get("/api/youtube/search", async (req, res) => {
+  const query = req.query.q as string;
+  if (!query) return res.status(400).json({ error: "Missing query" });
+  if (!yt) {
+    // Retry initialization if it failed
+    try {
+      yt = await Innertube.create();
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  try {
+    const results = await yt.search(query, { type: 'video' });
+    const videos = results.videos.map((v: any) => {
+      try {
+        // Handle various video object types in youtubei.js
+        const title = v.title?.text || v.title?.toString() || "Untitled";
+        const author = v.author?.name || v.author?.toString() || "Unknown Artist";
+        const duration = v.duration?.text || v.duration?.toString() || "";
+        const id = v.id;
+        const thumbnail = v.thumbnails?.[0]?.url || "";
+
+        if (id && title) {
+          return {
+            id,
+            title,
+            artist: author,
+            duration,
+            url: `https://www.youtube.com/watch?v=${id}`,
+            thumbnail
+          };
+        }
+      } catch (e) {
+        return null;
+      }
+      return null;
+    }).filter(Boolean);
+    res.json(videos);
+  } catch (error) {
+    console.error("YouTube search error:", error);
+    res.status(500).json({ error: "Internal YouTube search error" });
+  }
 });
 
 // Helper function to extract tracks from SoundCloud HTML

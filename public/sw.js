@@ -1,4 +1,4 @@
-const CACHE_NAME = "bienve-music-app-v2";
+const CACHE_NAME = "flux-player-v2";
 const ASSETS_TO_CACHE = [
   "/",
   "/index.html",

@@ -39,10 +39,24 @@ app.post("/api/ai/coach", async (req, res) => {
   res.json({ reply: "Entrena con foco. La música está lista." });
 });
 
+// YouTube Search Cache (Eco-Friendly)
+const searchCache = new Map<string, { data: any, timestamp: number }>();
+const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+
 // YouTube Search Endpoint
 app.get("/api/youtube/search", async (req, res) => {
   const query = req.query.q as string;
   if (!query) return res.status(400).json({ error: "Missing query" });
+
+  const normalizedQuery = query.toLowerCase().trim();
+  
+  // Check eco-friendly cache
+  const cached = searchCache.get(normalizedQuery);
+  if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
+    console.log("Serving YouTube search from cache (ECO):", normalizedQuery);
+    return res.json(cached.data);
+  }
+
   if (!yt) {
     // Retry initialization if it failed
     try {
@@ -54,13 +68,13 @@ app.get("/api/youtube/search", async (req, res) => {
 
   try {
     const results = await yt.search(query, { type: 'video' });
-    const videos = results.videos.map((v: any) => {
+    const videos = results.videos ? results.videos.map((v: any) => {
       try {
         // Handle various video object types in youtubei.js
         const title = v.title?.text || v.title?.toString() || "Untitled";
         const author = v.author?.name || v.author?.toString() || "Unknown Artist";
         const duration = v.duration?.text || v.duration?.toString() || "";
-        const id = v.id;
+        const id = v.id || v.video_id;
         const thumbnail = v.thumbnails?.[0]?.url || "";
 
         if (id && title) {
@@ -77,7 +91,13 @@ app.get("/api/youtube/search", async (req, res) => {
         return null;
       }
       return null;
-    }).filter(Boolean);
+    }).filter(Boolean) : [];
+    
+    // Save to cache
+    if (videos.length > 0) {
+      searchCache.set(normalizedQuery, { data: videos, timestamp: Date.now() });
+    }
+    
     res.json(videos);
   } catch (error) {
     console.error("YouTube search error:", error);

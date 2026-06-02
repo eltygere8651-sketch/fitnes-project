@@ -189,8 +189,8 @@ function AppContent() {
               <span>{isOnline ? "ONLINE" : "OFFLINE"}</span>
             </div>
             <span className="text-slate-700">|</span>
-            <span className="text-emerald-500">
-              {user ? user.email : "MODO LECTURA"}
+            <span className="text-emerald-400 font-extrabold">
+              {user ? (user.displayName || "Socio Premium") : "MODO LECTURA"}
             </span>
           </div>
         </div>

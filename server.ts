@@ -50,7 +50,7 @@ app.get("/api/youtube/search", async (req, res) => {
 
   const normalizedQuery = query.toLowerCase().trim();
   
-  // Check eco-friendly cache
+  // Check cache
   const cached = searchCache.get(normalizedQuery);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL)) {
     console.log("Serving YouTube search from cache (ECO):", normalizedQuery);
@@ -58,7 +58,6 @@ app.get("/api/youtube/search", async (req, res) => {
   }
 
   if (!yt) {
-    // Retry initialization if it failed
     try {
       yt = await Innertube.create();
     } catch (e) {
@@ -67,41 +66,251 @@ app.get("/api/youtube/search", async (req, res) => {
   }
 
   try {
-    const results = await yt.search(query, { type: 'video' });
-    const videos = results.videos ? results.videos.map((v: any) => {
-      try {
-        // Handle various video object types in youtubei.js
-        const title = v.title?.text || v.title?.toString() || "Untitled";
-        const author = v.author?.name || v.author?.toString() || "Unknown Artist";
-        const duration = v.duration?.text || v.duration?.toString() || "";
-        const id = v.id || v.video_id;
-        const thumbnail = v.thumbnails?.[0]?.url || "";
+    // Perform both searches in parallel for the most complete results (General and Playlist-specific)
+    const [generalResults, playlistResults] = await Promise.allSettled([
+      yt.search(query),
+      yt.search(query, { type: 'playlist' })
+    ]);
 
-        if (id && title) {
-          return {
+    const rawItems: any[] = [];
+
+    if (generalResults.status === 'fulfilled' && generalResults.value) {
+      const resultsVal = generalResults.value;
+      const resAny: any = resultsVal.results;
+      if (resAny) {
+        if (Array.isArray(resAny)) {
+          rawItems.push(...resAny);
+        } else if (typeof resAny.forEach === 'function') {
+          resAny.forEach((x: any) => rawItems.push(x));
+        } else if (typeof resAny.map === 'function') {
+          resAny.map((x: any) => rawItems.push(x));
+        }
+      }
+      if (resultsVal.playlists && Array.isArray(resultsVal.playlists)) {
+        rawItems.push(...resultsVal.playlists);
+      }
+      if (resultsVal.videos && Array.isArray(resultsVal.videos)) {
+        rawItems.push(...resultsVal.videos);
+      }
+    }
+
+    if (playlistResults.status === 'fulfilled' && playlistResults.value) {
+      const resultsVal = playlistResults.value;
+      const resAny: any = resultsVal.results;
+      if (resAny) {
+        if (Array.isArray(resAny)) {
+          rawItems.push(...resAny);
+        } else if (typeof resAny.forEach === 'function') {
+          resAny.forEach((x: any) => rawItems.push(x));
+        } else if (typeof resAny.map === 'function') {
+          resAny.map((x: any) => rawItems.push(x));
+        }
+      }
+      if (resultsVal.playlists && Array.isArray(resultsVal.playlists)) {
+        rawItems.push(...resultsVal.playlists);
+      }
+    }
+
+    const combined: any[] = [];
+    const addedIds = new Set<string>();
+
+    const addParsedItem = (item: any) => {
+      if (!item || !item.id) return;
+      if (addedIds.has(item.id)) return;
+      addedIds.add(item.id);
+      combined.push(item);
+    };
+
+    rawItems.forEach((p: any) => {
+      try {
+        const type = (p.type || p.constructor?.name || "").toLowerCase();
+        
+        let id = p.id?.toString() || p.playlist_id?.toString() || p.video_id?.toString() || p.content_id?.toString() || "";
+        if (!id) return;
+
+        let title = p.title?.text || p.title?.toString() || "";
+        if (!title && p.metadata?.title?.text) {
+          title = p.metadata.title.text;
+        }
+        if (!title) return;
+
+        let author = "YouTube Curator";
+        if (p.author) {
+          author = p.author.name || p.author.toString() || "YouTube Creator";
+        } else if (p.short_byline_text) {
+          author = p.short_byline_text.toString();
+        } else if (p.metadata?.metadata?.metadata_rows) {
+          const rows = p.metadata.metadata.metadata_rows || [];
+          for (const row of rows) {
+            const part = row.metadata_parts?.[0];
+            if (part?.text?.text) {
+              author = part.text.text;
+              break;
+            }
+          }
+        }
+
+        let thumbnail = "";
+        if (p.thumbnails && Array.isArray(p.thumbnails) && p.thumbnails.length > 0) {
+          thumbnail = p.thumbnails[0].url || "";
+        } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
+          thumbnail = p.thumbnail.thumbnails[0].url || "";
+        } else if (p.content_image?.primary_thumbnail?.image && Array.isArray(p.content_image.primary_thumbnail.image) && p.content_image.primary_thumbnail.image.length > 0) {
+          const imgs = p.content_image.primary_thumbnail.image;
+          thumbnail = imgs[0].url || "";
+        }
+
+        const isPlaylistId = id.startsWith("PL") || id.startsWith("UU");
+        const isYouTubeMixId = id.startsWith("RD");
+        
+        let videoCountStr = "";
+        if (p.content_image?.primary_thumbnail?.overlays) {
+          const overlays = p.content_image.primary_thumbnail.overlays || [];
+          for (const overlay of overlays) {
+            const badges = overlay.badges || [];
+            for (const badge of badges) {
+              if (badge.text) {
+                videoCountStr = badge.text.toString();
+                break;
+              }
+            }
+            if (videoCountStr) break;
+          }
+        }
+
+        const hasPlaylistIndicator = !!p.playlist_id || p.video_count !== undefined || p.video_count_text !== undefined || videoCountStr !== "";
+        
+        const isPlaylistType = type.includes("playlist") || (p.content_type || "").toUpperCase() === "PLAYLIST" || isPlaylistId || (hasPlaylistIndicator && !isYouTubeMixId);
+        const isMixType = type.includes("mix") || (p.content_type || "").toUpperCase() === "MIX" || isYouTubeMixId;
+
+        if (isPlaylistType || isMixType) {
+          if (!videoCountStr) {
+            if (p.video_count !== undefined) {
+              const rawVal = p.video_count;
+              videoCountStr = typeof rawVal === 'object' ? (rawVal.text || rawVal.toString()) : rawVal.toString();
+            } else if (p.video_count_text) {
+              const rawValText = p.video_count_text;
+              videoCountStr = typeof rawValText === 'object' ? (rawValText.text || rawValText.toString()) : rawValText.toString();
+            }
+          }
+
+          if (!videoCountStr || videoCountStr === "Playlist" || videoCountStr === "0") {
+            videoCountStr = isMixType ? "Mix" : "Canal";
+          } else if (!isNaN(Number(videoCountStr))) {
+            videoCountStr = `${videoCountStr} videos`;
+          }
+
+          let subType = "playlist";
+          if (isYouTubeMixId || (!isPlaylistId && (type.includes("mix") || title.toLowerCase().includes("session") || title.toLowerCase().includes("dj set")))) {
+            subType = "mix";
+          }
+
+          addParsedItem({
+            id,
+            title,
+            artist: author,
+            duration: videoCountStr,
+            url: `https://www.youtube.com/playlist?list=${id}`,
+            thumbnail,
+            isPlaylist: true,
+            subType
+          });
+        } else {
+          let duration = "N/A";
+          if (p.duration) {
+            duration = p.duration.text || p.duration.toString() || "N/A";
+          } else if (p.length_text) {
+            duration = p.length_text.text || p.length_text.toString() || "N/A";
+          }
+
+          let subType = "cancion";
+          const lowerTitle = title.toLowerCase();
+          if (lowerTitle.includes("mix") || lowerTitle.includes("remix") || lowerTitle.includes("set") || lowerTitle.includes("hour") || lowerTitle.includes("dance mix") || lowerTitle.includes("phonk mix") || lowerTitle.includes("gym mix")) {
+            subType = "mix";
+          }
+
+          addParsedItem({
             id,
             title,
             artist: author,
             duration,
             url: `https://www.youtube.com/watch?v=${id}`,
-            thumbnail
-          };
+            thumbnail,
+            isPlaylist: false,
+            subType
+          });
         }
-      } catch (e) {
-        return null;
+      } catch (err) {
+        // Skip entry on parse error
       }
-      return null;
-    }).filter(Boolean) : [];
-    
+    });
+
     // Save to cache
-    if (videos.length > 0) {
-      searchCache.set(normalizedQuery, { data: videos, timestamp: Date.now() });
+    if (combined.length > 0) {
+      searchCache.set(normalizedQuery, { data: combined, timestamp: Date.now() });
     }
     
-    res.json(videos);
+    res.json(combined);
   } catch (error) {
     console.error("YouTube search error:", error);
     res.status(500).json({ error: "Internal YouTube search error" });
+  }
+});
+
+// YouTube Playlist Tracks Extractor Endpoint
+app.get("/api/youtube/playlist", async (req, res) => {
+  const playlistId = req.query.id as string;
+  if (!playlistId) return res.status(400).json({ error: "Missing playlist ID" });
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create();
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  try {
+    const playlist: any = await yt.getPlaylist(playlistId);
+    let rawVideos: any[] = [];
+    if (playlist.videos) {
+      if (Array.isArray(playlist.videos)) {
+        rawVideos = playlist.videos;
+      } else if (playlist.videos.entries && Array.isArray(playlist.videos.entries)) {
+        rawVideos = playlist.videos.entries;
+      } else if (playlist.videos.contents && Array.isArray(playlist.videos.contents)) {
+        rawVideos = playlist.videos.contents;
+      }
+    } else if (playlist.contents && Array.isArray(playlist.contents)) {
+      rawVideos = playlist.contents;
+    }
+
+    const tracks = rawVideos.map((v: any) => {
+      try {
+        const title = v.title?.text || v.title?.toString() || "Untitled Track";
+        const artist = v.author?.name || v.author?.toString() || playlist.author?.name || "Artista de YouTube";
+        const duration = v.duration?.text || v.duration?.toString() || "N/A";
+        const id = v.id || v.video_id;
+        
+        if (id && title) {
+          return {
+            id,
+            title,
+            artist,
+            duration,
+            url: `https://www.youtube.com/watch?v=${id}`,
+          };
+        }
+      } catch (err) {
+        return null;
+      }
+      return null;
+    }).filter(Boolean);
+
+    res.json(tracks);
+  } catch (err) {
+    console.error("Error fetching playlist tracks:", err);
+    res.status(500).json({ error: "Internal error fetching playlist" });
   }
 });
 

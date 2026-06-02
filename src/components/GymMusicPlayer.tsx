@@ -265,6 +265,7 @@ export default function GymMusicPlayer() {
     useState<MusicPlaylist | null>(null);
   const [isTracklistOpen, setIsTracklistOpen] = useState(true);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
+  const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] = useState(false);
   const [currentTrackIndex, setCurrentTrackIndex] = useState(() => {
     const saved = localStorage.getItem("gym_music_current_track_index");
     return saved ? parseInt(saved, 10) : 0;
@@ -272,6 +273,7 @@ export default function GymMusicPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
   const [userPlaylists, setUserPlaylists] = useState<MusicPlaylist[]>([]);
+  const [sidebarTab, setSidebarTab] = useState<'my' | 'explore'>('my');
   const [isAdding, setIsAdding] = useState(false);
   const [addStep, setAddStep] = useState<"auth" | "form">("auth");
   const [addMode, setAddMode] = useState<"import_set" | "create_empty" | "add_track">("import_set");
@@ -282,6 +284,13 @@ export default function GymMusicPlayer() {
   const [adminCode, setAdminCode] = useState("");
   const [isFetchingMeta, setIsFetchingMeta] = useState(false);
 
+  // Spotify-style playlist copier states
+  const [playlistToCopy, setPlaylistToCopy] = useState<MusicPlaylist | null>(null);
+  const [targetPlaylistIdForCopy, setTargetPlaylistIdForCopy] = useState<string>("new");
+  const [copyPlaylistNameInput, setCopyPlaylistNameInput] = useState<string>("");
+  const [copyPlaylistDescInput, setCopyPlaylistDescInput] = useState<string>("");
+  const [isProcessingCopy, setIsProcessingCopy] = useState<boolean>(false);
+
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
 
   const [showLibrary, setShowLibrary] = useState(false);
@@ -289,6 +298,20 @@ export default function GymMusicPlayer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
+  
+  // Expanded playlist/mix tracks viewer states
+  const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
+  const [expandedPlaylistTracks, setExpandedPlaylistTracks] = useState<any[]>([]);
+  const [isFetchingExpandedTracks, setIsFetchingExpandedTracks] = useState<boolean>(false);
+
+  // New intuitive track/playlist placement modal states
+  const [trackToAddDestination, setTrackToAddDestination] = useState<any | null>(null);
+  const [isAddingToPlaylistModalOpen, setIsAddingToPlaylistModalOpen] = useState(false);
+  const [modalNewPlaylistName, setModalNewPlaylistName] = useState("");
+  const [modalNewPlaylistDesc, setModalNewPlaylistDesc] = useState("");
+  const [modalSelectedPlaylistId, setModalSelectedPlaylistId] = useState<string>("new");
+  const [isProcessingModalAdd, setIsProcessingModalAdd] = useState(false);
+
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingDescription, setEditingDescription] = useState("");
@@ -591,19 +614,32 @@ export default function GymMusicPlayer() {
     }
   }, [currentTrack, currentUrl]);
 
-  // Sync with Firestore
+  // Sync with Firestore (Spotify-like: fetch all playlists so users can explore/play them)
   useEffect(() => {
-    let q;
-    if (user && !isAdmin && savedSecurityCode !== "ho82788278") {
-      q = query(
-        collection(db, "users", user.uid, "playlists"),
-        orderBy("createdAt", "desc"),
-      );
-    } else {
-      q = query(collectionGroup(db, "playlists"), orderBy("createdAt", "desc"));
-    }
+    const q = query(collectionGroup(db, "playlists"), orderBy("createdAt", "desc"));
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
+      // Background auto-cleanup of Martina's playlist (keep only up to 80 tracks, removing any extras added by mistake)
+      snapshot.docs.forEach((playlistDoc) => {
+        const data = playlistDoc.data();
+        const name = data.name || "";
+        if (name.toLowerCase().includes("martina")) {
+          const tracks = data.tracks || [];
+          if (tracks.length > 80) {
+            console.log("Detected extra tracks in Martina playlist. Automatically pruning to 80...");
+            const pruned = tracks.slice(0, 80);
+            updateDoc(playlistDoc.ref, {
+              tracks: pruned,
+              updatedAt: serverTimestamp()
+            }).then(() => {
+              console.log("Successfully pruned Martina's playlist down to the first 80 tracks.");
+            }).catch(e => {
+              console.error("Failed to auto-prune Martina's playlist:", e);
+            });
+          }
+        }
+      });
+
       const folders = snapshot.docs.map((doc) => {
         const data = doc.data();
         let ownerId = data.ownerId;
@@ -627,6 +663,7 @@ export default function GymMusicPlayer() {
           id: doc.id,
           ...data,
           ownerId: ownerId,
+          ownerName: data.ownerName || (data.adminSecret === "ho82788278" ? "Administrador" : "Curador"),
           tracks: cleanedTracks,
         };
       })
@@ -646,7 +683,7 @@ export default function GymMusicPlayer() {
         // If it was created from a soundcloud import or had no youtube tracks, check
         // but let's allow other personal custom playlists
         return true;
-      }) as MusicPlaylist[];
+      }) as any as MusicPlaylist[];
 
       setUserPlaylists(folders);
       const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
@@ -685,6 +722,86 @@ export default function GymMusicPlayer() {
       console.error("Metadata fetch error via proxy", e);
     }
     return null;
+  };
+
+  const handleCopyPlaylistToProfile = async (pl: MusicPlaylist) => {
+    if (!user) {
+      alert("Debes iniciar sesión para guardar canales en tu perfil.");
+      setAuthModalOpen(true);
+      return;
+    }
+    setPlaylistToCopy(pl);
+    setCopyPlaylistNameInput(pl.name);
+    setCopyPlaylistDescInput(pl.description || "Canal guardado desde la comunidad");
+    setTargetPlaylistIdForCopy("new");
+  };
+
+  const handleProcessCopyPlaylist = async () => {
+    if (!user || !playlistToCopy) return;
+    setIsProcessingCopy(true);
+
+    try {
+      if (targetPlaylistIdForCopy === "new") {
+        // Option 1: Create a brand new independent channels group
+        const newPlDoc = {
+          name: copyPlaylistNameInput.trim() || playlistToCopy.name,
+          genre: playlistToCopy.genre || "Personalizado",
+          description: copyPlaylistDescInput.trim() || "Canal guardado desde la comunidad",
+          icon: playlistToCopy.icon || "📂",
+          thumbnail_url: playlistToCopy.thumbnail_url || "",
+          ownerId: user.uid,
+          ownerName: user.displayName || "Socio Premium",
+          adminSecret: "ho82788278",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          tracks: playlistToCopy.tracks || [],
+        };
+        const docRef = await addDoc(
+          collection(db, "users", user.uid, "playlists"),
+          newPlDoc,
+        );
+        showNotification(`Canal "${newPlDoc.name}" guardado con éxito`);
+        setSidebarTab('my');
+        setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
+      } else {
+        // Option 2: Append all tracks into an existing playlist owned by the user
+        const targetPl = userPlaylists.find(p => p.id === targetPlaylistIdForCopy);
+        if (!targetPl) {
+          alert("La playlist de destino seleccionada no es válida.");
+          setIsProcessingCopy(false);
+          return;
+        }
+
+        // Filter tracks to avoid duplicate URLs
+        const existingUrls = new Set((targetPl.tracks || []).map(t => t.url?.trim().toLowerCase()));
+        const tracksToAdd = (playlistToCopy.tracks || []).filter(t => t.url && !existingUrls.has(t.url.trim().toLowerCase()));
+
+        if (tracksToAdd.length === 0) {
+          showNotification("Todas las canciones de esta playlist ya existen en tu canal.");
+          setPlaylistToCopy(null);
+          setIsProcessingCopy(false);
+          return;
+        }
+
+        const mergedTracks = [...(targetPl.tracks || []), ...tracksToAdd];
+        const targetRef = doc(db, "users", user.uid, "playlists", targetPl.id);
+
+        await updateDoc(targetRef, {
+          tracks: mergedTracks,
+          updatedAt: serverTimestamp()
+        });
+
+        showNotification(`¡Añadidas ${tracksToAdd.length} canciones a "${targetPl.name}" con éxito!`);
+        setSidebarTab('my');
+        setSelectedPlaylist({ ...targetPl, tracks: mergedTracks });
+      }
+      setPlaylistToCopy(null);
+    } catch (e) {
+      console.error("Error copying playlist:", e);
+      alert("Hubo un problema al guardar las canciones. Inténtalo de nuevo.");
+    } finally {
+      setIsProcessingCopy(false);
+    }
   };
 
   const handleAddNewCanalClick = () => {
@@ -770,6 +887,7 @@ export default function GymMusicPlayer() {
           icon: newPlaylistIcon.trim() || "📂",
           thumbnail_url: newPlaylistCover.trim() || generatedCoverUrl,
           ownerId: currentUser.uid,
+          ownerName: currentUser.displayName || "Usuario",
           adminSecret: adminCode,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -848,6 +966,7 @@ export default function GymMusicPlayer() {
         description: meta?.author_name || `Audio via ${provider}`,
         icon: isPlaylist ? "📂" : "🎵",
         ownerId: currentUser.uid,
+        ownerName: currentUser.displayName || "Usuario",
         adminSecret: adminCode,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -1106,6 +1225,214 @@ export default function GymMusicPlayer() {
     }
   };
 
+  const handleToggleExpandPlaylist = async (playlistId: string) => {
+    if (expandedPlaylistId === playlistId) {
+      setExpandedPlaylistId(null);
+      setExpandedPlaylistTracks([]);
+      return;
+    }
+
+    setExpandedPlaylistId(playlistId);
+    setExpandedPlaylistTracks([]);
+    setIsFetchingExpandedTracks(true);
+
+    try {
+      const res = await fetch(`/api/youtube/playlist?id=${playlistId}`);
+      if (res.ok) {
+        const tracks = await res.json();
+        setExpandedPlaylistTracks(tracks);
+      } else {
+        showNotification("No se pudieron cargar las canciones de la lista.");
+      }
+    } catch (err) {
+      console.error(err);
+      showNotification("Error al cargar canciones.");
+    } finally {
+      setIsFetchingExpandedTracks(false);
+    }
+  };
+
+  const addSingleTrackToCurrentPlaylist = (track: MusicTrack) => {
+    setTrackToAddDestination(track);
+    const isMasterAdmin = savedSecurityCode === "ho82788278";
+    const canWrite = selectedPlaylist && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin || isMasterAdmin);
+    setModalSelectedPlaylistId(canWrite ? selectedPlaylist!.id : "new");
+    setIsAddingToPlaylistModalOpen(true);
+  };
+
+  const executeModalAddTrack = async (targetPlaylistId: string, buildNew: boolean) => {
+    if (!trackToAddDestination) return;
+    setIsProcessingModalAdd(true);
+
+    try {
+      let currentUser = user;
+      if (!currentUser) {
+        const { signInAnonymously: firebaseSignInAnonymously } = await import("../lib/firebase");
+        const { auth: firebaseAuth } = await import("../lib/firebase");
+        const cred = await firebaseSignInAnonymously(firebaseAuth);
+        currentUser = cred.user;
+      }
+
+      if (!currentUser) {
+        showNotification("Error de autenticación. Inténtalo de nuevo.");
+        setIsProcessingModalAdd(false);
+        return;
+      }
+
+      const isPlaylistSource = trackToAddDestination.isPlaylist;
+      let finalTracksToAdd: MusicTrack[] = [];
+
+      if (isPlaylistSource) {
+        showNotification("Extrayendo canciones de la lista...");
+        try {
+          const res = await fetch(`/api/youtube/playlist?id=${trackToAddDestination.id}`);
+          if (res.ok) {
+            const fetched = await res.json();
+            finalTracksToAdd = fetched.map((t: any, i: number) => ({
+              id: `yt_${t.id}_${Date.now()}_${i}`,
+              title: t.title,
+              artist: t.artist,
+              url: t.url,
+              duration: t.duration || "N/A",
+              bpm: 120,
+            }));
+          } else {
+            showNotification("No se pudieron extraer las pistas del enlace en YouTube.");
+            setIsProcessingModalAdd(false);
+            return;
+          }
+        } catch (e) {
+          showNotification("Error obteniendo pistas.");
+          setIsProcessingModalAdd(false);
+          return;
+        }
+      } else {
+        const defaultUrl = trackToAddDestination.url || (trackToAddDestination.id ? `https://www.youtube.com/watch?v=${trackToAddDestination.id}` : "");
+        finalTracksToAdd = [{
+          id: trackToAddDestination.id?.toString().startsWith("yt_") ? trackToAddDestination.id.toString() : `yt_${trackToAddDestination.id}_${Date.now()}`,
+          title: trackToAddDestination.title,
+          artist: trackToAddDestination.artist,
+          url: defaultUrl,
+          duration: trackToAddDestination.duration || "N/A",
+          bpm: 120,
+        }];
+      }
+
+      if (finalTracksToAdd.length === 0) {
+        showNotification("No se encontraron canciones válidas.");
+        setIsProcessingModalAdd(false);
+        return;
+      }
+
+      if (buildNew) {
+        const name = modalNewPlaylistName.trim();
+        if (!name) {
+          showNotification("Por favor especifica un nombre para la nueva playlist.");
+          setIsProcessingModalAdd(false);
+          return;
+        }
+
+        const desc = modalNewPlaylistDesc.trim() || "Creada con canciones desde el explorador musical";
+        const promptBase = `${name} ${desc}`;
+        const prompt = encodeURIComponent(`${promptBase}, modern aesthetic, artistic music album cover art, spotify playlist style, vibrant colors, minimalist, no text`);
+        const generatedCoverUrl = trackToAddDestination.thumbnail || `https://image.pollinations.ai/prompt/${prompt}?width=400&height=400&nologo=true`;
+
+        const newPlDoc = {
+          name: name,
+          genre: "Personalizado",
+          description: desc,
+          icon: "📂",
+          thumbnail_url: generatedCoverUrl,
+          ownerId: currentUser.uid,
+          ownerName: currentUser.displayName || "Usuario",
+          adminSecret: savedSecurityCode || "",
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          tracks: finalTracksToAdd,
+        };
+
+        const docRef = await addDoc(
+          collection(db, "users", currentUser.uid, "playlists"),
+          newPlDoc
+        );
+
+        showNotification(`Nueva playlist "${name}" creada con éxito.`);
+        
+        const newlyCreatedPlaylist: MusicPlaylist = {
+          id: docRef.id,
+          ...newPlDoc,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          tracks: finalTracksToAdd,
+        } as any;
+        setSelectedPlaylist(newlyCreatedPlaylist);
+        localStorage.setItem("gym_music_selected_playlist_id", docRef.id);
+      } else {
+        const targetPl = userPlaylists.find(p => p.id === targetPlaylistId);
+        if (!targetPl) {
+          showNotification("La playlist de destino no existe.");
+          setIsProcessingModalAdd(false);
+          return;
+        }
+
+        const isMasterAdmin = savedSecurityCode === "ho82788278";
+        if (targetPl.ownerId !== currentUser.uid && !isAdmin && !isMasterAdmin) {
+          showNotification("No tienes permisos para modificar esta playlist.");
+          setIsProcessingModalAdd(false);
+          return;
+        }
+
+        const targetOwnerId = targetPl.ownerId || currentUser.uid;
+        const docRef = doc(db, "users", targetOwnerId, "playlists", targetPl.id);
+        const updatedTracks = [...(targetPl.tracks || []), ...finalTracksToAdd];
+        await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+
+        if (selectedPlaylist?.id === targetPl.id) {
+          setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+        }
+        showNotification(`Añadido con éxito a "${targetPl.name}".`);
+      }
+
+      setIsAddingToPlaylistModalOpen(false);
+      setTrackToAddDestination(null);
+      setModalNewPlaylistName("");
+      setModalNewPlaylistDesc("");
+    } catch (err) {
+      console.error(err);
+      showNotification("Error procesando solicitud.");
+    } finally {
+      setIsProcessingModalAdd(false);
+    }
+  };
+
+  const importAllExpandedTracks = async (tracks: MusicTrack[]) => {
+    if (!selectedPlaylist?.id || selectedPlaylist.id === "all") {
+      showNotification("Selecciona una de tus playlists primero.");
+      return;
+    }
+
+    const isMasterAdmin = savedSecurityCode === "ho82788278";
+    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin && !isMasterAdmin) {
+      showNotification("No tienes permisos para modificar esta playlist.");
+      return;
+    }
+
+    try {
+      const targetOwnerId = selectedPlaylist.ownerId || user?.uid;
+      if (!targetOwnerId) return;
+
+      const docRef = doc(db, "users", targetOwnerId, "playlists", selectedPlaylist.id);
+      const updatedTracks = [...(selectedPlaylist.tracks || []), ...tracks];
+      await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
+
+      setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
+      showNotification(`Se añadieron ${tracks.length} canciones con éxito.`);
+    } catch (err) {
+      console.error(err);
+      showNotification("Error al añadir las canciones.");
+    }
+  };
+
   const handleYoutubeSearch = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     if (!searchQuery.trim()) return;
@@ -1125,72 +1452,12 @@ export default function GymMusicPlayer() {
     }
   };
 
-  const addYoutubeTrackToPlaylist = async (ytTrack: any) => {
-    if (!selectedPlaylist?.id || selectedPlaylist.id === "all") {
-      showNotification("Selecciona una playlist primero.");
-      return;
-    }
-
+  const addYoutubeTrackToPlaylist = (ytTrack: any) => {
+    setTrackToAddDestination(ytTrack);
     const isMasterAdmin = savedSecurityCode === "ho82788278";
-    if (selectedPlaylist.ownerId !== user?.uid && !isAdmin && !isMasterAdmin) {
-      showNotification("No tienes permisos para añadir a esta playlist.");
-      return;
-    }
-
-    try {
-      const targetOwnerId = selectedPlaylist.ownerId || user?.uid;
-      if (!targetOwnerId) {
-        showNotification("Error: no se pudo identificar al dueño de la lista.");
-        return;
-      }
-      
-      const docRef = doc(db, "users", targetOwnerId, "playlists", selectedPlaylist.id);
-      let updatedTracks = [...(selectedPlaylist.tracks || [])];
-      
-      if (ytTrack.isPlaylist) {
-         showNotification("Extrayendo canciones de la playlist...");
-         try {
-           const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
-           if (res.ok) {
-             const tracks = await res.json();
-             const newTracks = tracks.map((t: any, i: number) => ({
-                id: `yt_${t.id}_${Date.now()}_${i}`,
-                title: t.title,
-                artist: t.artist,
-                url: t.url,
-                duration: t.duration || "N/A",
-                bpm: 120,
-             }));
-             updatedTracks = [...updatedTracks, ...newTracks];
-             showNotification(`Se han añadido ${newTracks.length} canciones.`);
-           } else {
-             throw new Error("No se pudo obtener las canciones");
-           }
-         } catch(e) {
-           showNotification("Error al procesar playlist.");
-           return;
-         }
-      } else {
-        const newTrack: MusicTrack = {
-          id: `yt_${ytTrack.id}_${Date.now()}`,
-          title: ytTrack.title,
-          artist: ytTrack.artist,
-          url: ytTrack.url,
-          duration: ytTrack.duration || "N/A",
-          bpm: 120,
-        };
-        updatedTracks.push(newTrack);
-        showNotification("Canción añadida.");
-      }
-
-      await updateDoc(docRef, { tracks: updatedTracks, updatedAt: serverTimestamp() });
-
-      setSelectedPlaylist({ ...selectedPlaylist, tracks: updatedTracks });
-      showNotification("Añadida a la playlist.");
-    } catch (err) {
-      console.error(err);
-      showNotification("Error al añadir canción.");
-    }
+    const canWrite = selectedPlaylist && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin || isMasterAdmin);
+    setModalSelectedPlaylistId(canWrite ? selectedPlaylist!.id : "new");
+    setIsAddingToPlaylistModalOpen(true);
   };
 
   const handleAddToQueue = (track: MusicTrack, event: React.MouseEvent) => {
@@ -1565,7 +1832,7 @@ export default function GymMusicPlayer() {
             <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full h-auto">
                 <div className="text-center md:text-left w-full md:w-auto">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center md:text-left">
-                        Canal
+                        Biblioteca
                     </h3>
                 </div>
                 <button 
@@ -1576,9 +1843,53 @@ export default function GymMusicPlayer() {
                   <Plus className="w-3.5 h-3.5 stroke-[3px]" />
                 </button>
             </div>
+
+            {/* Sidebar Tabs for Spotify style */}
+            <div className="flex px-1 md:px-2 pb-2 pt-1.5 gap-1 border-b border-white/[0.02] shrink-0">
+              <button
+                onClick={() => setSidebarTab('my')}
+                className={`flex-1 py-1 md:py-1.5 text-center text-[8px] md:text-[9px] font-black uppercase tracking-wider rounded-md md:rounded-lg transition-all ${
+                  sidebarTab === 'my' 
+                    ? 'bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 font-black' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
+              >
+                <span className="hidden md:inline">Mis Canales</span>
+                <span className="md:hidden">Mis</span>
+              </button>
+              <button
+                onClick={() => setSidebarTab('explore')}
+                className={`flex-1 py-1 md:py-1.5 text-center text-[8px] md:text-[9px] font-black uppercase tracking-wider rounded-md md:rounded-lg transition-all ${
+                  sidebarTab === 'explore' 
+                    ? 'bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 font-black' 
+                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
+                }`}
+              >
+                <span className="hidden md:inline">Comunidad</span>
+                <span className="md:hidden">Explore</span>
+              </button>
+            </div>
             
             <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none flex-1 min-h-0 w-full items-center md:items-stretch">
-                {userPlaylists.map(pl => {
+                {(() => {
+                  const filteredList = userPlaylists.filter(pl => {
+                    const isOwn = pl.ownerId === user?.uid;
+                    return sidebarTab === 'my' ? isOwn : !isOwn;
+                  });
+
+                  if (filteredList.length === 0) {
+                    return (
+                      <div className="text-center py-8 px-2 font-medium">
+                        <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-relaxed">
+                          {sidebarTab === 'my' 
+                            ? "Sin canales. Guarda de la pestaña 'Comunidad' o añade uno nuevo." 
+                            : "No hay más canales disponibles por el momento."}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return filteredList.map(pl => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
                     
@@ -1588,7 +1899,7 @@ export default function GymMusicPlayer() {
                           onClick={() => selectPlaylist(pl)} 
                           className={`group flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-1.5 flex-wrap md:flex-nowrap md:px-3 md:py-2.5 rounded-xl transition-all text-center md:text-left shrink-0 ${
                             isSelected 
-                              ? 'bg-emerald-500/10 border-l-[3px] border-emerald-500 ring-1 ring-emerald-500/10' 
+                              ? 'bg-[#1ED760]/5 border-l-[3px] border-[#1ED760] ring-1 ring-[#1ED760]/10' 
                               : 'border-l-[3px] border-transparent hover:bg-white/[0.03]'
                           }`}
                         >
@@ -1618,24 +1929,44 @@ export default function GymMusicPlayer() {
                             </div>
  
                             {/* Info */}
-                            <div className="min-w-0 text-center md:text-left flex flex-col justify-center">
+                            <div className="min-w-0 text-center md:text-left flex flex-col justify-center items-center md:items-start flex-1">
                                 <p className={`text-[10px] md:text-[13px] font-bold truncate leading-snug max-w-[70px] md:max-w-[130px] ${
-                                  isSelected ? 'text-emerald-400' : 'text-white/90 group-hover:text-white'
+                                  isSelected ? 'text-[#1ED760]' : 'text-white/90 group-hover:text-white'
                                 }`}>
                                     {pl.name}
                                 </p>
                                 <p className="hidden md:block text-[10px] md:text-[11.5px] text-slate-300 font-extrabold mt-0.5 truncate max-w-[130px]" title={`${pl.tracks?.length || 0} tracks, duration ${calculatePlaylistDuration(pl.tracks)}`}>
-                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'} • <span className="text-emerald-400 font-black">{calculatePlaylistDuration(pl.tracks)}</span>
+                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'} • <span className="text-[#1ED760] font-black">{calculatePlaylistDuration(pl.tracks)}</span>
                                 </p>
-                                {pl.description && (
+                                {sidebarTab === 'explore' && pl.ownerName && (
+                                  <p className="hidden md:block text-[8px] text-[#1ED760] font-black uppercase tracking-widest truncate max-w-[130px] mt-0.5">
+                                    Por: {pl.ownerName}
+                                  </p>
+                                )}
+                                {pl.description && !pl.ownerName && (
                                   <p className="hidden md:block text-[9.5px] md:text-[10.5px] text-slate-400 font-medium truncate max-w-[130px] mt-0.5 normal-case tracking-wide" title={pl.description}>
                                     {pl.description}
                                   </p>
                                 )}
+
+                                {sidebarTab === 'explore' && pl.ownerId !== user?.uid && (
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      handleCopyPlaylistToProfile(pl);
+                                    }}
+                                    className="mt-1 md:mt-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760] border border-[#1ED760]/20 hover:border-transparent text-[#1ED760] hover:text-black text-[8px] md:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer shrink-0"
+                                    title="Añadir este canal a mi biblioteca"
+                                  >
+                                    <Plus className="w-2.5 h-2.5 stroke-[3px]" />
+                                    <span>Añadir</span>
+                                  </button>
+                                )}
                             </div>
                         </button>
-                    )
-                })}
+                    );
+                  });
+                })()}
             </div>
 
             {isAdmin && (
@@ -1978,23 +2309,42 @@ export default function GymMusicPlayer() {
                           Vaciar
                         </button>
                       )}
-                      <button
-                        onClick={() => {
-                          setAdminCode(savedSecurityCode || "");
-                          setCustomUrl("");
-                          setAddMode("add_track");
-                          if (savedSecurityCode === "ho82788278") {
-                            setAddStep("form");
-                          } else {
-                            setAddStep("auth");
-                          }
-                          setIsAdding(true);
-                        }}
-                        title="Añadir pista a esta lista"
-                        className="p-1.5 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition-all shrink-0"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
+
+                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && (
+                        <button
+                          onClick={() => handleCopyPlaylistToProfile(selectedPlaylist)}
+                          className="flex items-center gap-2 bg-[#1ED760] hover:bg-white hover:scale-[1.02] active:scale-[0.98] text-black font-black px-4 py-2 rounded-full transition-all text-[10px] uppercase tracking-[0.1em] shrink-0 cursor-pointer shadow-[0_8px_25px_rgba(30,215,96,0.2)] hover:shadow-[#1ED760]/30"
+                          title="Sincronizar y guardar este canal en tu biblioteca"
+                        >
+                          <Plus className="w-3.5 h-3.5 stroke-[3.5px]" />
+                          <span className="hidden sm:inline">Guardar en tu Biblioteca</span>
+                          <span className="sm:hidden">Guardar</span>
+                        </button>
+                      )}
+
+                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (
+                        isAdmin ||
+                        savedSecurityCode === "ho82788278" ||
+                        (user && selectedPlaylist.ownerId === user?.uid)
+                      ) && (
+                        <button
+                          onClick={() => {
+                            setAdminCode(savedSecurityCode || "");
+                            setCustomUrl("");
+                            setAddMode("add_track");
+                            if (savedSecurityCode === "ho82788278") {
+                              setAddStep("form");
+                            } else {
+                              setAddStep("auth");
+                            }
+                            setIsAdding(true);
+                          }}
+                          title="Añadir pista a esta lista"
+                          className="p-1.5 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition-all shrink-0"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2013,7 +2363,7 @@ export default function GymMusicPlayer() {
                         placeholder={
                           trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
                           trackListTab === "queue" ? "¿Qué hay en la cola?" :
-                          "Buscar en internet..."
+                          "Buscar canciones, artistas o de todo..."
                         }
                         value={searchQuery}
                         onChange={(e) => {
@@ -2061,95 +2411,260 @@ export default function GymMusicPlayer() {
 
                       {!isSearchingYT && youtubeResults.length === 0 && (
                         <div className="py-12 flex flex-col items-center justify-center text-center px-4">
-                          <p className="text-xs text-slate-500 font-medium font-mono uppercase tracking-widest">
-                            {searchQuery ? "No se encontraron resultados" : "Busca cualquier canción en internet para empezar"}
+                          <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest leading-relaxed">
+                            {searchQuery ? "No se encontraron resultados" : "Explora y reproduce canciones de alta fidelidad al instante"}
                           </p>
                         </div>
                       )}
 
-                      {youtubeResults.map((ytTrack, idx) => (
-                        <div 
-                          key={`yt-${ytTrack.id}-${idx}`}
-                          className="group/yt flex items-center gap-3 p-2 rounded-xl bg-white/[0.02] hover:bg-emerald-500/[0.05] border border-transparent hover:border-emerald-500/10 transition-all cursor-default"
-                        >
-                          <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-black/40">
-                            <img 
-                              src={ytTrack.thumbnail} 
-                              alt="" 
-                              className="w-full h-full object-cover"
-                              referrerPolicy="no-referrer"
-                            />
-                            <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-transparent transition-colors" />
-                          </div>
-                          
-                          <div className="flex-1 min-w-0">
-                            <h4 className="text-[11px] font-bold text-white truncate leading-tight group-hover/yt:text-emerald-400 transition-colors uppercase tracking-tight flex items-center gap-1.5">
-                              {ytTrack.isPlaylist && (
-                                <span className="bg-emerald-500/20 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded font-black shrink-0">
+                      {youtubeResults.map((ytTrack, idx) => {
+                        const isExpanded = expandedPlaylistId === ytTrack.id;
+                        
+                        const renderBadge = () => {
+                          if (ytTrack.isPlaylist) {
+                            if (ytTrack.subType === 'mix') {
+                              return (
+                                <span className="bg-purple-500/20 text-purple-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase shrink-0 tracking-wider">
+                                  MIX YOUTUBE
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="bg-blue-500/20 text-blue-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase shrink-0 tracking-wider">
                                   PLAYLIST
                                 </span>
-                              )}
-                              {ytTrack.title}
-                            </h4>
-                            <p className="text-[10px] text-slate-500 truncate mt-0.5 font-bold uppercase tracking-widest">
-                              {ytTrack.artist} {ytTrack.duration && `• ${ytTrack.duration}`}
-                            </p>
-                          </div>
+                              );
+                            }
+                          } else {
+                            if (ytTrack.subType === 'mix') {
+                              return (
+                                <span className="bg-fuchsia-500/20 text-fuchsia-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase shrink-0 tracking-wider">
+                                  MIX SESIÓN
+                                </span>
+                              );
+                            } else {
+                              return (
+                                <span className="bg-emerald-500/10 text-emerald-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase shrink-0 tracking-wider">
+                                  CANCIÓN
+                                </span>
+                              );
+                            }
+                          }
+                        };
 
-                          <div className="flex items-center gap-1.5 pr-1">
-                             <button
-                               onClick={() => addYoutubeTrackToPlaylist(ytTrack)}
-                               title="Añadir a Playlist"
-                               className="p-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all"
-                             >
-                               <ListPlus className="w-4 h-4" />
-                             </button>
-                             <button
-                               onClick={async (e) => {
-                                 if (ytTrack.isPlaylist) {
-                                   showNotification("Cargando playlist...");
-                                   try {
-                                     const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
-                                     if (res.ok) {
-                                       const tracks = await res.json();
-                                       if (tracks.length > 0) {
-                                          const queueTracks = tracks.map((t: any, i: number) => ({
-                                            id: `yt_temp_${t.id}_${i}`,
+                        return (
+                          <div 
+                            key={`yt-${ytTrack.id}-${idx}`}
+                            className="flex flex-col gap-1 p-1.5 bg-white/[0.01] hover:bg-white/[0.02] rounded-2xl border border-transparent hover:border-white/5 transition-all text-left mb-2 group/yt"
+                          >
+                            <div className="flex items-center gap-3 p-1 relative">
+                              <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-black/40 shadow-md">
+                                <img 
+                                  src={ytTrack.thumbnail} 
+                                  alt="" 
+                                  className="w-full h-full object-cover"
+                                  referrerPolicy="no-referrer"
+                                />
+                                <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-transparent transition-colors" />
+                              </div>
+                              
+                              <div className="flex-1 min-w-0">
+                                <span className="flex items-center gap-1.5 mb-1 flex-wrap">
+                                  {renderBadge()}
+                                </span>
+                                <h4 className="text-[11px] font-bold text-white truncate leading-tight transition-colors uppercase tracking-tight">
+                                  {ytTrack.title}
+                                </h4>
+                                <p className="text-[10px] text-slate-500 truncate mt-0.5 font-bold uppercase tracking-widest flex items-center gap-2">
+                                  <span>{ytTrack.artist}</span>
+                                  {ytTrack.duration && <span className="text-white/20">•</span>}
+                                  {ytTrack.duration && <span>{ytTrack.duration}</span>}
+                                </p>
+                              </div>
+
+                              <div className="flex items-center gap-1 shrink-0 pr-1">
+                                {ytTrack.isPlaylist ? (
+                                  <div className="flex items-center gap-1">
+                                    <button
+                                      onClick={() => handleToggleExpandPlaylist(ytTrack.id)}
+                                      title={isExpanded ? "Ocultar canciones" : "Ver canciones de la playlist"}
+                                      className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[8.5px] font-black uppercase tracking-wider cursor-pointer ${
+                                        isExpanded 
+                                          ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/30" 
+                                          : "bg-white/5 border-transparent text-slate-400 hover:text-white hover:bg-white/10"
+                                      }`}
+                                    >
+                                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                                      <span className="hidden sm:inline">Explorar</span>
+                                    </button>
+
+                                    <button
+                                      onClick={() => addYoutubeTrackToPlaylist(ytTrack)}
+                                      title="Importar / Añadir Playlist Completa a tu Biblioteca"
+                                      className="p-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                                    >
+                                      <ListPlus className="w-4 h-4" />
+                                      <span className="hidden sm:inline text-[8.5px] font-black uppercase tracking-wider">Añadir Todo</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => addYoutubeTrackToPlaylist(ytTrack)}
+                                    title="Añadir a Playlist Activa"
+                                    className="p-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all cursor-pointer"
+                                  >
+                                    <ListPlus className="w-4 h-4" />
+                                  </button>
+                                )}
+
+                                <button
+                                  onClick={async (e) => {
+                                    if (ytTrack.isPlaylist) {
+                                      showNotification("Cargando lista...");
+                                      try {
+                                        const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
+                                        if (res.ok) {
+                                          const tracks = await res.json();
+                                          if (tracks.length > 0) {
+                                             const queueTracks = tracks.map((t: any, i: number) => ({
+                                               id: `yt_temp_${t.id}_${i}`,
+                                               title: t.title,
+                                               artist: t.artist,
+                                               url: t.url,
+                                               duration: t.duration,
+                                               bpm: 120
+                                             }));
+                                             handleAddToQueue(queueTracks[0], e);
+                                             if (queueTracks.length > 1) {
+                                               setTrackQueue(prev => [...prev, ...queueTracks.slice(1)]);
+                                             }
+                                          }
+                                        }
+                                      } catch (err) {
+                                        showNotification("Error reproduciendo lista");
+                                      }
+                                    } else {
+                                      const track: MusicTrack = {
+                                        id: `yt_temp_${ytTrack.id}`,
+                                        title: ytTrack.title,
+                                        artist: ytTrack.artist,
+                                        url: ytTrack.url,
+                                        duration: ytTrack.duration,
+                                        bpm: 120
+                                      };
+                                      handleAddToQueue(track, e);
+                                    }
+                                  }}
+                                  title={ytTrack.isPlaylist ? "Reproducir Playlist completo" : "Escuchar ahora"}
+                                  className="p-1.5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all cursor-pointer"
+                                >
+                                  <Play className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+
+                            {/* Expandable playlist track selector */}
+                            {isExpanded && (
+                              <div className="mt-1 mb-1 mx-1.5 p-2 bg-black/60 border border-white/5 rounded-xl space-y-1.5 transition-all">
+                                {isFetchingExpandedTracks ? (
+                                  <div className="flex items-center gap-2 p-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest justify-center">
+                                    <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
+                                    <span>Buscando pistas de audio en YouTube...</span>
+                                  </div>
+                                ) : expandedPlaylistTracks.length === 0 ? (
+                                  <div className="text-[9px] text-slate-500 p-3 text-center uppercase font-bold tracking-widest">
+                                    No se encontraron pistas o mix de audio en esta playlist.
+                                  </div>
+                                ) : (
+                                  <div className="space-y-1 max-h-56 overflow-y-auto premium-scrollbar pr-1">
+                                    <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-white/5">
+                                      <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">
+                                        Pistas del Canal ({expandedPlaylistTracks.length})
+                                      </p>
+                                      <button 
+                                        onClick={() => {
+                                          if (!selectedPlaylist?.id || selectedPlaylist.id === "all") {
+                                            showNotification("Selecciona una playlist en tu biblioteca primero.");
+                                            return;
+                                          }
+                                          const tracksToAdd = expandedPlaylistTracks.map((t, idx) => ({
+                                            id: `yt_sub_${t.id}_${Date.now()}_${idx}`,
                                             title: t.title,
                                             artist: t.artist,
                                             url: t.url,
-                                            duration: t.duration,
+                                            duration: t.duration || "N/A",
                                             bpm: 120
                                           }));
-                                          handleAddToQueue(queueTracks[0], e);
-                                          if (queueTracks.length > 1) {
-                                            setTrackQueue(prev => [...prev, ...queueTracks.slice(1)]);
-                                          }
-                                       }
-                                     }
-                                   } catch (err) {
-                                     showNotification("Error reproduciendo playlist");
-                                   }
-                                 } else {
-                                   const track: MusicTrack = {
-                                     id: `yt_temp_${ytTrack.id}`,
-                                     title: ytTrack.title,
-                                     artist: ytTrack.artist,
-                                     url: ytTrack.url,
-                                     duration: ytTrack.duration,
-                                     bpm: 120
-                                   };
-                                   handleAddToQueue(track, e);
-                                 }
-                               }}
-                               title="Escuchar ahora"
-                               className="p-1.5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all"
-                             >
-                                <Play className="w-3.5 h-3.5" />
-                             </button>
+                                          importAllExpandedTracks(tracksToAdd);
+                                        }}
+                                        className="text-[8px] font-black uppercase text-emerald-400 hover:text-white tracking-widest bg-emerald-500/10 px-2 py-0.5 rounded-md cursor-pointer"
+                                      >
+                                        Añadir todas
+                                      </button>
+                                    </div>
+                                    {expandedPlaylistTracks.map((subTrack, subIdx) => (
+                                      <div 
+                                        key={`sub-${subTrack.id}-${subIdx}`}
+                                        className="flex items-center justify-between gap-3 p-1.5 rounded-lg bg-white/[0.01] hover:bg-emerald-500/[0.04] border border-transparent hover:border-emerald-500/5 transition-all text-left"
+                                      >
+                                        <div className="flex-1 min-w-0 pr-1">
+                                          <p className="text-[10px] font-bold text-white truncate leading-tight uppercase tracking-tight">
+                                            {subIdx + 1}. {subTrack.title}
+                                          </p>
+                                          <p className="text-[8.5px] text-slate-500 font-bold uppercase tracking-wider mt-0.5">
+                                            {subTrack.artist} {subTrack.duration && `• ${subTrack.duration}`}
+                                          </p>
+                                        </div>
+                                        
+                                        <div className="flex items-center gap-1 shrink-0">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const finalTrack: MusicTrack = {
+                                                id: `yt_sub_${subTrack.id}_${Date.now()}_${subIdx}`,
+                                                title: subTrack.title,
+                                                artist: subTrack.artist,
+                                                url: subTrack.url,
+                                                duration: subTrack.duration || "N/A",
+                                                bpm: 120
+                                              };
+                                              addSingleTrackToCurrentPlaylist(finalTrack);
+                                            }}
+                                            title="Añadir a playlist activa"
+                                            className="p-1 px-2 bg-emerald-500/10 hover:bg-emerald-500 text-emerald-500 hover:text-black rounded-lg transition-all text-[8.5px] font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer"
+                                          >
+                                            <Plus className="w-2.5 h-2.5" />
+                                            <span>Añadir</span>
+                                          </button>
+                                          
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const finalTrack: MusicTrack = {
+                                                id: `yt_sub_temp_${subTrack.id}_${Date.now()}_${subIdx}`,
+                                                title: subTrack.title,
+                                                artist: subTrack.artist,
+                                                url: subTrack.url,
+                                                duration: subTrack.duration,
+                                                bpm: 120
+                                              };
+                                              handleAddToQueue(finalTrack, e);
+                                            }}
+                                            title="Escuchar ahora"
+                                            className="p-1 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all cursor-pointer"
+                                          >
+                                            <Play className="w-2.5 h-2.5 fill-current" />
+                                          </button>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
+                            )}
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       <div className="pt-4 border-t border-white/5 mt-4" />
                     </div>
                   ) : trackListTab === "queue" ? (
@@ -2389,8 +2904,8 @@ export default function GymMusicPlayer() {
               <div className="w-24 h-24 border border-dashed border-white/10 rounded-full flex items-center justify-center mb-6">
                 <Music className="w-7 h-7 text-white/5 animate-pulse" />
               </div>
-              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-white/20 mb-4">
-                Estación Offline
+              <h3 className="text-[10px] font-black uppercase tracking-[0.4em] text-white/30 mb-4">
+                Listo para Escuchar
               </h3>
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
@@ -2844,6 +3359,248 @@ export default function GymMusicPlayer() {
         )}
       </AnimatePresence>
 
+      {/* OVERLAY: CHOOSE OR CREATE PLAYLIST FOR TRACK ADDITION */}
+      <AnimatePresence>
+        {isAddingToPlaylistModalOpen && trackToAddDestination && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: -40, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -40, scale: 0.95 }}
+              className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-[#0a0a0a] border border-white/10 rounded-[30px] p-6 sm:p-8 shadow-[0_0_100px_rgba(16,185,129,0.15)] relative flex flex-col"
+            >
+              <div className="absolute -top-32 -right-32 w-64 h-64 bg-emerald-500/20 blur-[120px] rounded-full" />
+              
+              <div className="flex justify-between items-center mb-6 relative z-10">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-emerald-500/10 rounded-xl">
+                    <Sparkles className="w-5 h-5 text-emerald-400" />
+                  </div>
+                  <h3 className="text-lg font-black uppercase tracking-wider text-white">
+                    Añadir a Biblioteca
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsAddingToPlaylistModalOpen(false);
+                    setTrackToAddDestination(null);
+                  }}
+                  className="p-2 hover:bg-white/5 rounded-full transition-colors cursor-pointer text-slate-400 hover:text-white"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Mini Item Card Display */}
+              <div className="p-4 bg-white/5 border border-white/10 rounded-2xl flex items-center gap-3 relative z-10 mb-6 font-sans">
+                {trackToAddDestination.thumbnail ? (
+                  <img
+                    src={trackToAddDestination.thumbnail}
+                    alt={trackToAddDestination.title}
+                    referrerPolicy="no-referrer"
+                    className="w-16 h-16 rounded-xl object-cover border border-white/10"
+                  />
+                ) : (
+                  <div className="w-16 h-16 rounded-xl bg-gradient-to-br from-emerald-500/20 to-teal-500/20 flex items-center justify-center border border-white/10">
+                    <Music className="w-6 h-6 text-emerald-400 animate-pulse" />
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-[10px] uppercase font-black tracking-widest px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md">
+                      {trackToAddDestination.isPlaylist ? "PLAYLIST / MIX" : "CANCIÓN"}
+                    </span>
+                    {trackToAddDestination.duration && (
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        {trackToAddDestination.duration}
+                      </span>
+                    )}
+                  </div>
+                  <h4 className="font-bold text-white text-sm truncate">
+                    {trackToAddDestination.title}
+                  </h4>
+                  <p className="text-xs text-slate-400 truncate">
+                    {trackToAddDestination.artist || "YouTube Artist"}
+                  </p>
+                </div>
+               </div>
+
+              {/* Mode Selection */}
+              <div className="flex gap-2 p-1 bg-white/5 rounded-xl mb-6 relative z-10">
+                <button
+                  type="button"
+                  onClick={() => setModalSelectedPlaylistId(userPlaylists.length > 0 ? (selectedPlaylist?.id && selectedPlaylist.id !== "all" ? selectedPlaylist.id : userPlaylists[0].id) : "new")}
+                  className={`flex-1 py-12 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                    modalSelectedPlaylistId !== "new" 
+                      ? "bg-emerald-500 text-black shadow-lg" 
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  style={{ paddingTop: '8px', paddingBottom: '8px' }}
+                >
+                  Playlist Existente
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalSelectedPlaylistId("new")}
+                  className={`flex-1 py-12 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
+                    modalSelectedPlaylistId === "new" 
+                      ? "bg-emerald-500 text-black shadow-lg" 
+                      : "text-slate-400 hover:text-white"
+                  }`}
+                  style={{ paddingTop: '8px', paddingBottom: '8px' }}
+                >
+                  Nueva Playlist
+                </button>
+              </div>
+
+              {/* Option Rendering */}
+              {modalSelectedPlaylistId === "new" ? (
+                <div className="space-y-4 mb-6 relative z-10">
+                  <div>
+                    <label className="block text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2">
+                      Nombre de la Playlist
+                    </label>
+                    <input
+                      type="text"
+                      value={modalNewPlaylistName}
+                      onChange={(e) => setModalNewPlaylistName(e.target.value)}
+                      placeholder="Ej. Mi rutina de Pecho 2026"
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:bg-white/10 transition-all font-bold"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2">
+                      Descripción (Opcional)
+                    </label>
+                    <textarea
+                      value={modalNewPlaylistDesc}
+                      onChange={(e) => setModalNewPlaylistDesc(e.target.value)}
+                      placeholder="Ej. Enfoque puro y beats duros para entrenar en serio."
+                      rows={2}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:bg-white/10 transition-all resize-none"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="mb-6 relative z-10 flex-1 max-h-[300px] overflow-y-auto pr-1 space-y-2">
+                  <span className="block text-[10px] uppercase font-black tracking-widest text-slate-400 mb-2 pr-2">
+                    Selecciona una playlist de destino
+                  </span>
+                  
+                  {userPlaylists.length === 0 ? (
+                    <div className="text-center py-8 bg-white/5 border border-dashed border-white/10 rounded-xl">
+                      <p className="text-xs text-slate-400 mb-2">No tienes playlists creadas todavía.</p>
+                      <button
+                        type="button"
+                        onClick={() => setModalSelectedPlaylistId("new")}
+                        className="text-xs font-bold text-emerald-400 hover:underline"
+                      >
+                        Crear una ahora misma
+                      </button>
+                    </div>
+                  ) : (
+                    userPlaylists.map((pl) => {
+                      const isMasterAdmin = savedSecurityCode === "ho82788278";
+                      const canWrite = pl.ownerId === user?.uid || isAdmin || isMasterAdmin;
+                      const isCurrentlyActive = selectedPlaylist?.id === pl.id;
+
+                      return (
+                        <button
+                          key={pl.id}
+                          type="button"
+                          disabled={!canWrite}
+                          onClick={() => setModalSelectedPlaylistId(pl.id)}
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                            modalSelectedPlaylistId === pl.id
+                              ? "bg-emerald-500/10 border-emerald-500 text-white select-none ring-1 ring-emerald-500/40"
+                              : "bg-white/5 hover:bg-white/10 border-transparent text-slate-300"
+                          } ${!canWrite ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            {pl.thumbnail_url ? (
+                              <img
+                                src={pl.thumbnail_url}
+                                alt={pl.name}
+                                referrerPolicy="no-referrer"
+                                className="w-10 h-10 rounded-lg object-cover border border-white/10"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-lg bg-white/10 flex items-center justify-center">
+                                <ListMusic className="w-5 h-5 text-slate-400" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="text-xs font-bold truncate pr-3 text-white">{pl.name}</p>
+                              <p className="text-[10px] text-slate-400">
+                                {pl.tracks?.length || 0} canciones
+                              </p>
+                            </div>
+                          </div>
+                          
+                          <div className="flex items-center gap-2 shrink-0">
+                            {isCurrentlyActive && (
+                              <span className="text-[8px] tracking-widest font-black uppercase bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md">
+                                Activa
+                              </span>
+                            )}
+                            {!canWrite && (
+                              <span className="text-[8px] tracking-widest font-black uppercase bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-md">
+                                Protegida
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              )}
+
+              {/* Action Footer Buttons */}
+              <div className="mt-auto flex gap-3 pt-4 border-t border-white/10 relative z-10 justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsAddingToPlaylistModalOpen(false);
+                    setTrackToAddDestination(null);
+                  }}
+                  className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    isProcessingModalAdd || 
+                    (modalSelectedPlaylistId === "new" ? !modalNewPlaylistName.trim() : modalSelectedPlaylistId === "new")
+                  }
+                  onClick={() => executeModalAddTrack(modalSelectedPlaylistId, modalSelectedPlaylistId === "new")}
+                  className="px-6 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 disabled:hover:bg-emerald-500 text-black rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg flex items-center gap-2 cursor-pointer"
+                >
+                  {isProcessingModalAdd ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Procesando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4" />
+                      <span>Añadir Ahora</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* OVERLAY: ADD PLAYLIST MODAL */}
       <AnimatePresence>
         {isAdding && (
@@ -3044,44 +3801,366 @@ export default function GymMusicPlayer() {
       </AnimatePresence>
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
-      
-      {accessData && !accessData.isValid && (
-        <div className="absolute inset-0 z-[99999] bg-black/95 backdrop-blur-3xl flex flex-col items-center justify-center p-8 text-center overscroll-none">
-          <Shield className="w-16 h-16 text-emerald-500 mb-6" />
-          <h2 className="text-3xl font-black mb-2 uppercase tracking-wider text-white">
-            {accessData.plan === "none" && !accessData.trialStart ? "Acceso Restringido" : "Acceso Suspendido"}
-          </h2>
-          <p className="text-slate-400 max-w-md mx-auto mb-8 text-sm font-medium leading-relaxed">
-            {accessData.plan === "none" && !accessData.trialStart 
-              ? "Para evitar abusos con multi-cuentas, el acceso es manual. Solicita tu prueba gratuita de 7 días al administrador para acceder a todas las funciones."
-              : "Tu período de prueba o suscripción ha expirado. Por favor, selecciona un plan para continuar disfrutando de Gym Music."}
-          </p>
-          <div className="bg-white/5 border border-white/10 rounded-3xl p-6 w-full max-w-sm mb-6 flex flex-col gap-3 shadow-2xl">
-             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Prueba Gratis (7 Días)</span>
-                <span className="text-emerald-400 font-black text-sm">GRATIS</span>
-             </div>
-             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5 mt-2">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 31 Días</span>
-                <span className="text-emerald-400 font-black text-sm">$4.99</span>
-             </div>
-             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 3 Meses</span>
-                <span className="text-emerald-400 font-black text-sm">$12.99</span>
-             </div>
-             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 6 Meses</span>
-                <span className="text-emerald-400 font-black text-sm">$22.99</span>
-             </div>
-             <div className="flex justify-between items-center bg-black/40 p-3.5 rounded-xl border border-white/5">
-                <span className="text-[11px] font-black uppercase tracking-widest text-slate-300">Plan 12 Meses</span>
-                <span className="text-emerald-400 font-black text-sm">$39.99</span>
-             </div>
-          </div>
 
-          <button onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} className="bg-emerald-500 text-black px-8 py-4 rounded-full font-black uppercase text-xs tracking-widest shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer">
-            Contactar Soporte
-          </button>
+      {/* OVERLAY: SPOTIFY-STYLE MULTI-OPTION PLAYLIST COPIER */}
+      <AnimatePresence>
+        {playlistToCopy && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
+            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 bg-black/85"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              className="w-full max-w-lg bg-[#121212] border border-white/10 rounded-[32px] p-6 sm:p-8 shadow-[0_24px_60px_rgba(0,0,0,0.8)] relative overflow-hidden"
+            >
+              {/* Green layout ambient glow */}
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-64 h-32 bg-[#1ED760]/10 blur-[60px] pointer-events-none rounded-full" />
+
+              <div className="flex justify-between items-start mb-6 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#1ED760]/10 rounded-xl flex items-center justify-center border border-[#1ED760]/20 shrink-0">
+                    <ListPlus className="w-5 h-5 text-[#1ED760]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-white tracking-[0.2em]">Guardar Canal</h3>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-1 font-sans">
+                      Añade "{playlistToCopy.name}" a tu perfil
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setPlaylistToCopy(null)}
+                  className="p-2.5 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all transform hover:rotate-90 cursor-pointer text-center flex items-center justify-center"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Selection cards */}
+              <div className="space-y-5 relative z-10">
+                <p className="text-[11px] text-slate-400 font-semibold leading-relaxed">
+                  ¿Dónde quieres guardar este canal en tu biblioteca? Elige una opción:
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Option 1: Create a new playlist */}
+                  <button
+                    type="button"
+                    onClick={() => setTargetPlaylistIdForCopy("new")}
+                    className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                      targetPlaylistIdForCopy === "new"
+                        ? "bg-[#1f1f1f] border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.15)]"
+                        : "bg-[#181818] border-white/5 hover:border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${targetPlaylistIdForCopy === "new" ? "border-[#1ED760]" : "border-slate-500"}`}>
+                        {targetPlaylistIdForCopy === "new" && <div className="w-2 bg-[#1ED760] h-2 rounded-full" />}
+                      </div>
+                      <span className="text-xs font-black text-white uppercase tracking-wider font-sans">Crear Nuevo Canal</span>
+                    </div>
+                    <p className="text-[9.5px] text-slate-400 leading-snug">
+                      Clona el canal de la comunidad como una lista independiente.
+                    </p>
+                  </button>
+
+                  {/* Option 2: Add to an existing playlist (enabled only if they own at least one) */}
+                  <button
+                    type="button"
+                    disabled={userPlaylists.filter(p => p.ownerId === user?.uid).length === 0}
+                    onClick={() => {
+                      const owned = userPlaylists.filter(p => p.ownerId === user?.uid);
+                      if (owned.length > 0) {
+                        setTargetPlaylistIdForCopy(owned[0].id);
+                      }
+                    }}
+                    className={`p-4 rounded-2xl border text-left cursor-pointer transition-all ${
+                      userPlaylists.filter(p => p.ownerId === user?.uid).length === 0 ? "opacity-40 grayscale cursor-not-allowed" : ""
+                    } ${
+                      targetPlaylistIdForCopy !== "new"
+                        ? "bg-[#1f1f1f] border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.15)]"
+                        : "bg-[#181818] border-white/5 hover:border-white/10"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${targetPlaylistIdForCopy !== "new" ? "border-[#1ED760]" : "border-slate-500"}`}>
+                        {targetPlaylistIdForCopy !== "new" && <div className="w-2 bg-[#1ED760] h-2 rounded-full" />}
+                      </div>
+                      <span className="text-xs font-black text-white uppercase tracking-wider font-sans">Añadir a Existente</span>
+                    </div>
+                    <p className="text-[9.5px] text-slate-400 leading-snug">
+                      Agrega las canciones de este canal a una de tus listas personales.
+                    </p>
+                  </button>
+                </div>
+
+                {/* Subforms based on choice */}
+                {targetPlaylistIdForCopy === "new" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3 bg-[#181818] p-4 rounded-2xl border border-white/5"
+                  >
+                    <div>
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1 font-sans">Nombre del Canal</label>
+                      <input
+                        type="text"
+                        value={copyPlaylistNameInput}
+                        onChange={(e) => setCopyPlaylistNameInput(e.target.value)}
+                        placeholder="Mi Lista de Música..."
+                        className="w-full bg-[#121212] border border-white/5 focus:border-[#1ED760]/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-[#1ED760]/20 transition-all font-medium"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[8px] font-black text-slate-500 uppercase tracking-widest block mb-1 font-sans">Descripción</label>
+                      <input
+                        type="text"
+                        value={copyPlaylistDescInput}
+                        onChange={(e) => setCopyPlaylistDescInput(e.target.value)}
+                        placeholder="Breve descripción..."
+                        className="w-full bg-[#121212] border border-white/5 focus:border-[#1ED760]/40 rounded-xl px-3.5 py-2 text-xs text-white outline-none focus:ring-1 focus:ring-[#1ED760]/20 transition-all font-medium"
+                      />
+                    </div>
+                  </motion.div>
+                )}
+
+                {targetPlaylistIdForCopy !== "new" && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-3 bg-[#181818] p-4 rounded-2xl border border-white/5"
+                  >
+                    <div>
+                      <label className="text-[8px] font-black text-slate-300 uppercase tracking-widest block mb-1.5 font-sans">Elige tu Canal Destino</label>
+                      <select
+                        value={targetPlaylistIdForCopy}
+                        onChange={(e) => setTargetPlaylistIdForCopy(e.target.value)}
+                        className="w-full bg-[#121212] border border-white/5 rounded-xl p-3 text-xs text-white outline-none focus:border-[#1ED760]/50 transition-all font-bold tracking-wide cursor-pointer"
+                      >
+                        {userPlaylists
+                          .filter(p => p.ownerId === user?.uid)
+                          .map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.icon || "📂"} {p.name} ({p.tracks?.length || 0} canciones)
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  </motion.div>
+                )}
+
+                {/* Submit button */}
+                <div className="pt-2">
+                  <button
+                    type="button"
+                    onClick={handleProcessCopyPlaylist}
+                    disabled={isProcessingCopy || (targetPlaylistIdForCopy === "new" && !copyPlaylistNameInput.trim())}
+                    className="w-full py-4 bg-[#1ED760] hover:bg-white text-black hover:scale-[1.01] active:scale-[0.99] transition-all disabled:opacity-40 disabled:scale-100 disabled:cursor-not-allowed font-black uppercase tracking-widest text-[10px] rounded-2xl cursor-pointer flex items-center justify-center gap-2 shadow-[0_8px_30px_rgba(30,215,96,0.15)] hover:shadow-[#1ED760]/20"
+                  >
+                    {isProcessingCopy ? (
+                      <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <>
+                        <ListPlus className="w-4.5 h-4.5" />
+                        <span>{targetPlaylistIdForCopy === "new" ? "CREAR CANAL EN MI PERFIL" : "FUSIONAR CON MI CANAL"}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
+
+      {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
+        <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000] backdrop-blur-3xl flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
+          {/* Authentic Spotify premium subtle ambient green glow */}
+          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[#1ED760]/10 blur-[120px] pointer-events-none animate-pulse" />
+
+          <div className="relative z-10 max-w-sm w-full bg-[#121212] border border-white/10 rounded-[28px] p-6 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.9)] flex flex-col items-center">
+            {/* Spotify Brand Emblem / Tech Vibe Dot */}
+            <div className="w-12 h-12 bg-black rounded-full border border-[#1ED760]/20 flex items-center justify-center mb-6 shadow-inner relative group">
+              <span className="absolute inset-0 rounded-full bg-[#1ED760]/10 blur-sm group-hover:bg-[#1ED760]/20 transition-all pointer-events-none" />
+              <Headphones className="w-5 h-5 text-[#1ED760] relative z-10 animate-bounce" />
+            </div>
+
+            {!user ? (
+              <>
+                <h1 className="text-3xl font-black tracking-tighter text-white uppercase mb-1 font-sans">
+                  FLUX PREMIUM
+                </h1>
+                
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-4 px-3 bg-[#1ED760]/10 py-1 rounded-full border border-[#1ED760]/20">
+                  Audio Analógico de Alta Fidelidad
+                </p>
+                
+                <p className="text-slate-400 max-w-xs mx-auto mb-5 text-xs font-semibold leading-relaxed">
+                  Únete al club de audio exclusivo más privado. Sin anuncios, sin límites de velocidad y optimizado para audiófilos exigentes.
+                </p>
+
+                {/* Spotify-style premium interactive dropdown block */}
+                <div className="w-full mb-5 text-left relative z-30">
+                  <button
+                    type="button"
+                    onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
+                    className="w-full bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-3 rounded-2xl flex items-center justify-between transition-all relative cursor-pointer text-left"
+                  >
+                    <div>
+                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Planes de Membresía ▾</span>
+                      <span className="text-[11px] font-black text-white uppercase tracking-wide">
+                        Ver Tarifas Premium
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold text-[#1ED760] bg-[#1ED760]/10 px-2.5 py-1 rounded-lg border border-[#1ED760]/10 font-sans">Desde $5.99/mes</span>
+                  </button>
+
+                  {/* Pricing tiers dropdown overlay container */}
+                  <AnimatePresence>
+                    {isMembershipDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="absolute top-full left-0 right-0 mt-1 bg-[#1c1c1e] border border-white/10 rounded-2xl p-3 z-30 shadow-[0_20px_50px_rgba(0,0,0,0.9)] space-y-2.5"
+                      >
+                        <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-white/5">
+                          <span>Plan Escogido</span>
+                          <span>Tarifa Mensual</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white">1 Usuario</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Individual</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$5.99</span>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white">2 Usuarios</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Duo</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$9.99</span>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white font-sans">Familiar</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Hasta 6 Cuentas</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$14.99</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+                
+                <button 
+                  onClick={() => setAuthModalOpen(true)} 
+                  className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-3.5 rounded-full font-black uppercase text-xs tracking-widest shadow-[0_10px_30px_rgba(30,215,96,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                >
+                  <LogIn className="w-4 h-4" />
+                  <span>Iniciar Sesión / Registro</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <h1 className="text-2xl font-black tracking-tight text-white uppercase mb-1 font-sans">
+                  {accessData.plan === "none" && !accessData.trialStart ? "Acceso Restringido" : "Fin de Suscripción"}
+                </h1>
+                
+                <p className="text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-5 px-3 bg-[#1ED760]/10 py-0.5 rounded-full border border-[#1ED760]/20">
+                  {accessData.plan === "none" && !accessData.trialStart ? "Privado • Pendiente de Alta" : "Membresía Expirada"}
+                </p>
+                
+                <p className="text-[#a7a7a7] max-w-xs mx-auto mb-6 text-xs font-medium leading-relaxed">
+                  {accessData.plan === "none" && !accessData.trialStart 
+                    ? "Para garantizar máxima estabilidad y baja latencia, controlamos manualmente el aforo. Adquiere o solicita tu prueba."
+                    : "Tu licencia ha finalizado. Restablece tu acceso a los canales de alta fidelidad renovando tu membresía."}
+                </p>
+                
+                {/* Spotify-style premium interactive dropdown block */}
+                <div className="w-full mb-6 space-y-2.5 text-left relative">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-[#181818] border border-white/5 p-3 rounded-2xl">
+                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Acceso Inicial</span>
+                      <span className="text-[11px] font-black text-[#1ED760] uppercase tracking-wide">Prueba 7 días</span>
+                    </div>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
+                      className="bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-3 rounded-2xl flex flex-col justify-between transition-all relative cursor-pointer text-left"
+                    >
+                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Membresía ▾</span>
+                      <span className="text-[11px] font-black text-white uppercase tracking-wide flex items-center justify-between w-full">
+                        <span>Ver Precios</span>
+                      </span>
+                    </button>
+                  </div>
+
+                  {/* Pricing tiers dropdown overlay container */}
+                  <AnimatePresence>
+                    {isMembershipDropdownOpen && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -4 }}
+                        className="absolute top-full left-0 right-0 mt-1 bg-[#1c1c1e] border border-white/10 rounded-2xl p-3 z-30 shadow-[0_20px_50px_rgba(0,0,0,0.9)] space-y-2.5"
+                      >
+                        <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-white/5">
+                          <span>Plan Escogido</span>
+                          <span>Tarifa Mensual</span>
+                        </div>
+                        
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white">1 Usuario</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Individual</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$5.99</span>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white">2 Usuarios</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Duo</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$9.99</span>
+                        </div>
+
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                          <div>
+                            <p className="text-xs font-black text-white font-sans">Familiar</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Hasta 6 Cuentas</span>
+                          </div>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$14.99</span>
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+
+                <div className="flex flex-col gap-3.5 w-full">
+                  <button 
+                    onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} 
+                    className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-3 rounded-full font-black uppercase text-[10px] tracking-widest shadow-[0_10px_25px_rgba(30,215,96,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    Contactar Administrador
+                  </button>
+                </div>
+              </>
+            )}
+
+          </div>
         </div>
       )}
 

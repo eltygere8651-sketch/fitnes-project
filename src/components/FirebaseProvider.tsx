@@ -9,6 +9,7 @@ export interface UserAccessData {
   plan: 'free' | '1mo' | '3mo' | '6mo' | '12mo' | null;
   isValid: boolean;
   daysRemaining: number;
+  maxUsers: number;
 }
 
 interface FirebaseContextType {
@@ -69,6 +70,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             let tStart: number | null = null;
             let subEnd: number | null = null;
             let planType: any = null;
+            let allowedUsers = 1;
             
             const now = Date.now();
             
@@ -80,10 +82,12 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 photoURL: u.photoURL,
                 lastLogin: serverTimestamp(),
                 trialStart: null,
-                plan: "none"
+                plan: "none",
+                maxUsers: 1
               });
               tStart = null;
               planType = "none";
+              allowedUsers = 1;
             } else {
               const data = userSnap.data();
               // Update last login
@@ -92,6 +96,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               tStart = data.trialStart || null;
               subEnd = data.subscriptionEnd || null;
               planType = data.plan || "free";
+              allowedUsers = data.maxUsers || 1;
             }
             
             let isValid = false;
@@ -103,16 +108,16 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                isValid = true;
                daysRemaining = 999;
             } else if (subEnd && subEnd > now) {
-               // Plan activo
-               isValid = true;
-               daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
+                // Plan activo
+                isValid = true;
+                daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
             } else if (planType === "free" && tStart) {
-               // Evaluar Trial (7 días)
-               const trialEnd = tStart + 7 * msPerDay;
-               if (trialEnd > now) {
-                 isValid = true;
-                 daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
-               }
+                // Evaluar Trial (7 días)
+                const trialEnd = tStart + 7 * msPerDay;
+                if (trialEnd > now) {
+                  isValid = true;
+                  daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
+                }
             }
             
             setAccessData({
@@ -120,7 +125,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               subscriptionEnd: subEnd,
               plan: planType,
               isValid,
-              daysRemaining
+              daysRemaining,
+              maxUsers: allowedUsers
             });
 
           } catch (e) {

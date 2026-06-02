@@ -124,10 +124,39 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 return (
                   <div key={u.id} className="bg-white/5 border border-white/5 rounded-2xl p-4 flex flex-col gap-4">
                      <div className="flex justify-between items-start">
-                        <div>
+                        <div className="space-y-1">
                            <p className="text-white font-bold text-sm">{u.displayName || "Sin Nombre"}</p>
                            <p className="text-slate-400 text-xs">{u.email}</p>
                            <p className="text-[10px] text-slate-500 mt-1">ID: {u.id}</p>
+                           
+                           {/* Spotify-type allowed concurrent users/devices permission config */}
+                           {u.email !== "eltygere8651@gmail.com" && (
+                             <div className="mt-3 bg-black/40 border border-white/5 p-2 rounded-xl space-y-1.5">
+                               <p className="text-[9px] font-black uppercase tracking-wider text-purple-400">Licencia de Usuarios:</p>
+                               <div className="flex gap-1">
+                                 {[1, 2, 6].map(num => (
+                                   <button
+                                     key={num}
+                                     onClick={async () => {
+                                       try {
+                                         await updateDoc(doc(db, "users", u.id), { maxUsers: num });
+                                         fetchUsers();
+                                       } catch (e) {
+                                         console.error(e);
+                                       }
+                                     }}
+                                     className={`px-2 py-1 text-[9px] font-black rounded-lg transition-all cursor-pointer ${
+                                       (u.maxUsers || 1) === num
+                                         ? "bg-purple-600 text-white shadow-md font-extrabold"
+                                         : "bg-white/5 text-slate-400 hover:bg-white/10"
+                                     }`}
+                                   >
+                                     {num === 1 ? "1 Usu." : num === 2 ? "2 Usu." : "Familiar (6)"}
+                                   </button>
+                                 ))}
+                               </div>
+                             </div>
+                           )}
                         </div>
                         <div className={`px-2 py-1 rounded text-[9px] font-black uppercase tracking-wider ${isActive ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/20 text-red-400 border border-red-500/20'}`}>
                            {statusText}

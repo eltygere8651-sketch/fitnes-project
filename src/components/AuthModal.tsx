@@ -1,13 +1,15 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
 import { loginWithGoogle, loginWithEmail, signupWithEmail } from "../lib/firebase";
-import { X, LogIn, Mail, Lock, Shield, Sparkles, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
+import { X, LogIn, Mail, Lock, Shield, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useFirebase();
+  const [authType, setAuthType] = useState<"login" | "signup">("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [nickname, setNickname] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -46,7 +48,7 @@ export const AuthModal: React.FC = () => {
 
   const handleEmailAction = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim() || !password.trim()) {
+    if (!email.trim() || !password.trim() || (authType === "signup" && !nickname.trim())) {
       setErrorMsg("Por favor, rellena todos los campos.");
       return;
     }
@@ -56,48 +58,12 @@ export const AuthModal: React.FC = () => {
     setSuccessMsg(null);
 
     try {
-      // 1. Try to log in first
-      try {
+      if (authType === "login") {
         await loginWithEmail(email.trim(), password);
-        setSuccessMsg("¡Sesión iniciada con éxito!");
-      } catch (loginErr: any) {
-        console.warn("Login failed, attempting auto-sign up...", loginErr);
-        const code = loginErr?.code || "";
-        
-        // If the user doesn't exist yet, we register them automatically
-        if (
-          code === "auth/user-not-found" || 
-          code === "auth/invalid-credential" || 
-          loginErr?.message?.toLowerCase().includes("not-found") || 
-          loginErr?.message?.toLowerCase().includes("no user record")
-        ) {
-          try {
-            await signupWithEmail(email.trim(), password);
-            setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito!");
-          } catch (signupErr: any) {
-            console.error("Auto sign-up error:", signupErr);
-            const subCode = signupErr?.code || "";
-            // If email is already in use, it means they got wrong password during login
-            if (subCode === "auth/email-already-in-use") {
-              throw new Error("Contraseña incorrecta para este correo electrónico.");
-            } else if (subCode === "auth/weak-password") {
-              throw new Error("La contraseña debe ser más segura (mínimo 6 caracteres).");
-            } else if (subCode === "auth/invalid-email") {
-              throw new Error("Formato de correo electrónico no válido.");
-            } else {
-              throw signupErr;
-            }
-          }
-        } else {
-          // If the error was some other error (like invalid-email, etc.), throw it
-          if (code === "auth/invalid-email") {
-            throw new Error("Formato de correo electrónico no válido.");
-          } else if (code === "auth/wrong-password") {
-            throw new Error("Contraseña incorrecta para esta cuenta.");
-          } else {
-            throw loginErr;
-          }
-        }
+        setSuccessMsg("¡Sesión iniciada con éxito! Iniciando...");
+      } else {
+        await signupWithEmail(email.trim(), password, nickname.trim());
+        setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito! Iniciando...");
       }
 
       setTimeout(() => {
@@ -105,8 +71,29 @@ export const AuthModal: React.FC = () => {
         window.location.reload();
       }, 1200);
     } catch (err: any) {
-      console.error("Unfied Auth error:", err);
-      setErrorMsg(err?.message || "Por favor verifica tus datos de acceso.");
+      console.error("Unified Auth error:", err);
+      const code = err?.code || "";
+      if (
+        code === "auth/user-not-found" || 
+        code === "auth/invalid-credential" || 
+        code === "auth/wrong-password" ||
+        err?.message?.toLowerCase().includes("not-found") || 
+        err?.message?.toLowerCase().includes("no user record")
+      ) {
+        if (authType === "login") {
+          setErrorMsg("Correo o contraseña incorrectos. Verifica tus datos o crea una cuenta.");
+        } else {
+          setErrorMsg("No se pudo registrar la cuenta. Comprueba los campos.");
+        }
+      } else if (code === "auth/email-already-in-use") {
+        setErrorMsg("Este correo electrónico ya está registrado. Por favor, selecciona Iniciar Sesión.");
+      } else if (code === "auth/weak-password") {
+        setErrorMsg("La contraseña debe tener al menos 6 caracteres.");
+      } else if (code === "auth/invalid-email") {
+        setErrorMsg("La dirección de correo electrónico es inválida.");
+      } else {
+        setErrorMsg(err?.message || "Por favor verifica tus datos de acceso.");
+      }
     } finally {
       setIsLoading(false);
     }
@@ -129,12 +116,12 @@ export const AuthModal: React.FC = () => {
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: 15 }}
           transition={{ type: "spring", damping: 25, stiffness: 350 }}
-          className="relative w-full max-w-md bg-[#0d0d0f] border border-white/10 rounded-[28px] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.3)] flex flex-col z-10 max-h-[92vh]"
+          className="relative w-full max-w-md bg-[#0d0d0f] border border-white/10 rounded-[28px] overflow-hidden shadow-[0_0_50px_rgba(30,215,96,0.15)] flex flex-col z-10 max-h-[92vh]"
         >
-          {/* Glow decoration */}
-          <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-400" />
+          {/* Top border ambient glow accent */}
+          <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-emerald-500 via-[#1ED760] to-teal-500" />
 
-          {/* Modal Close */}
+          {/* Modal Close Button */}
           <div className="absolute top-4 right-4 z-20">
             <button
               onClick={() => setAuthModalOpen(false)}
@@ -144,43 +131,100 @@ export const AuthModal: React.FC = () => {
             </button>
           </div>
 
-          {/* Header content (Static) */}
-          <div className="p-6 pb-4 text-center shrink-0 border-b border-white/5">
-            <h2 className="text-xl font-black uppercase tracking-wider text-[#1ED760] drop-shadow-[0_0_10px_rgba(30,215,96,0.2)]">
-              ENTRAR A FLUX PLAYER
-            </h2>
-            <p className="text-[11.5px] text-slate-300 mt-1.5 px-3 leading-relaxed font-bold">
-              Introduce tu correo y contraseña. Si no tienes cuenta, se creará una gratis de inmediato.
-            </p>
+          {/* Premium Logo & Text Info Header */}
+          <div className="p-6 pb-4 text-center shrink-0 border-b border-white/5 flex flex-col items-center">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[20px] filter drop-shadow">⚡</span>
+              <h2 className="text-lg font-black uppercase tracking-widest text-[#1ED760]">
+                FLUX PLAYER
+              </h2>
+            </div>
+            
+            {/* Spotify-style compact tabs for toggling sign-in vs sign-up */}
+            <div className="flex bg-white/[0.03] p-1 rounded-full border border-white/5 w-full max-w-[290px] mx-auto mt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthType("login");
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 py-2 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 text-center cursor-pointer ${
+                  authType === "login"
+                    ? "bg-[#1ED760] text-black shadow-lg font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Iniciar Sesión
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthType("signup");
+                  setErrorMsg(null);
+                  setSuccessMsg(null);
+                }}
+                className={`flex-1 py-2 px-4 rounded-full text-[10px] font-black uppercase tracking-wider transition-all duration-300 text-center cursor-pointer ${
+                  authType === "signup"
+                    ? "bg-[#1ED760] text-black shadow-lg font-black"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Registrarme
+              </button>
+            </div>
           </div>
 
-          {/* Scrollable content container for perfect mobile/iOS viewport support */}
-          <div className="overflow-y-auto px-6 pb-6 pt-4 space-y-4 max-h-[62vh] scrollbar-thin scrollbar-thumb-white/5 flex flex-col items-center">
+          {/* Scrollable content container for perfect viewport support */}
+          <div className="overflow-y-auto px-6 pb-6 pt-5 space-y-5 max-h-[64vh] scrollbar-thin scrollbar-thumb-white/5 flex flex-col items-center">
             
-            {/* Email + Password Form */}
-            <form onSubmit={handleEmailAction} className="space-y-4 pt-1 w-full">
-              {/* Target alerts */}
+            {/* Form Fields & Submit Form */}
+            <form onSubmit={handleEmailAction} className="space-y-4 w-full">
+              {/* Error messages */}
               {errorMsg && (
-                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-start gap-2">
+                <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-xl flex items-start gap-2 animate-shake">
                   <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span className="leading-snug">{errorMsg}</span>
+                  <span className="leading-snug font-medium">{errorMsg}</span>
                 </div>
               )}
 
+              {/* Success messages */}
               {successMsg && (
                 <div className="p-3 bg-[#1ED760]/10 border border-[#1ED760]/20 text-[#1ED760] text-xs rounded-xl flex items-start gap-2">
                   <Check className="w-4 h-4 shrink-0 mt-0.5 animate-bounce" />
-                  <span className="leading-snug">{successMsg}</span>
+                  <span className="leading-snug font-medium">{successMsg}</span>
                 </div>
               )}
 
-              {/* Form Fields: EMAIL */}
+              {/* Input for Nickname (Only visible when signing up) */}
+              {authType === "signup" && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black tracking-widest text-[#1ED760] uppercase block pl-1">
+                    Apodo / Nickname Público *
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                      <span className="text-[12px] font-bold">👤</span>
+                    </div>
+                    <input
+                      type="text"
+                      value={nickname}
+                      onChange={(e) => setNickname(e.target.value)}
+                      placeholder="Tu nombre público (sin mostrar tu email)"
+                      className="w-full pl-10 pr-4 py-3 bg-[#121214] border border-[#1ED760]/20 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
+                      required={authType === "signup"}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Input for Email */}
               <div className="space-y-1">
                 <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block pl-1">
                   Correo Electrónico
                 </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <Mail className="w-4 h-4" />
                   </div>
                   <input
@@ -188,21 +232,19 @@ export const AuthModal: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="ejemplo@correo.com"
-                    className="w-full pl-9 pr-3 py-2.5 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/55 focus:border-[#1ED760] transition-all font-medium"
+                    className="w-full pl-10 pr-4 py-3 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
                     required
                   />
                 </div>
               </div>
 
-              {/* Form Fields: PASSWORD */}
+              {/* Input for Password */}
               <div className="space-y-1">
-                <div className="flex justify-between items-center pl-1">
-                  <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block">
-                    Contraseña
-                  </label>
-                </div>
+                <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block pl-1">
+                  Contraseña
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-500">
+                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
                     <Lock className="w-4 h-4" />
                   </div>
                   <input
@@ -210,51 +252,56 @@ export const AuthModal: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full pl-9 pr-10 py-2.5 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/55 focus:border-[#1ED760] transition-all font-medium"
+                    className="w-full pl-10 pr-10 py-3 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
                     required
                   />
                   <button
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-500 hover:text-white transition-all cursor-pointer"
+                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white transition-all cursor-pointer"
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              {/* Submit Button */}
+              {/* Action main button based on tab */}
               <button
                 type="submit"
                 disabled={isLoading}
-                className="w-full py-3 bg-[#1ED760] font-black uppercase tracking-wider text-[10px] text-black rounded-xl hover:bg-white hover:text-black hover:scale-[1.01] transition-all active:scale-[0.99] shadow-lg shadow-[#1ED760]/10 flex items-center justify-center gap-2 cursor-pointer mt-1"
+                className="w-full py-3 bg-[#1ED760] font-black uppercase tracking-wider text-[10px] text-black rounded-xl hover:bg-white hover:text-black hover:scale-[1.01] transition-all active:scale-[0.99] shadow-lg shadow-[#1ED760]/10 flex items-center justify-center gap-2 cursor-pointer mt-2"
               >
                 {isLoading ? (
                   <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin" />
+                ) : authType === "login" ? (
+                  <>
+                    <LogIn className="w-4 h-4 text-black" />
+                    <span>Iniciar Sesión</span>
+                  </>
                 ) : (
                   <>
-                    <LogIn className="w-4 h-4" />
-                    <span>EMPEZAR A ESCUCHAR</span>
+                    <UserPlus className="w-4 h-4 text-black" />
+                    <span>Crear Cuenta Gratis</span>
                   </>
                 )}
               </button>
             </form>
 
-            {/* Separator bar */}
+            {/* Premium Separator indicator */}
             <div className="relative flex py-1 items-center w-full">
               <div className="flex-grow border-t border-white/5" />
-              <span className="flex-shrink mx-3 text-[8px] font-black uppercase text-slate-500 tracking-widest">
-                O también con
+              <span className="flex-shrink mx-3 text-[8.5px] font-black uppercase text-slate-500 tracking-widest leading-none select-none">
+                {authType === "login" ? "o iniciar sesión con" : "o registrarse con"}
               </span>
               <div className="flex-grow border-t border-white/5" />
             </div>
 
-            {/* Google Sign-in trigger */}
+            {/* Google provider button login alternative */}
             <button
               type="button"
               onClick={handleGoogleLogin}
               disabled={isLoading}
-              className="w-full py-3 bg-white/5 border border-white/10 text-white font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-white/10 transition-all flex items-center justify-center gap-2 cursor-pointer"
+              className="w-full py-3 bg-white/5 border border-white/10 text-white font-black uppercase tracking-widest text-[9px] rounded-xl hover:bg-white/10 hover:border-white/20 hover:scale-[1.01] active:scale-[0.99] transition-all flex items-center justify-center gap-2 cursor-pointer"
             >
               <svg className="w-4 h-4 mr-1 shrink-0 text-[#1ED760]" viewBox="0 0 24 24">
                 <path
@@ -274,10 +321,11 @@ export const AuthModal: React.FC = () => {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Continuar con Google</span>
+              <span>Google</span>
             </button>
 
-            <div className="text-[9px] text-slate-500 text-center flex items-center justify-center gap-1.5 bg-white/[0.01] border border-white/[0.03] p-2.5 rounded-xl">
+            {/* Bottom secure certificate indicator badge */}
+            <div className="text-[9px] text-slate-500 text-center flex items-center justify-center gap-1.5 bg-white/[0.01] border border-white/[0.03] p-2.5 rounded-xl w-full">
               <Shield className="w-3.5 h-3.5 text-[#1ED760]" />
               <span>Conexión segura SSL. Datos protegidos.</span>
             </div>

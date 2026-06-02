@@ -1,15 +1,77 @@
 import React, { useState, useEffect } from "react";
-import { collection, getDocs, doc, updateDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash } from "lucide-react";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [requests, setRequests] = useState<any[]>([]);
+  const [loadingRequests, setLoadingRequests] = useState(true);
 
   useEffect(() => {
     fetchUsers();
+    fetchRequests();
   }, []);
+
+  const fetchRequests = async () => {
+    try {
+      setLoadingRequests(true);
+      const snap = await getDocs(collection(db, "trial_requests"));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setRequests(list);
+    } catch (e) {
+      console.error("Error loaded trial requests:", e);
+    } finally {
+      setLoadingRequests(false);
+    }
+  };
+
+  const handleApproveRequest = async (req: any) => {
+    try {
+      if (!window.confirm(`¿Aprobar prueba de 7 días para ${req.email}?`)) return;
+      
+      await updateDoc(doc(db, "users", req.uid), {
+        plan: "free",
+        trialStart: Date.now(),
+        subscriptionEnd: null
+      });
+
+      await updateDoc(doc(db, "trial_requests", req.id), {
+        status: "approved"
+      });
+
+      alert("Acceso de prueba activado y solicitud aprobada con éxito!");
+      fetchUsers();
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+      alert("Error al aprobar la solicitud. Revisa si el usuario existe.");
+    }
+  };
+
+  const handleRejectRequest = async (reqId: string) => {
+    try {
+      if (!window.confirm("¿Rechazar esta solicitud de prueba?")) return;
+      await updateDoc(doc(db, "trial_requests", reqId), {
+        status: "rejected"
+      });
+      alert("Solicitud rechazada.");
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteRequestRecord = async (reqId: string) => {
+    try {
+      if (!window.confirm("¿Eliminar registro de esta solicitud?")) return;
+      await deleteDoc(doc(db, "trial_requests", reqId));
+      fetchRequests();
+    } catch (err) {
+      console.error(err);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -93,6 +155,97 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         </div>
 
         <div className="overflow-y-auto p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
+          {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
+          <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
+            <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 7 Días ({requests.filter(r => r.status === "pending").length})
+            </h3>
+            
+            {loadingRequests ? (
+              <div className="text-xs text-slate-500 animate-pulse">Cargando solicitudes...</div>
+            ) : requests.length === 0 ? (
+              <p className="text-xs text-slate-500 font-medium">No hay ninguna solicitud registrada actualmente.</p>
+            ) : (
+              <div className="space-y-3">
+                {requests.map((r: any) => {
+                  const duplicateFp = requests.filter(req => req.fingerprint === r.fingerprint && req.uid !== r.uid).length > 0;
+                  const duplicateIp = requests.filter(req => req.ip === r.ip && req.uid !== r.uid && r.ip !== "N/A" && r.ip !== "IP_DETECTOR_FAILED").length > 0;
+                  const isFlagged = duplicateFp || duplicateIp;
+
+                  return (
+                    <div key={r.id} className={`p-4 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all ${
+                      r.status === "pending" 
+                        ? isFlagged 
+                          ? "bg-red-500/5 border-red-500/30 shadow-[0_4px_20px_rgba(239,68,68,0.05)]"
+                          : "bg-emerald-500/5 border-emerald-500/10"
+                        : "bg-white/[0.02] border-white/5 opacity-60"
+                    }`}>
+                      <div className="space-y-1.5 min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-white font-black text-xs uppercase tracking-wide">{r.displayName || "Socio Premium"}</span>
+                          <span className="text-[10px] text-slate-400 font-semibold truncate">({r.email})</span>
+                          
+                          {r.status === "approved" && (
+                            <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-emerald-500/10">Aprobado</span>
+                          )}
+                          {r.status === "rejected" && (
+                            <span className="px-2 py-0.5 bg-red-500/20 text-red-400 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-red-500/10">Rechazado</span>
+                          )}
+                          {r.status === "pending" && (
+                            <span className="px-2 py-0.5 bg-amber-500/25 text-amber-300 rounded-md text-[8.5px] font-black uppercase tracking-wider border border-amber-500/20 animate-pulse">Pendiente</span>
+                          )}
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[9px] font-mono text-slate-500">
+                          <span>IP: <strong className={duplicateIp && r.status === "pending" ? "text-red-400 font-black animate-pulse" : "text-white/40"}>{r.ip || "N/A"}</strong></span>
+                          <span>FINGERPRINT: <strong className={duplicateFp && r.status === "pending" ? "text-red-400 font-black" : "text-white/40"}>{r.fingerprint ? r.fingerprint.substring(0, 10) + "..." : "N/A"}</strong></span>
+                          <span>SOLICITADO: <span className="text-white/20">{r.createdAt ? new Date(r.createdAt).toLocaleString() : "N/A"}</span></span>
+                        </div>
+
+                        {isFlagged && r.status === "pending" && (
+                          <div className="mt-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg text-[9px] font-black uppercase tracking-wider text-red-400 flex items-center gap-1.5 animate-shake">
+                            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                            <span>Alerta: ¡Posible Multicuenta o VPN con el mismo dispositivo detectado!</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                        {r.status === "pending" && (
+                          <>
+                            <button
+                              onClick={() => handleApproveRequest(r)}
+                              className="px-3 py-1.5 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[9px] font-black uppercase tracking-widest rounded-lg transition-all cursor-pointer flex items-center gap-1.5"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5" /> Aprobar
+                            </button>
+                            <button
+                              onClick={() => handleRejectRequest(r.id)}
+                              className="px-3 py-1.5 bg-red-500/10 hover:bg-red-500/25 text-red-400 text-[9px] font-black uppercase tracking-widest rounded-lg transition-all border border-red-500/20 cursor-pointer"
+                            >
+                              Rechazar
+                            </button>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleDeleteRequestRecord(r.id)}
+                          className="p-1.5 bg-white/5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-all border border-white/5 cursor-pointer flex items-center justify-center"
+                          title="Eliminar Registro"
+                        >
+                          <Trash className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">
+            <Shield className="w-4 h-4 text-purple-400" /> Todos los Usuarios Registrados ({users.length})
+          </h3>
+
           {loading ? (
              <div className="text-center py-12 text-slate-500 text-sm font-medium animate-pulse">Cargando usuarios...</div>
           ) : (

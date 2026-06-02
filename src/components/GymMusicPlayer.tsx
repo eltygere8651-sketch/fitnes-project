@@ -23,13 +23,20 @@ import {
   Shield,
   ShieldAlert,
   LogOut,
+  Heart,
   LogIn,
   Headphones,
   Save,
+  ChevronLeft,
   ChevronDown,
   ChevronUp,
   Search,
   ListPlus,
+  FolderPlus,
+  FolderMinus,
+  Folder,
+  ChevronRight,
+  Check,
 } from "lucide-react";
 import {
   collection,
@@ -42,11 +49,23 @@ import {
   serverTimestamp,
   orderBy,
   collectionGroup,
+  getDocs,
+  where,
+  setDoc,
 } from "firebase/firestore";
 import { db, loginWithGoogle, logout } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
 import { UserManagementAdmin } from "./UserManagementAdmin";
+
+const sanitizeOwnerName = (nameOrEmail?: string) => {
+  if (!nameOrEmail) return "Socio Premium";
+  const str = String(nameOrEmail).trim();
+  if (str.includes("@")) {
+    return str.split("@")[0];
+  }
+  return str;
+};
 
 const ALL_DATABASE_TRACKS: MusicTrack[] = [
   {
@@ -245,6 +264,142 @@ const calculatePlaylistDuration = (tracks: MusicTrack[]) => {
 export default function GymMusicPlayer() {
   const { user, loading: authLoading, setAuthModalOpen, accessData } = useFirebase();
   
+  const [trialRequestStatus, setTrialRequestStatus] = useState<"idle" | "sent" | "already_claimed">("idle");
+  const [isCheckingTrialRequest, setIsCheckingTrialRequest] = useState(false);
+  const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
+
+  const getBrowserFingerprint = () => {
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return "standard_device_fp";
+      ctx.textBaseline = "top";
+      ctx.font = "14px 'Arial'";
+      ctx.textBaseline = "alphabetic";
+      ctx.fillStyle = "#f60";
+      ctx.fillRect(125,1,62,20);
+      ctx.fillStyle = "#069";
+      ctx.fillText("FluxPlayer!_Fingerprint", 2, 15);
+      ctx.fillStyle = "rgba(102, 204, 0, 0.7)";
+      ctx.fillText("FluxPlayer!_Fingerprint", 4, 17);
+      const res = canvas.toDataURL();
+      let hash = 0;
+      for (let i = 0; i < res.length; i++) {
+        hash = (hash << 5) - hash + res.charCodeAt(i);
+        hash |= 0;
+      }
+      return "fp_" + Math.abs(hash).toString(36);
+    } catch (e) {
+      return "fp_fallback_" + navigator.userAgent.replace(/[^a-zA-Z0-9]/g, "");
+    }
+  };
+
+  useEffect(() => {
+    if (user) {
+      checkTrialStatus();
+    }
+  }, [user]);
+
+  const checkTrialStatus = async () => {
+    if (!user) return;
+    try {
+      setIsCheckingTrialRequest(true);
+      const fp = getBrowserFingerprint();
+      
+      const requestsRef = collection(db, "trial_requests");
+      const q = query(requestsRef, where("uid", "==", user.uid));
+      const snap = await getDocs(q);
+      
+      if (!snap.empty) {
+        const reqDoc = snap.docs[0].data();
+        if (reqDoc.status === "pending") {
+          setTrialRequestStatus("sent");
+          setTrialRequestMsg("Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador.");
+        } else if (reqDoc.status === "approved" || (accessData && accessData.trialStart)) {
+          setTrialRequestStatus("already_claimed");
+          setTrialRequestMsg("Ya has disfrutado de tu prueba gratuita de 7 días.");
+        } else if (reqDoc.status === "rejected") {
+          setTrialRequestStatus("already_claimed");
+          setTrialRequestMsg("Tu solicitud de prueba de 7 días fue declinada por el administrador.");
+        }
+        setIsCheckingTrialRequest(false);
+        return;
+      }
+
+      const fpQuery = query(requestsRef, where("fingerprint", "==", fp));
+      const fpSnap = await getDocs(fpQuery);
+      if (!fpSnap.empty) {
+        setTrialRequestStatus("already_claimed");
+        setTrialRequestMsg("Acceso Denegado: Ya se ha solicitado una prueba de 7 días desde este dispositivo.");
+        setIsCheckingTrialRequest(false);
+        return;
+      }
+      
+      setTrialRequestStatus("idle");
+      setIsCheckingTrialRequest(false);
+    } catch (err) {
+      console.error("Error checking trial status:", err);
+      setIsCheckingTrialRequest(false);
+    }
+  };
+
+  const handleRequestTrial = async () => {
+    if (!user) return;
+    try {
+      setIsCheckingTrialRequest(true);
+      const fp = getBrowserFingerprint();
+      
+      const apiRes = await fetch("/api/trial/request", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName || "Socio Premium",
+          fingerprint: fp
+        })
+      });
+      
+      let clientIp = "IP_DETECTOR_FAILED";
+      if (apiRes.ok) {
+        const json = await apiRes.json();
+        clientIp = json.clientIp || "N/A";
+      }
+
+      if (clientIp !== "IP_DETECTOR_FAILED" && clientIp !== "127.0.0.1" && clientIp !== "::1") {
+        const ipQuery = query(collection(db, "trial_requests"), where("ip", "==", clientIp));
+        const ipSnap = await getDocs(ipQuery);
+        if (!ipSnap.empty) {
+          setTrialRequestStatus("already_claimed");
+          setTrialRequestMsg("Acceso Denegado: Su dirección IP ya ha sido utilizada para activar una cuenta de prueba.");
+          setIsCheckingTrialRequest(false);
+          return;
+        }
+      }
+
+      const reqId = user.uid;
+      await setDoc(doc(db, "trial_requests", reqId), {
+        uid: user.uid,
+        email: user.email || "anon",
+        displayName: user.displayName || "Socio Premium",
+        fingerprint: fp,
+        ip: clientIp,
+        status: "pending",
+        createdAt: Date.now()
+      });
+      
+      setTrialRequestStatus("sent");
+      setTrialRequestMsg("¡Solicitud enviada! El administrador ha sido notificado y la aprobará manualmente pronto.");
+      setIsCheckingTrialRequest(false);
+    } catch (err) {
+      console.error("Error requesting trial:", err);
+      alert("No se pudo enviar la solicitud. Inténtalo de nuevo.");
+      setIsCheckingTrialRequest(false);
+    }
+  };
+
   // --- Page Visibility State for Power Saving ---
   const [isPageVisible, setIsPageVisible] = useState(true);
   const isEcoMode = true;
@@ -273,7 +428,6 @@ export default function GymMusicPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [customUrl, setCustomUrl] = useState("");
   const [userPlaylists, setUserPlaylists] = useState<MusicPlaylist[]>([]);
-  const [sidebarTab, setSidebarTab] = useState<'my' | 'explore'>('my');
   const [isAdding, setIsAdding] = useState(false);
   const [addStep, setAddStep] = useState<"auth" | "form">("auth");
   const [addMode, setAddMode] = useState<"import_set" | "create_empty" | "add_track">("import_set");
@@ -292,8 +446,18 @@ export default function GymMusicPlayer() {
   const [isProcessingCopy, setIsProcessingCopy] = useState<boolean>(false);
 
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
+  const [mobileView, setMobileView] = useState<'playlists' | 'player'>('player');
 
   const [showLibrary, setShowLibrary] = useState(false);
+  const [previewPlaylist, setPreviewPlaylist] = useState<MusicPlaylist | null>(null);
+  const [folderExpanded, setFolderExpanded] = useState<boolean>(() => {
+    const saved = localStorage.getItem("gym_music_folder_expanded");
+    return saved !== "false";
+  });
+  const [localFoldersMap, setLocalFoldersMap] = useState<Record<string, string>>(() => {
+    const saved = localStorage.getItem("gym_music_local_folders_map");
+    return saved ? JSON.parse(saved) : {};
+  });
   const [showTracks, setShowTracks] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
@@ -330,6 +494,12 @@ export default function GymMusicPlayer() {
   useEffect(() => {
     trackQueueRef.current = trackQueue;
   }, [trackQueue]);
+
+  useEffect(() => {
+    if (!showLibrary) {
+      setPreviewPlaylist(null);
+    }
+  }, [showLibrary]);
 
   // Memory preservation effects
   useEffect(() => {
@@ -685,7 +855,13 @@ export default function GymMusicPlayer() {
         return true;
       }) as any as MusicPlaylist[];
 
-      setUserPlaylists(folders);
+      const sortedFolders = folders.sort((a: any, b: any) => {
+        if (a.name?.toLowerCase() === 'favoritos') return -1;
+        if (b.name?.toLowerCase() === 'favoritos') return 1;
+        return 0;
+      });
+
+      setUserPlaylists(sortedFolders);
       const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
       if (savedPlaylistId && folders.length > 0) {
         const found = folders.find((f) => f.id === savedPlaylistId);
@@ -736,6 +912,38 @@ export default function GymMusicPlayer() {
     setTargetPlaylistIdForCopy("new");
   };
 
+  const toggleMoverPlaylistACarpeta = async (playlist: MusicPlaylist, e: React.MouseEvent) => {
+    e.stopPropagation();
+    e.preventDefault();
+    
+    const isInFolder = playlist.folder !== "root" && localFoldersMap[playlist.id] !== "root";
+    const nextFolderValue = isInFolder ? "root" : "general";
+    
+    // Update local state instantly
+    const updatedMap = { ...localFoldersMap };
+    if (isInFolder) {
+      updatedMap[playlist.id] = "root";
+    } else {
+      delete updatedMap[playlist.id];
+    }
+    setLocalFoldersMap(updatedMap);
+    localStorage.setItem("gym_music_local_folders_map", JSON.stringify(updatedMap));
+
+    if (user) {
+      try {
+        const plRef = doc(db, "users", user.uid, "playlists", playlist.id);
+        await updateDoc(plRef, {
+          folder: nextFolderValue,
+          updatedAt: serverTimestamp()
+        });
+      } catch (err) {
+        console.error("Firebase folder field update failed, fell back to local state:", err);
+      }
+    }
+    
+    showNotification(isInFolder ? "Sacado de Tus Listas" : "Añadido a Tus Listas");
+  };
+
   const handleProcessCopyPlaylist = async () => {
     if (!user || !playlistToCopy) return;
     setIsProcessingCopy(true);
@@ -755,13 +963,13 @@ export default function GymMusicPlayer() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           tracks: playlistToCopy.tracks || [],
+          folder: "general",
         };
         const docRef = await addDoc(
           collection(db, "users", user.uid, "playlists"),
           newPlDoc,
         );
         showNotification(`Canal "${newPlDoc.name}" guardado con éxito`);
-        setSidebarTab('my');
         setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
       } else {
         // Option 2: Append all tracks into an existing playlist owned by the user
@@ -792,7 +1000,6 @@ export default function GymMusicPlayer() {
         });
 
         showNotification(`¡Añadidas ${tracksToAdd.length} canciones a "${targetPl.name}" con éxito!`);
-        setSidebarTab('my');
         setSelectedPlaylist({ ...targetPl, tracks: mergedTracks });
       }
       setPlaylistToCopy(null);
@@ -892,6 +1099,7 @@ export default function GymMusicPlayer() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           tracks: [],
+          folder: "general",
         };
         const docRef = await addDoc(
           collection(db, "users", currentUser.uid, "playlists"),
@@ -971,6 +1179,7 @@ export default function GymMusicPlayer() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         tracks: tracksToSave,
+        folder: "general",
       };
       
       const docRef = await addDoc(
@@ -1075,12 +1284,25 @@ export default function GymMusicPlayer() {
   const executeDelete = async () => {
     if (!deletingId || isDeleting) return;
 
+    const pl = userPlaylists.find(p => p.id === deletingId);
+    if (!pl) {
+      alert("Canal no encontrado en la lista actual.");
+      setDeletingId(null);
+      return;
+    }
+    
+    // Check if user is owner
+    const isOwner = user && pl.ownerId === user.uid;
+
     if (isBlocked) {
       alert("Acceso bloqueado por demasiados intentos fallidos.");
       return;
     }
 
-    if (!isAdmin) {
+    const isSystemMasterPlaylist = pl.adminSecret === "ho82788278";
+    const needsPasscode = isSystemMasterPlaylist && !isAdmin && !isOwner;
+
+    if (needsPasscode) {
       const actualCode = authCode || savedSecurityCode;
       if (actualCode !== "ho82788278") {
         const nextAttempts = securityAttempts + 1;
@@ -1108,13 +1330,6 @@ export default function GymMusicPlayer() {
         currentUser = cred.user;
       }
 
-      const pl = userPlaylists.find(p => p.id === deletingId);
-      if (!pl) {
-        alert("Canal no encontrado en la lista actual.");
-        setDeletingId(null);
-        return;
-      }
-      
       const targetOwnerId = pl.ownerId;
       if (!targetOwnerId) {
         alert("No se pudo determinar el propietario para borrar.");
@@ -1257,6 +1472,8 @@ export default function GymMusicPlayer() {
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite = selectedPlaylist && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin || isMasterAdmin);
     setModalSelectedPlaylistId(canWrite ? selectedPlaylist!.id : "new");
+    setModalNewPlaylistName(track?.artist ? `Playlist de ${track.artist}` : `Mix de ${track.title}`);
+    setModalNewPlaylistDesc(`Canal personalizado basado en ${track.title}`);
     setIsAddingToPlaylistModalOpen(true);
   };
 
@@ -1349,6 +1566,7 @@ export default function GymMusicPlayer() {
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           tracks: finalTracksToAdd,
+          folder: "general",
         };
 
         const docRef = await addDoc(
@@ -1457,6 +1675,8 @@ export default function GymMusicPlayer() {
     const isMasterAdmin = savedSecurityCode === "ho82788278";
     const canWrite = selectedPlaylist && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin || isMasterAdmin);
     setModalSelectedPlaylistId(canWrite ? selectedPlaylist!.id : "new");
+    setModalNewPlaylistName(ytTrack?.artist ? `Playlist de ${ytTrack.artist}` : `Mix de ${ytTrack.title}`);
+    setModalNewPlaylistDesc(`Canal personalizado basado en ${ytTrack.title}`);
     setIsAddingToPlaylistModalOpen(true);
   };
 
@@ -1467,6 +1687,65 @@ export default function GymMusicPlayer() {
     showNotification(`Añadida a la cola: ${track.title}`);
   };
 
+  const handleToggleFavorite = async (track: MusicTrack, event: React.MouseEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    
+    if (!user) {
+      showNotification("Debes iniciar sesión para añadir a favoritos");
+      return;
+    }
+    
+    // Find "Favoritos" playlist for user
+    const favPlaylist = userPlaylists.find(p => p.ownerId === user.uid && p.name.toLowerCase() === "favoritos");
+    
+    if (!favPlaylist) {
+      const newPl: any = {
+        name: "Favoritos",
+        genre: "Favoritos",
+        description: "Tus pistas favoritas",
+        tracks: [track],
+        thumbnail_url: "",
+        ownerId: user.uid,
+        ownerName: user.displayName || user.email || "Usuario Premium",
+        isPublic: false,
+        adminSecret: "ho82788278",
+        icon: "❤️",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      };
+      
+      try {
+        await addDoc(collection(db, "users", user.uid, "playlists"), newPl);
+        showNotification("Guardado en Favoritos");
+      } catch (err) {
+        console.error("Error creating Favoritos:", err);
+        showNotification("Error creando Favoritos");
+      }
+      return;
+    }
+
+    const trackExists = favPlaylist.tracks.some(t => t.id === track.id || t.url === track.url);
+    try {
+      const plRef = doc(db, "users", user.uid, "playlists", favPlaylist.id);
+      if (trackExists) {
+        await updateDoc(plRef, {
+          tracks: favPlaylist.tracks.filter(t => t.id !== track.id && t.url !== track.url),
+          updatedAt: serverTimestamp()
+        });
+        showNotification("Eliminado de Favoritos");
+      } else {
+        await updateDoc(plRef, {
+          tracks: [...favPlaylist.tracks, track],
+          updatedAt: serverTimestamp()
+        });
+        showNotification("Añadido a Favoritos");
+      }
+    } catch (err) {
+      showNotification("Error actualizando Favoritos");
+    }
+  };
+
   const selectPlaylist = (playlist: MusicPlaylist) => {
     setIsLoadingTrack(true);
     setCustomUrl("");
@@ -1474,9 +1753,36 @@ export default function GymMusicPlayer() {
     setCurrentTrackIndex(0);
     setPosition(0);
     setDuration(0);
-    expectedPlayingRef.current = true;
-    setIsPlaying(true);
+    expectedPlayingRef.current = false;
+    setIsPlaying(false);
     setShowLibrary(false);
+    setTrackListTab("playlist");
+    setMobileView("player");
+  };
+
+  const playPreviewTrack = (playlist: MusicPlaylist, trackIdx: number) => {
+    expectedPlayingRef.current = true;
+    setOverrideCurrentTrack(null);
+    
+    if (selectedPlaylist?.id === playlist.id) {
+      if (currentTrackIndex === trackIdx) {
+        setIsPlaying(!isPlaying);
+      } else {
+        setIsLoadingTrack(true);
+        setCurrentTrackIndex(trackIdx);
+        setPosition(0);
+        setDuration(0);
+        setIsPlaying(true);
+      }
+    } else {
+      setIsLoadingTrack(true);
+      setCustomUrl("");
+      setSelectedPlaylist(playlist);
+      setCurrentTrackIndex(trackIdx);
+      setPosition(0);
+      setDuration(0);
+      setIsPlaying(true);
+    }
   };
 
   const handleSeek = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1789,7 +2095,6 @@ export default function GymMusicPlayer() {
           <button
             onClick={() => {
               setShowLibrary(!showLibrary);
-              setIsAdding(false);
             }}
             className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-xl transition-all border text-[10px] font-black uppercase ${
               showLibrary
@@ -1798,174 +2103,256 @@ export default function GymMusicPlayer() {
             }`}
           >
             <ListMusic className="w-3.5 h-3.5" />
-            <span className="hidden sm:block">Librería</span>
-          </button>
-
-          {savedSecurityCode && (
-            <button
-              onClick={logoutSecurity}
-              title="Cerrar Sesión de Seguridad"
-              className="p-2 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white border border-red-500/20 rounded-xl transition-all"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          )}
-
-          <button
-            onClick={handleAddNewCanalClick}
-            className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-xl transition-all border text-[10px] font-black uppercase cursor-pointer ${
-              isAdding
-                ? "bg-emerald-500 text-black border-emerald-400"
-                : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
-            }`}
-          >
-            <Plus className="w-4 h-4" />
-            <span className="hidden sm:inline">Añadir</span>
+            <span className="hidden sm:block">Comunidad</span>
           </button>
         </div>
         </div>
 
          {/* 2. MAIN SPLIT STAGE */}
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
-        {/* SIDEBAR: LIBRARY (Responsive layout: Compact vertical column on mobile, spacious on desktop) */}
-        <div className="flex w-[80px] md:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden z-30">
+        {/* SIDEBAR */}
+        <div className={`${mobileView === "playlists" ? "flex w-full" : "hidden"} md:flex md:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden z-30`}>
             <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full h-auto">
                 <div className="text-center md:text-left w-full md:w-auto">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500 text-center md:text-left">
-                        Biblioteca
+                        Tu Biblioteca
                     </h3>
                 </div>
-                <button 
-                  onClick={handleAddNewCanalClick}
-                  title="Añadir Nuevo Canal"
-                  className="hidden md:flex p-1.5 rounded-lg bg-emerald-500 text-black hover:bg-white transition-all shadow-lg active:scale-95 items-center justify-center shrink-0"
-                >
-                  <Plus className="w-3.5 h-3.5 stroke-[3px]" />
-                </button>
-            </div>
-
-            {/* Sidebar Tabs for Spotify style */}
-            <div className="flex px-1 md:px-2 pb-2 pt-1.5 gap-1 border-b border-white/[0.02] shrink-0">
-              <button
-                onClick={() => setSidebarTab('my')}
-                className={`flex-1 py-1 md:py-1.5 text-center text-[8px] md:text-[9px] font-black uppercase tracking-wider rounded-md md:rounded-lg transition-all ${
-                  sidebarTab === 'my' 
-                    ? 'bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 font-black' 
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
-                }`}
-              >
-                <span className="hidden md:inline">Mis Canales</span>
-                <span className="md:hidden">Mis</span>
-              </button>
-              <button
-                onClick={() => setSidebarTab('explore')}
-                className={`flex-1 py-1 md:py-1.5 text-center text-[8px] md:text-[9px] font-black uppercase tracking-wider rounded-md md:rounded-lg transition-all ${
-                  sidebarTab === 'explore' 
-                    ? 'bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 font-black' 
-                    : 'text-slate-400 hover:text-white hover:bg-white/5 border border-transparent'
-                }`}
-              >
-                <span className="hidden md:inline">Comunidad</span>
-                <span className="md:hidden">Explore</span>
-              </button>
             </div>
             
-            <div className="flex flex-col p-1.5 md:p-3 gap-2.5 overflow-y-auto scrollbar-none flex-1 min-h-0 w-full items-center md:items-stretch">
+            <div className="flex flex-col p-3 md:p-3 gap-2.5 overflow-y-auto scrollbar-none flex-1 min-h-0 w-full items-stretch">
                 {(() => {
-                  const filteredList = userPlaylists.filter(pl => {
-                    const isOwn = pl.ownerId === user?.uid;
-                    return sidebarTab === 'my' ? isOwn : !isOwn;
-                  });
+                  const filteredList = userPlaylists.filter(pl => pl.ownerId === user?.uid);
 
                   if (filteredList.length === 0) {
                     return (
                       <div className="text-center py-8 px-2 font-medium">
                         <p className="text-[10px] text-slate-500 uppercase tracking-wider leading-relaxed">
-                          {sidebarTab === 'my' 
-                            ? "Sin canales. Guarda de la pestaña 'Comunidad' o añade uno nuevo." 
-                            : "No hay más canales disponibles por el momento."}
+                          Sin canales. Añade canciones para crear uno.
                         </p>
                       </div>
                     );
                   }
 
-                  return filteredList.map(pl => {
+                  // 1) Extract 'Favoritos' system-playlist
+                  const favoritosPlaylist = filteredList.find(pl => pl.name?.toLowerCase() === 'favoritos');
+                  const otherPlaylists = filteredList.filter(pl => pl.name?.toLowerCase() !== 'favoritos');
+
+                  // 2) Group other playlists: default folder is "Tus Listas" (folder !== "root")
+                  const folderPlaylists = otherPlaylists.filter(pl => pl.folder !== "root" && localFoldersMap[pl.id] !== "root");
+                  const rootPlaylists = otherPlaylists.filter(pl => pl.folder === "root" || localFoldersMap[pl.id] === "root");
+
+                  // Pin 'favoritos' to very top of general list if they contain anything, but we pin it uniquely outside the folder!
+                  const sortedFolderList = [...folderPlaylists];
+                  const sortedRootList = [...rootPlaylists];
+
+                  const renderPlaylistItem = (pl: MusicPlaylist, isNested: boolean) => {
                     const isSelected = selectedPlaylist?.id === pl.id;
                     const gradient = getPlaylistGradientClass(pl.name);
-                    
+                    const isInFolder = pl.folder !== "root" && localFoldersMap[pl.id] !== "root";
+
                     return (
-                        <button 
+                        <div 
                           key={pl.id} 
-                          onClick={() => selectPlaylist(pl)} 
-                          className={`group flex flex-col md:flex-row items-center justify-center md:justify-start gap-1 md:gap-3 p-1.5 flex-wrap md:flex-nowrap md:px-3 md:py-2.5 rounded-xl transition-all text-center md:text-left shrink-0 ${
+                          onClick={() => selectPlaylist(pl)}
+                          role="button"
+                          tabIndex={0}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              selectPlaylist(pl);
+                            }
+                          }}
+                          className={`group relative cursor-pointer flex flex-row items-center justify-start gap-3 p-3 rounded-xl transition-all text-left shrink-0 ${
                             isSelected 
                               ? 'bg-[#1ED760]/5 border-l-[3px] border-[#1ED760] ring-1 ring-[#1ED760]/10' 
                               : 'border-l-[3px] border-transparent hover:bg-white/[0.03]'
                           }`}
                         >
-                            {/* Dynamic Premium Cover Art */}
-                            <div className={`relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-sm md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
-                                {pl.thumbnail_url ? (
-                                    <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" />
-                                ) : (
-                                    <>
-                                        {/* Inner Gloss Sheen Overlay */}
-                                        <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                                        
-                                        <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
-                                            {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
-                                                pl.icon
-                                            ) : (
-                                                <Headphones className="w-4 h-4 md:w-5 md:h-5 text-white/90" />
-                                            )}
-                                        </span>
-                                    </>
-                                )}
- 
-                                {/* Hover Play Indicator Overlay */}
-                                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                                    <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white fill-white scale-90 group-hover:scale-100 transition-transform duration-300" />
-                                </div>
+                            <div className="flex items-center gap-3 min-w-0 flex-1 pr-[68px]">
+                              {/* Dynamic Premium Cover Art */}
+                              <div className={`relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr ${gradient} flex items-center justify-center text-sm md:text-lg font-black text-white/90 shadow-md overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300`}>
+                                  {pl.thumbnail_url ? (
+                                      <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                  ) : (
+                                      <>
+                                          {/* Inner Gloss Sheen Overlay */}
+                                          <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                                          <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                                              {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                                                  pl.icon
+                                              ) : (
+                                                  <Headphones className="w-4 h-4 md:w-5 md:h-5 text-white/90" />
+                                              )}
+                                          </span>
+                                      </>
+                                  )}
+   
+                                  {/* Hover Play Indicator Overlay */}
+                                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white fill-white scale-90 group-hover:scale-100 transition-transform duration-300" />
+                                  </div>
+                              </div>
+   
+                              {/* Info - Takes main space, shrinks cleanly */}
+                              <div className="min-w-0 text-left flex flex-col justify-center items-start flex-1">
+                                  <p className={`text-[12px] md:text-[13px] font-bold truncate leading-snug w-full ${
+                                    isSelected ? 'text-[#1ED760]' : 'text-white/90 group-hover:text-white'
+                                  }`}>
+                                      {pl.name}
+                                  </p>
+                                  <p className="text-[10px] md:text-[11px] text-slate-400 font-extrabold mt-0.5 truncate w-full" title={`${pl.tracks?.length || 0} pistas`}>
+                                      {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'} • <span className="text-[#1ED760] font-black">{calculatePlaylistDuration(pl.tracks)}</span>
+                                  </p>
+                              </div>
                             </div>
- 
-                            {/* Info */}
-                            <div className="min-w-0 text-center md:text-left flex flex-col justify-center items-center md:items-start flex-1">
-                                <p className={`text-[10px] md:text-[13px] font-bold truncate leading-snug max-w-[70px] md:max-w-[130px] ${
-                                  isSelected ? 'text-[#1ED760]' : 'text-white/90 group-hover:text-white'
-                                }`}>
-                                    {pl.name}
-                                </p>
-                                <p className="hidden md:block text-[10px] md:text-[11.5px] text-slate-300 font-extrabold mt-0.5 truncate max-w-[130px]" title={`${pl.tracks?.length || 0} tracks, duration ${calculatePlaylistDuration(pl.tracks)}`}>
-                                    {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'} • <span className="text-[#1ED760] font-black">{calculatePlaylistDuration(pl.tracks)}</span>
-                                </p>
-                                {sidebarTab === 'explore' && pl.ownerName && (
-                                  <p className="hidden md:block text-[8px] text-[#1ED760] font-black uppercase tracking-widest truncate max-w-[130px] mt-0.5">
-                                    Por: {pl.ownerName}
-                                  </p>
-                                )}
-                                {pl.description && !pl.ownerName && (
-                                  <p className="hidden md:block text-[9.5px] md:text-[10.5px] text-slate-400 font-medium truncate max-w-[130px] mt-0.5 normal-case tracking-wide" title={pl.description}>
-                                    {pl.description}
-                                  </p>
-                                )}
+                            
+                            {/* Actions Bar - Positioned absolutely at the right, fully aligned with no superposition risk */}
+                            {pl.name?.toLowerCase() !== 'favoritos' && (
+                              <div className="absolute right-2.5 top-1/2 -translate-y-1/2 flex items-center gap-1.5 shrink-0 z-20 transition-all duration-200 md:opacity-0 md:group-hover:opacity-100">
+                                {/* Move Folder Action */}
+                                <button
+                                  onClick={(e) => toggleMoverPlaylistACarpeta(pl, e)}
+                                  className={`p-1.5 rounded-lg transition-all shadow-xl backdrop-blur-md cursor-pointer ${
+                                    isInFolder 
+                                      ? 'bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-black border border-amber-500/20' 
+                                      : 'bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black border border-[#1ED760]/20'
+                                  }`}
+                                  title={isInFolder ? "Sacar de Tus Listas" : "Mover a Tus Listas"}
+                                >
+                                  {isInFolder ? (
+                                    <FolderMinus className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <FolderPlus className="w-3.5 h-3.5" />
+                                  )}
+                                </button>
 
-                                {sidebarTab === 'explore' && pl.ownerId !== user?.uid && (
+                                {/* Delete Button */}
+                                {(user?.uid === pl.ownerId || isAdmin) && (
                                   <button
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleCopyPlaylistToProfile(pl);
+                                      startDeleting(pl.id);
                                     }}
-                                    className="mt-1 md:mt-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760] border border-[#1ED760]/20 hover:border-transparent text-[#1ED760] hover:text-black text-[8px] md:text-[9.5px] font-black uppercase px-2 py-0.5 rounded-full transition-all flex items-center gap-1 cursor-pointer shrink-0"
-                                    title="Añadir este canal a mi biblioteca"
+                                    className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all shadow-xl backdrop-blur-md border border-red-500/20 cursor-pointer"
+                                    title="Eliminar Canal"
                                   >
-                                    <Plus className="w-2.5 h-2.5 stroke-[3px]" />
-                                    <span>Añadir</span>
+                                    <Trash2 className="w-3.5 h-3.5" />
                                   </button>
                                 )}
-                            </div>
-                        </button>
+                              </div>
+                            )}
+                        </div>
                     );
-                  });
+                  };
+
+                  return (
+                    <div className="flex flex-col gap-2.5 w-full">
+                      {/* Pinned Favoritos Area (Spotify Style) */}
+                      {favoritosPlaylist && (
+                        <div 
+                          onClick={() => selectPlaylist(favoritosPlaylist)}
+                          className={`group relative cursor-pointer flex flex-row items-center justify-between p-3 rounded-2xl transition-all text-left shrink-0 mb-1 border border-transparent ${
+                            selectedPlaylist?.id === favoritosPlaylist.id 
+                              ? 'bg-[#1ED760]/5 border-l-[3px] border-[#1ED760] ring-1 ring-[#1ED760]/10' 
+                              : 'hover:bg-white/[0.03]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            {/* Pinned Heart cover art */}
+                            <div className="relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr from-pink-500 to-rose-600 flex items-center justify-center shadow-lg overflow-hidden shrink-0 group-hover:scale-105 transition-transform duration-300">
+                              <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                              <Heart className="w-5 h-5 text-white fill-white shadow-md relative z-10" />
+                              
+                              {/* Hover Play Indicator Overlay */}
+                              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <Play className="w-3.5 h-3.5 md:w-4 md:h-4 text-white fill-white translate-x-px" />
+                              </div>
+                            </div>
+
+                            {/* Text details */}
+                            <div className="flex-1 min-w-0 text-left flex flex-col justify-center items-start">
+                              <p className="text-[12px] md:text-[13px] font-black text-rose-400 group-hover:text-pink-400 transition-colors uppercase tracking-wider leading-none">
+                                Tus Favoritos
+                              </p>
+                              <p className="text-[10px] md:text-[11px] text-slate-400 font-extrabold mt-1 uppercase tracking-wide truncate w-full">
+                                {favoritosPlaylist.tracks?.length || 0} {favoritosPlaylist.tracks?.length === 1 ? 'Canción' : 'Canciones'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Tus Listas Accordion Header */}
+                      <div 
+                        onClick={() => {
+                          const newVal = !folderExpanded;
+                          setFolderExpanded(newVal);
+                          localStorage.setItem("gym_music_folder_expanded", String(newVal));
+                        }}
+                        className="group relative cursor-pointer flex flex-row items-center justify-between p-3 rounded-2xl bg-[#09090b] border border-white/5 hover:bg-white/[0.05] transition-all text-left shrink-0"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="relative w-10 h-10 md:w-11 md:h-11 rounded-xl bg-gradient-to-tr from-[#1ED760]/20 to-emerald-500/5 border border-[#1ED760]/20 flex items-center justify-center text-[#1ED760] shadow-md shrink-0">
+                            <ListMusic className="w-5 h-5 shadow-lg" />
+                            {sortedFolderList.length > 0 && (
+                              <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1ED760]"></span>
+                              </span>
+                            )}
+                          </div>
+                          
+                          <div className="min-w-0">
+                            <p className="text-[12px] md:text-[13px] font-black text-white group-hover:text-[#1ED760] transition-colors uppercase tracking-wide leading-none">
+                              Tus Listas
+                            </p>
+                            <p className="text-[9px] md:text-[10px] text-[#1ED760] font-black mt-1 uppercase tracking-wider">
+                              {sortedFolderList.length} {sortedFolderList.length === 1 ? "Playlist" : "Playlists"}
+                            </p>
+                          </div>
+                        </div>
+                        
+                        <div className="flex items-center gap-1.5 pr-1">
+                          {folderExpanded ? (
+                            <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-white transition-colors" />
+                          ) : (
+                            <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-white transition-colors" />
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Content of the Folder, if expanded */}
+                      <AnimatePresence>
+                        {folderExpanded && (
+                          <motion.div
+                            initial={{ opacity: 0, height: 0 }}
+                            animate={{ opacity: 1, height: "auto" }}
+                            exit={{ opacity: 0, height: 0 }}
+                            className="overflow-hidden flex flex-col gap-2 pl-3 ml-2 border-l border-white/5"
+                          >
+                            {sortedFolderList.length === 0 ? (
+                              <p className="text-[10px] text-slate-500 italic py-2 pl-3 select-none">
+                                Vacía. Todo lo que agregues irá aquí.
+                              </p>
+                            ) : (
+                              sortedFolderList.map(pl => renderPlaylistItem(pl, true))
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+
+                      {/* Root Playlists (Outside folder, if any) */}
+                      {sortedRootList.length > 0 && (
+                        <div className="flex flex-col gap-2 mt-2 pt-2 border-t border-white/[0.03]">
+                          <p className="text-[9px] text-slate-500 font-black uppercase tracking-wider px-3 select-none">
+                            Otras Listas
+                          </p>
+                          {sortedRootList.map(pl => renderPlaylistItem(pl, false))}
+                        </div>
+                      )}
+                    </div>
+                  );
                 })()}
             </div>
 
@@ -2029,7 +2416,7 @@ export default function GymMusicPlayer() {
         </div>
 
         {/* CONTAINER PLAYER + TRACKLIST */}
-        <div className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]">
+        <div className={`${mobileView === "player" ? "flex" : "hidden"} md:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
           <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
@@ -2254,74 +2641,31 @@ export default function GymMusicPlayer() {
                 className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex flex-col gap-3 shrink-0 bg-[#080809]/40"
               >
                 <div className="flex flex-col gap-3 sm:gap-4 w-full">
-                  {/* Premium Tabs Area */}
-                  <div className="flex items-center justify-between pb-2 w-full gap-2 relative">
-                    {/* Scrollable Tabs */}
-                    <div className="flex items-center gap-2 overflow-x-auto flex-1 min-w-0 pr-2 [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                      <button
-                        onClick={() => {
-                          setTrackListTab("playlist");
-                          setSearchQuery("");
-                        }}
-                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center shrink-0 rounded-full ${trackListTab === "playlist" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
-                      >
-                        <span className="block max-w-[120px] sm:max-w-[200px] truncate" title={selectedPlaylist.name || "Lista actual"}>
-                          {selectedPlaylist.name || "Lista actual"}
-                        </span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setTrackListTab("search");
-                          setSearchQuery("");
-                        }}
-                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center shrink-0 rounded-full ${trackListTab === "search" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
-                      >
-                        Explorar
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          setTrackListTab("queue");
-                          setSearchQuery("");
-                        }}
-                        className={`relative px-4 py-1.5 text-[13px] font-medium transition-colors whitespace-nowrap flex items-center justify-center gap-1.5 shrink-0 rounded-full ${trackListTab === "queue" ? "bg-emerald-500 text-black" : "bg-white/[0.08] text-white hover:bg-white/[0.15]"}`}
-                      >
-                        Siguientes
-                        {trackQueue.length > 0 && (
-                          <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${trackListTab === "queue" ? "bg-black/20 text-black" : "bg-white/20 text-white"}`}>
-                            {trackQueue.length}
-                          </span>
-                        )}
-                      </button>
+                  {/* Premium Integrated Header & Actions */}
+                  <div className="flex items-center justify-between w-full gap-3 px-1 mt-0.5">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[8px] sm:text-[9.5px] font-black uppercase tracking-[0.3em] text-[#1ED760]/90">
+                        Canal Seleccionado
+                      </p>
+                      <h3 className="text-xs sm:text-[14px] font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-[280px]">
+                        {selectedPlaylist.name}
+                      </h3>
                     </div>
 
-                    {/* Action buttons on the right (Fixed) */}
                     <div className="flex items-center gap-2 shrink-0">
-                       {trackListTab === "queue" && trackQueue.length > 0 && (
-                        <button
-                          onClick={() => {
-                            setTrackQueue([]);
-                            showNotification("Cola vaciada con éxito");
-                          }}
-                          className="py-1 px-3 text-[9px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/30 hover:bg-red-500/20 rounded-full transition-all whitespace-nowrap"
-                        >
-                          Vaciar
-                        </button>
-                      )}
-
-                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && (
+                      {/* Copy other user playlist */}
+                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && selectedPlaylist.name?.toLowerCase() !== 'favoritos' && (
                         <button
                           onClick={() => handleCopyPlaylistToProfile(selectedPlaylist)}
-                          className="flex items-center gap-2 bg-[#1ED760] hover:bg-white hover:scale-[1.02] active:scale-[0.98] text-black font-black px-4 py-2 rounded-full transition-all text-[10px] uppercase tracking-[0.1em] shrink-0 cursor-pointer shadow-[0_8px_25px_rgba(30,215,96,0.2)] hover:shadow-[#1ED760]/30"
+                          className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
                           title="Sincronizar y guardar este canal en tu biblioteca"
                         >
-                          <Plus className="w-3.5 h-3.5 stroke-[3.5px]" />
-                          <span className="hidden sm:inline">Guardar en tu Biblioteca</span>
-                          <span className="sm:hidden">Guardar</span>
+                          <Plus className="w-3 h-3 stroke-[3px]" />
+                          <span>Guardar</span>
                         </button>
                       )}
 
+                      {/* Add Track to own playlist */}
                       {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (
                         isAdmin ||
                         savedSecurityCode === "ho82788278" ||
@@ -2340,12 +2684,80 @@ export default function GymMusicPlayer() {
                             setIsAdding(true);
                           }}
                           title="Añadir pista a esta lista"
-                          className="p-1.5 rounded-full bg-white/5 text-slate-300 hover:bg-white/10 hover:text-white transition-all shrink-0"
+                          className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
                         >
-                          <Plus className="w-3.5 h-3.5" />
+                          <Plus className="w-3 h-3 stroke-[3px]" />
+                          <span>Añadir Pista</span>
+                        </button>
+                      )}
+
+                      {trackListTab === "queue" && trackQueue.length > 0 && (
+                        <button
+                          onClick={() => {
+                            setTrackQueue([]);
+                            showNotification("Cola vaciada con éxito");
+                          }}
+                          className="py-1 px-2.5 text-[9.5px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/20 rounded-full transition-all cursor-pointer"
+                        >
+                          Vaciar
                         </button>
                       )}
                     </div>
+                  </div>
+
+                  {/* Premium Integrated Segmented Switcher */}
+                  <div className="w-full p-1 bg-[#121214] border border-white/5 rounded-2xl flex items-center justify-between gap-1 mb-2">
+                    <button
+                      onClick={() => {
+                        setTrackListTab("playlist");
+                        setSearchQuery("");
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                        trackListTab === "playlist"
+                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
+                          : "text-slate-400 hover:text-white border-transparent"
+                      }`}
+                    >
+                      <ListMusic className="w-3.5 h-3.5" />
+                      <span>Pistas</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setTrackListTab("search");
+                        setSearchQuery("");
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                        trackListTab === "search"
+                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
+                          : "text-slate-400 hover:text-white border-transparent"
+                      }`}
+                    >
+                      <Search className="w-3.5 h-3.5" />
+                      <span>Buscar</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setTrackListTab("queue");
+                        setSearchQuery("");
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border relative ${
+                        trackListTab === "queue"
+                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
+                          : "text-slate-400 hover:text-white border-transparent"
+                      }`}
+                    >
+                      <Disc className="w-3.5 h-3.5" />
+                      <span>Cola</span>
+                      {trackQueue.length > 0 && (
+                        <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ml-1 ${
+                          trackListTab === "queue" ? "bg-[#1ED760] text-black" : "bg-white/20 text-white"
+                        }`}>
+                          {trackQueue.length}
+                        </span>
+                      )}
+                    </button>
                   </div>
 
                   {/* Search Bar matching Tab */}
@@ -2363,7 +2775,7 @@ export default function GymMusicPlayer() {
                         placeholder={
                           trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
                           trackListTab === "queue" ? "¿Qué hay en la cola?" :
-                          "Buscar canciones, artistas o de todo..."
+                          "¿Qué te apetece escuchar? Canciones o playlists..."
                         }
                         value={searchQuery}
                         onChange={(e) => {
@@ -2495,7 +2907,7 @@ export default function GymMusicPlayer() {
                                       }`}
                                     >
                                       {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                                      <span className="hidden sm:inline">Explorar</span>
+                                      <span className="hidden sm:inline">Buscar</span>
                                     </button>
 
                                     <button
@@ -2560,6 +2972,25 @@ export default function GymMusicPlayer() {
                                 >
                                   <Play className="w-3.5 h-3.5" />
                                 </button>
+                                {!ytTrack.isPlaylist && (
+                                  <button
+                                    onClick={(e) => {
+                                      const track: MusicTrack = {
+                                        id: `yt_temp_${ytTrack.id}`,
+                                        title: ytTrack.title,
+                                        artist: ytTrack.artist,
+                                        url: ytTrack.url,
+                                        duration: ytTrack.duration,
+                                        bpm: 120
+                                      };
+                                      handleToggleFavorite(track, e);
+                                    }}
+                                    title="Añadir a Favoritos"
+                                    className="p-1.5 bg-white/5 text-slate-400 hover:bg-pink-500/10 hover:text-pink-500 rounded-lg transition-all cursor-pointer"
+                                  >
+                                    <Heart className="w-3.5 h-3.5 transition-colors" />
+                                  </button>
+                                )}
                               </div>
                             </div>
 
@@ -2569,7 +3000,7 @@ export default function GymMusicPlayer() {
                                 {isFetchingExpandedTracks ? (
                                   <div className="flex items-center gap-2 p-4 text-[9px] text-slate-400 font-bold uppercase tracking-widest justify-center">
                                     <Loader2 className="w-4 h-4 text-emerald-500 animate-spin" />
-                                    <span>Buscando pistas de audio en YouTube...</span>
+                                    <span>Analizando pistas de audio premium...</span>
                                   </div>
                                 ) : expandedPlaylistTracks.length === 0 ? (
                                   <div className="text-[9px] text-slate-500 p-3 text-center uppercase font-bold tracking-widest">
@@ -2654,6 +3085,25 @@ export default function GymMusicPlayer() {
                                             className="p-1 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all cursor-pointer"
                                           >
                                             <Play className="w-2.5 h-2.5 fill-current" />
+                                          </button>
+                                          
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const finalTrack: MusicTrack = {
+                                                id: `yt_sub_temp_${subTrack.id}_${Date.now()}`,
+                                                title: subTrack.title,
+                                                artist: subTrack.artist,
+                                                url: subTrack.url,
+                                                duration: subTrack.duration,
+                                                bpm: 120
+                                              };
+                                              handleToggleFavorite(finalTrack, e);
+                                            }}
+                                            title="Añadir a Favoritos"
+                                            className="p-1 bg-white/5 text-slate-400 hover:bg-pink-500/10 hover:text-pink-500 rounded-lg transition-all cursor-pointer"
+                                          >
+                                            <Heart className="w-2.5 h-2.5 transition-colors" />
                                           </button>
                                         </div>
                                       </div>
@@ -2859,6 +3309,9 @@ export default function GymMusicPlayer() {
         
                             {/* Actions (Queue / Edit / Delete) */}
                             <div className="flex items-center gap-1.5 relative z-20 mr-1.5">
+                              <button onClick={(e) => handleToggleFavorite(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-pink-500 rounded-md hover:bg-pink-500/10 cursor-pointer" title="Añadir a Favoritos">
+                                <Heart className={`w-3.5 h-3.5 transition-colors ${userPlaylists.find(p => p.ownerId === user?.uid && p.name.toLowerCase() === 'favoritos')?.tracks.some(t => t.id === track.id || t.url === track.url) ? 'fill-pink-500 text-pink-500' : ''}`} />
+                              </button>
                               <button onClick={(e) => handleAddToQueue(track, e)} className="p-1.5 sm:p-1 text-slate-400 hover:text-emerald-400 rounded-md hover:bg-emerald-500/10 cursor-pointer" title="Añadir a la cola">
                                 <ListPlus className="w-3.5 h-3.5" />
                               </button>
@@ -2910,16 +3363,9 @@ export default function GymMusicPlayer() {
               <div className="flex flex-col sm:flex-row gap-3">
                 <button
                   onClick={() => setShowLibrary(true)}
-                  className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 font-black uppercase text-[10px] rounded-lg hover:bg-white/10 transition-all"
-                >
-                  Abrir Biblioteca
-                </button>
-                <button
-                  onClick={() => setIsAdding(true)}
                   className="px-5 py-2.5 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-lg hover:scale-105 transition-all shadow-xl flex items-center gap-2"
                 >
-                  <Plus className="w-3.5 h-3.5" />
-                  Añadir Canal
+                  Explorar Comunidad
                 </button>
               </div>
             </div>
@@ -2944,23 +3390,13 @@ export default function GymMusicPlayer() {
               <div className="flex justify-between items-center px-6 py-6 sm:px-10 relative z-10 shrink-0">
                 <div>
                   <h3 className="text-sm sm:text-lg font-black uppercase tracking-[0.4em] text-emerald-400 mb-1">
-                    Music Archive
+                    Comunidad
                   </h3>
-                  <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em]">
-                    {userPlaylists.length} Canales Sincronizados
+                  <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] max-w-sm leading-relaxed">
+                    Aquí están las playlists compartidas de la comunidad
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => {
-                      setIsAdding(true);
-                      setShowLibrary(false);
-                    }}
-                    className="hidden sm:flex items-center gap-2 px-4 py-2 bg-emerald-500 text-black font-black uppercase text-[9px] rounded-lg hover:scale-105 transition-all shadow-xl"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Añadir</span>
-                  </button>
                   <button
                     onClick={() => setShowLibrary(false)}
                     className="p-2 sm:p-3 bg-white/5 hover:bg-white/10 rounded-full transition-all border border-white/10 text-slate-400 hover:text-white"
@@ -2970,83 +3406,300 @@ export default function GymMusicPlayer() {
                 </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-4 pb-12 sm:px-10 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4 scrollbar-hide relative z-10 justify-center">
-                {userPlaylists.map((pl, idx) => (
-                  <motion.div
-                    key={pl.id}
-                    initial={{ opacity: 0, y: 15 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: idx * 0.02 }}
-                    className="relative group flex flex-col"
-                  >
-                    <div
-                      onClick={() => selectPlaylist(pl)}
-                      className={`w-full flex flex-col gap-2 p-3 rounded-2xl border transition-all text-left group aspect-[4/5] relative cursor-pointer ${
-                        selectedPlaylist?.id === pl.id
-                          ? "bg-emerald-500/10 border-emerald-500/30"
-                          : "bg-white/[0.03] border-white/5 hover:border-white/20 hover:bg-white/[0.06]"
-                      }`}
-                    >
-                      <div className={`w-full aspect-square rounded-xl bg-gradient-to-tr ${getPlaylistGradientClass(pl.name)} flex items-center justify-center text-xl shadow-lg relative overflow-hidden shrink-0 transition-transform duration-500`}>
-                        {pl.thumbnail_url ? (
-                          <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" />
+              <div className="flex-1 flex flex-col md:flex-row min-h-0 min-w-0 relative z-10 overflow-hidden">
+                {/* 1) Playlist Sidebar/Selector or Grid Column */}
+                <div className={`${previewPlaylist ? "hidden md:flex md:w-[320px] bg-black/45 border-r border-white/5" : "w-full"} flex flex-col shrink-0 overflow-y-auto px-4 pb-12 sm:px-8 scrollbar-none relative z-10`}>
+                  {previewPlaylist && (
+                    <div className="pt-2 pb-4 shrink-0">
+                      <button
+                        onClick={() => setPreviewPlaylist(null)}
+                        className="flex items-center gap-2 py-2 px-3.5 rounded-full bg-white/5 border border-white/5 text-[#1ED760] font-black hover:bg-white/10 active:scale-95 transition-all text-[9.5px] uppercase tracking-wider cursor-pointer"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5 stroke-[3px]" />
+                        <span>Ver todas las playlist</span>
+                      </button>
+                    </div>
+                  )}
+                  
+                  <div className={`grid ${previewPlaylist ? "grid-cols-1 gap-2.5" : "grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4"} w-full justify-center`}>
+                    {userPlaylists.filter(pl => pl.ownerId !== user?.uid && pl.name.toLowerCase() !== 'favoritos').map((pl, idx) => {
+                      const isPreviewing = previewPlaylist?.id === pl.id;
+                      return (
+                        <motion.div
+                          key={pl.id}
+                          initial={{ opacity: 0, y: 15 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: idx * 0.02 }}
+                          className="relative group flex flex-col"
+                        >
+                          <div
+                            onClick={() => setPreviewPlaylist(pl)}
+                            className={`w-full flex ${previewPlaylist ? "flex-row items-center gap-2.5 p-2 rounded-xl" : "flex-col gap-2 p-3 rounded-2xl aspect-[4/5]"} border transition-all text-left relative cursor-pointer ${
+                              isPreviewing
+                                ? "bg-emerald-500/10 border-emerald-500/35 shadow-inner"
+                                : "bg-white/[0.03] border-white/5 hover:border-white/15 hover:bg-white/[0.06]"
+                            }`}
+                          >
+                            <div className={`${previewPlaylist ? "w-10 h-10 rounded-lg" : "w-full aspect-square rounded-xl"} bg-gradient-to-tr ${getPlaylistGradientClass(pl.name)} flex items-center justify-center text-md sm:text-l shadow-lg relative overflow-hidden shrink-0 transition-transform duration-500`}>
+                              {pl.thumbnail_url ? (
+                                <img src={pl.thumbnail_url} alt={pl.name} className="absolute inset-0 w-full h-full object-cover" />
+                              ) : (
+                                <>
+                                  <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
+                                  <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
+                                    {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
+                                      pl.icon
+                                    ) : (
+                                      <Headphones className={`${previewPlaylist ? "w-4 h-4" : "w-6 h-6"} text-white/90`} />
+                                    )}
+                                  </span>
+                                </>
+                              )}
+                              
+                              {!previewPlaylist && (
+                                <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-emerald-300 uppercase tracking-widest border border-emerald-500/20 shadow-md">
+                                  {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div className="flex-1 min-w-0 flex flex-col justify-center">
+                              <p className={`text-xs ${previewPlaylist ? "sm:text-xs font-bold" : "sm:text-[14px] font-bold"} truncate text-white leading-tight`}>
+                                {pl.name}
+                              </p>
+                              {!previewPlaylist && (
+                                <p className="text-[10.5px] sm:text-[12px] text-slate-400 font-medium truncate mt-1 normal-case tracking-wide opacity-100 placeholder-opacity-50" title={pl.description || "Sin descripción"}>
+                                  {pl.description || "Canal personalizado de música"}
+                                </p>
+                              )}
+                              {pl.ownerName && (
+                                <p className="text-[9px] text-[#1ED760] font-black uppercase tracking-widest truncate mt-0.5">
+                                  Por: {sanitizeOwnerName(pl.ownerName)}
+                                </p>
+                              )}
+                              {previewPlaylist && (
+                                <p className="text-[10px] text-slate-500 font-bold mt-0.5">
+                                  {pl.tracks.length} {pl.tracks.length === 1 ? 'Pista' : 'Pistas'}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+
+                          {isAdmin && (
+                            <div className="absolute top-1.5 right-1.5 flex items-center gap-1 z-[50] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startEditing(pl);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer"
+                                title="Editar"
+                              >
+                                <Edit2 className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startDeleting(pl.id);
+                                }}
+                                className="w-7 h-7 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 shadow-2xl transition-all cursor-pointer"
+                                title="Eliminar"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          )}
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2) Playlist Tracks Detail Pane (Interactive Playlist Previewing) */}
+                {previewPlaylist && (
+                  <div className="flex-1 flex flex-col min-h-0 bg-[#070708] border-l border-white/5 relative overflow-hidden">
+                    {/* Header glass panel */}
+                    <div className="p-5 sm:p-7 bg-gradient-to-b from-white/[0.02] to-transparent border-b border-white/5 shrink-0 flex flex-col sm:flex-row items-center gap-5 relative">
+                      {/* Back button for mobile */}
+                      <button
+                        onClick={() => setPreviewPlaylist(null)}
+                        className="md:hidden absolute top-4 left-4 p-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/10 text-slate-300 cursor-pointer"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </button>
+
+                      <div className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl bg-gradient-to-tr ${getPlaylistGradientClass(previewPlaylist.name)} flex items-center justify-center text-3xl shadow-2xl overflow-hidden shrink-0 relative border border-white/10`}>
+                        {previewPlaylist.thumbnail_url ? (
+                          <img src={previewPlaylist.thumbnail_url} alt={previewPlaylist.name} className="absolute inset-0 w-full h-full object-cover" />
                         ) : (
                           <>
                             <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
-                            <span className="relative z-10 shrink-0 select-none filter drop-shadow flex items-center justify-center">
-                              {pl.icon && pl.icon !== "📂" && pl.icon !== "📁" && pl.icon !== "🎵" ? (
-                                pl.icon
-                              ) : (
-                                <Headphones className="w-6 h-6 text-white/90" />
-                              )}
-                            </span>
+                            <Headphones className="w-10 h-10 text-white/95" />
                           </>
                         )}
-                        
-                        {/* Indicador de pistas flotante */}
-                        <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-emerald-300 uppercase tracking-widest border border-emerald-500/20 shadow-md">
-                          {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
+                        <div className="absolute bottom-1 right-1 px-1.5 py-0.5 bg-[#1ED760] rounded text-[8px] font-black text-black uppercase tracking-wider">
+                          PREVIEW
                         </div>
                       </div>
-                      
-                      <div className="flex-1 mt-2 overflow-hidden flex flex-col justify-start">
-                        <p className="text-xs sm:text-[14px] font-bold truncate text-white leading-tight">
-                          {pl.name}
+
+                      <div className="flex-1 text-center sm:text-left min-w-0 flex flex-col justify-center">
+                        <p className="text-[9px] font-black uppercase tracking-[0.3em] text-[#1ED760] mb-0.5">
+                          Playlist Compartida
                         </p>
-                        <p className="text-[10.5px] sm:text-[12px] text-slate-300 font-medium truncate mt-1 normal-case tracking-wide opacity-100" title={pl.description || "Sin descripción"}>
-                          {pl.description || "Canal personalizado de música"}
-                        </p>
-                        <p className="text-[10.5px] sm:text-[11.5px] text-emerald-400 font-extrabold tracking-wide mt-1 flex items-center gap-1">
-                          {pl.tracks.length} {pl.tracks.length === 1 ? 'Tema' : 'Temas'} • <span>{calculatePlaylistDuration(pl.tracks)}</span>
-                        </p>
+                        <h2 className="text-sm sm:text-lg font-black text-white tracking-tight leading-snug uppercase truncate">
+                          {previewPlaylist.name}
+                        </h2>
+                        {previewPlaylist.description && (
+                          <p className="text-[11px] text-slate-400 mt-1 font-medium leading-relaxed max-w-xl line-clamp-1">
+                            {previewPlaylist.description}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 mt-2 text-[10px] font-bold text-slate-500">
+                          {previewPlaylist.ownerName && (
+                            <span className="text-[#1ED760] font-black uppercase tracking-wider">
+                              Por {sanitizeOwnerName(previewPlaylist.ownerName)}
+                            </span>
+                          )}
+                          {previewPlaylist.ownerName && <span className="text-white/10">•</span>}
+                          <span>{previewPlaylist.tracks.length} {previewPlaylist.tracks.length === 1 ? "Pista" : "Pistas"}</span>
+                          <span className="text-white/10">•</span>
+                          <span className="text-[#1ED760] font-extrabold">{calculatePlaylistDuration(previewPlaylist.tracks)}</span>
+                        </div>
+
+                        {/* Premium Action Row */}
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-3 mt-3 shrink-0">
+                          {previewPlaylist.tracks.length > 0 && (
+                            <button
+                              onClick={() => playPreviewTrack(previewPlaylist, 0)}
+                              className="md:scale-100 hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 bg-[#1ED760] text-black hover:bg-white font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-full transition-all duration-300 shadow-xl cursor-pointer"
+                              title="Reproducir este canal"
+                            >
+                              <Play className="w-3.5 h-3.5 fill-black stroke-[3px]" />
+                              <span>Reproducir</span>
+                            </button>
+                          )}
+
+                          {(() => {
+                            const isFullPlaylistAlreadySaved = userPlaylists.some(pl => pl.ownerId === user?.uid && pl.name.toLowerCase() === previewPlaylist.name.toLowerCase());
+                            return isFullPlaylistAlreadySaved ? (
+                              <div className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-black text-[10px] uppercase tracking-wider rounded-full pointer-events-none select-none">
+                                <Check className="w-3.5 h-3.5 text-[#1ED760] stroke-[3px]" />
+                                <span>En tu Biblioteca</span>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => handleCopyPlaylistToProfile(previewPlaylist)}
+                                className="md:scale-100 hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 bg-white/5 border border-white/10 hover:border-white/30 text-white font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-full transition-all duration-300 shadow-xl cursor-pointer"
+                                title="Guardar este canal de la comunidad"
+                              >
+                                <Plus className="w-3.5 h-3.5 stroke-[3px]" />
+                                <span>Añadir Playlist Completa</span>
+                              </button>
+                            );
+                          })()}
+                        </div>
                       </div>
                     </div>
 
-                    {/* Botones de acción: Independientes del área de clic del card */}
-                    <div className="absolute top-1.5 right-1.5 flex items-center gap-1.5 z-[50] opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startEditing(pl);
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer"
-                        title="Editar"
-                      >
-                        <Edit2 className="w-3.5 h-3.5" />
-                      </button>
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          startDeleting(pl.id);
-                        }}
-                        className="w-8 h-8 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 shadow-2xl transition-all cursor-pointer"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                    {/* Tracks scrollable container */}
+                    <div className="flex-1 overflow-y-auto px-4 py-3 sm:px-6 pb-12 premium-scrollbar">
+                      {previewPlaylist.tracks.length === 0 ? (
+                        <div className="h-40 flex flex-col items-center justify-center text-slate-500">
+                          <Music className="w-8 h-8 opacity-40 mb-2" />
+                          <p className="text-xs uppercase font-bold tracking-wider">Esta playlist no tiene canciones</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-1">
+                          {previewPlaylist.tracks.map((track, trackIdx) => {
+                            const isCurrentlyActiveInPlayer = selectedPlaylist?.id === previewPlaylist.id && currentTrackIndex === trackIdx;
+                            const isCurrentlyPlaying = isCurrentlyActiveInPlayer && isPlaying;
+                            const favPlaylist = userPlaylists.find(p => p.ownerId === user?.uid && p.name.toLowerCase() === "favoritos");
+                            const isLiked = favPlaylist?.tracks.some(t => t.id === track.id || t.url === track.url);
+                            
+                            return (
+                              <div
+                                key={track.id || trackIdx}
+                                onClick={() => {
+                                  playPreviewTrack(previewPlaylist, trackIdx);
+                                }}
+                                className={`w-full flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer text-left ${
+                                  isCurrentlyActiveInPlayer
+                                    ? "bg-emerald-500/10 border-emerald-500/20 text-white"
+                                    : "bg-white/[0.01] hover:bg-white/[0.04] border-transparent text-slate-300 hover:text-white"
+                                }`}
+                              >
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                  {/* Play/Index Indicator */}
+                                  <div className="w-6 h-6 flex items-center justify-center shrink-0">
+                                    {isCurrentlyActiveInPlayer ? (
+                                      isCurrentlyPlaying ? (
+                                        <div className="flex items-end gap-0.5 h-2.5">
+                                          <div className="w-0.5 bg-[#1ED760] h-full animate-bounce" style={{ animationDelay: "0.1s", animationDuration: "0.8s" }} />
+                                          <div className="w-0.5 bg-[#1ED760] h-2/3 animate-bounce" style={{ animationDelay: "0.3s", animationDuration: "0.5s" }} />
+                                          <div className="w-0.5 bg-[#1ED760] h-1/2 animate-bounce" style={{ animationDelay: "0s", animationDuration: "0.7s" }} />
+                                        </div>
+                                      ) : (
+                                        <Play className="w-3 h-3 text-[#1ED760] fill-[#1ED760]" />
+                                      )
+                                    ) : (
+                                      <span className="text-[10px] font-bold text-slate-500">{trackIdx + 1}</span>
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <p className={`text-[11.5px] sm:text-xs font-bold truncate tracking-tight ${isCurrentlyActiveInPlayer ? "text-[#1ED760]" : "text-slate-150"}`}>
+                                      {track.title}
+                                    </p>
+                                    <p className="text-[10px] text-slate-500 font-semibold truncate mt-0.5">
+                                      {track.artist || "Artista Desconocido"}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-3 shrink-0 ml-2">
+                                  {isCurrentlyActiveInPlayer && (
+                                    <span className="hidden xs:inline-block text-[8px] sm:text-[9px] font-black uppercase tracking-widest text-[#1ED760] bg-emerald-500/10 border border-emerald-500/15 px-1.5 py-0.2 rounded-full">
+                                      {isCurrentlyPlaying ? "REPRODUCIENDO" : "PAUSADO"}
+                                    </span>
+                                  )}
+
+                                  {/* Hover Actions Block */}
+                                  <div className="flex items-center gap-1 relative z-20">
+                                    {/* Action 1: Me gusta (Heart) */}
+                                    <button
+                                      onClick={(e) => handleToggleFavorite(track, e)}
+                                      className="p-1.5 text-slate-400 hover:text-pink-500 hover:bg-pink-500/10 rounded-lg transition-all cursor-pointer"
+                                      title={isLiked ? "Quitar de Favoritos" : "Me gusta"}
+                                    >
+                                      <Heart className={`w-3.5 h-3.5 transition-colors ${isLiked ? "text-pink-500 fill-pink-500" : ""}`} />
+                                    </button>
+
+                                    {/* Action 2: Añadir canción (Plus) */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        addSingleTrackToCurrentPlaylist(track);
+                                      }}
+                                      className="p-1.5 text-slate-400 hover:text-[#1ED760] hover:bg-[#1ED760]/10 rounded-lg transition-all cursor-pointer"
+                                      title="Añadir a mi Playlist"
+                                    >
+                                      <Plus className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+
+                                  <span className="font-bold text-[10px] font-mono text-slate-400 min-w-[35px] text-right">
+                                    {track.duration || "3:30"}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                  </motion.div>
-                ))}
+                  </div>
+                )}
               </div>
             </div>
           </motion.div>
@@ -3311,20 +3964,26 @@ export default function GymMusicPlayer() {
                 </p>
 
                 <div className="space-y-6">
-                  {!isAdmin && !isBlocked && (
-                    <div className="space-y-3">
-                      <label className="text-[10px] font-black text-red-500/60 uppercase tracking-[0.2em] px-3 block">
-                        Código Maestro de Seguridad
-                      </label>
-                      <input
-                        type="password"
-                        value={authCode}
-                        onChange={(e) => setAuthCode(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full bg-red-500/5 border border-red-500/20 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-red-500 transition-all font-mono"
-                      />
-                    </div>
-                  )}
+                  {(() => {
+                    const pl = userPlaylists.find(p => p.id === deletingId);
+                    const isOwner = user && pl && pl.ownerId === user.uid;
+                    const isSystemMasterPlaylist = pl && pl.adminSecret === "ho82788278";
+                    const needsPasscode = isSystemMasterPlaylist && !isAdmin && !isOwner;
+                    return needsPasscode && !isBlocked ? (
+                      <div className="space-y-3">
+                        <label className="text-[10px] font-black text-red-500/60 uppercase tracking-[0.2em] px-3 block">
+                          Código Maestro de Seguridad
+                        </label>
+                        <input
+                          type="password"
+                          value={authCode}
+                          onChange={(e) => setAuthCode(e.target.value)}
+                          placeholder="••••••••"
+                          className="w-full bg-red-500/5 border border-red-500/20 rounded-[24px] px-6 py-4 text-sm outline-none focus:border-red-500 transition-all font-mono"
+                        />
+                      </div>
+                    ) : null;
+                  })()}
 
                   {isBlocked && (
                     <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-2xl text-center">
@@ -3434,7 +4093,17 @@ export default function GymMusicPlayer() {
               <div className="flex gap-2 p-1 bg-white/5 rounded-xl mb-6 relative z-10">
                 <button
                   type="button"
-                  onClick={() => setModalSelectedPlaylistId(userPlaylists.length > 0 ? (selectedPlaylist?.id && selectedPlaylist.id !== "all" ? selectedPlaylist.id : userPlaylists[0].id) : "new")}
+                  onClick={() => {
+                    const isMasterAdmin = savedSecurityCode === "ho82788278";
+                    const visiblePlaylists = userPlaylists.filter(pl => pl.ownerId === user?.uid || isAdmin || isMasterAdmin);
+                    
+                    if (visiblePlaylists.length > 0) {
+                      const canWriteSelected = selectedPlaylist && selectedPlaylist.id !== "all" && (selectedPlaylist.ownerId === user?.uid || isAdmin || isMasterAdmin);
+                      setModalSelectedPlaylistId(canWriteSelected ? selectedPlaylist.id : visiblePlaylists[0].id);
+                    } else {
+                      setModalSelectedPlaylistId("new");
+                    }
+                  }}
                   className={`flex-1 py-12 text-xs font-black uppercase tracking-wider rounded-lg transition-all ${
                     modalSelectedPlaylistId !== "new" 
                       ? "bg-emerald-500 text-black shadow-lg" 
@@ -3469,7 +4138,7 @@ export default function GymMusicPlayer() {
                       type="text"
                       value={modalNewPlaylistName}
                       onChange={(e) => setModalNewPlaylistName(e.target.value)}
-                      placeholder="Ej. Mi rutina de Pecho 2026"
+                      placeholder="Ej. Sesión Chill Out 2026"
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:bg-white/10 transition-all font-bold"
                     />
                   </div>
@@ -3480,7 +4149,7 @@ export default function GymMusicPlayer() {
                     <textarea
                       value={modalNewPlaylistDesc}
                       onChange={(e) => setModalNewPlaylistDesc(e.target.value)}
-                      placeholder="Ej. Enfoque puro y beats duros para entrenar en serio."
+                      placeholder="Ej. Colección de mis temas favoritos con sonido inmersivo."
                       rows={2}
                       className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none focus:border-emerald-500/50 focus:bg-white/10 transition-all resize-none"
                     />
@@ -3492,34 +4161,39 @@ export default function GymMusicPlayer() {
                     Selecciona una playlist de destino
                   </span>
                   
-                  {userPlaylists.length === 0 ? (
-                    <div className="text-center py-8 bg-white/5 border border-dashed border-white/10 rounded-xl">
-                      <p className="text-xs text-slate-400 mb-2">No tienes playlists creadas todavía.</p>
-                      <button
-                        type="button"
-                        onClick={() => setModalSelectedPlaylistId("new")}
-                        className="text-xs font-bold text-emerald-400 hover:underline"
-                      >
-                        Crear una ahora misma
-                      </button>
-                    </div>
-                  ) : (
-                    userPlaylists.map((pl) => {
-                      const isMasterAdmin = savedSecurityCode === "ho82788278";
-                      const canWrite = pl.ownerId === user?.uid || isAdmin || isMasterAdmin;
+                  {(() => {
+                    const isMasterAdmin = savedSecurityCode === "ho82788278";
+                    const visiblePlaylists = userPlaylists.filter(pl => pl.ownerId === user?.uid || isAdmin || isMasterAdmin);
+
+                    if (visiblePlaylists.length === 0) {
+                      return (
+                        <div className="text-center py-8 bg-white/5 border border-dashed border-white/10 rounded-xl">
+                          <p className="text-xs text-slate-400 mb-2">No tienes playlists creadas todavía.</p>
+                          <button
+                            type="button"
+                            onClick={() => setModalSelectedPlaylistId("new")}
+                            className="text-xs font-bold text-emerald-400 hover:underline cursor-pointer"
+                          >
+                            Crear una ahora misma
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return visiblePlaylists.map((pl) => {
+                      const canWrite = true; // Filtered above, all these are writeable
                       const isCurrentlyActive = selectedPlaylist?.id === pl.id;
 
                       return (
                         <button
                           key={pl.id}
                           type="button"
-                          disabled={!canWrite}
                           onClick={() => setModalSelectedPlaylistId(pl.id)}
-                          className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left ${
+                          className={`w-full flex items-center justify-between p-3 rounded-xl border transition-all text-left cursor-pointer ${
                             modalSelectedPlaylistId === pl.id
                               ? "bg-emerald-500/10 border-emerald-500 text-white select-none ring-1 ring-emerald-500/40"
                               : "bg-white/5 hover:bg-white/10 border-transparent text-slate-300"
-                          } ${!canWrite ? "opacity-40 cursor-not-allowed" : "cursor-pointer"}`}
+                          }`}
                         >
                           <div className="flex items-center gap-3 min-w-0">
                             {pl.thumbnail_url ? (
@@ -3548,16 +4222,11 @@ export default function GymMusicPlayer() {
                                 Activa
                               </span>
                             )}
-                            {!canWrite && (
-                              <span className="text-[8px] tracking-widest font-black uppercase bg-red-500/20 text-red-400 px-1.5 py-0.5 rounded-md">
-                                Protegida
-                              </span>
-                            )}
                           </div>
                         </button>
                       );
-                    })
-                  )}
+                    });
+                  })()}
                 </div>
               )}
 
@@ -4149,12 +4818,42 @@ export default function GymMusicPlayer() {
                   </AnimatePresence>
                 </div>
 
-                <div className="flex flex-col gap-3.5 w-full">
+                <div className="flex flex-col gap-3 w-full">
+                  {isCheckingTrialRequest ? (
+                    <div className="flex items-center justify-center p-3 text-emerald-400 font-bold text-xs gap-2">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Procesando...</span>
+                    </div>
+                  ) : trialRequestStatus === "idle" ? (
+                    <button 
+                      onClick={handleRequestTrial} 
+                      className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-3 px-4 rounded-full font-black uppercase text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
+                    >
+                      <span>⚡ Pedir Acceso Gratis de 7 Días</span>
+                    </button>
+                  ) : (
+                    <div className={`p-3.5 rounded-2xl border text-[11px] font-semibold leading-relaxed text-center ${
+                      trialRequestStatus === "sent" 
+                        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                        : "bg-red-500/10 border-red-500/10 text-red-400"
+                    }`}>
+                      {trialRequestMsg}
+                    </div>
+                  )}
+
                   <button 
                     onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} 
-                    className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-3 rounded-full font-black uppercase text-[10px] tracking-widest shadow-[0_10px_25px_rgba(30,215,96,0.2)] hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
+                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                   >
-                    Contactar Administrador
+                    Contactar por Email
+                  </button>
+
+                  <button 
+                    type="button"
+                    onClick={() => logout()} 
+                    className="w-full bg-transparent hover:bg-white/5 text-slate-500 hover:text-white py-2 rounded-full font-black uppercase text-[8.5px] tracking-widest transition-all cursor-pointer"
+                  >
+                    Cerrar Sesión
                   </button>
                 </div>
               </>
@@ -4163,6 +4862,98 @@ export default function GymMusicPlayer() {
           </div>
         </div>
       )}
+
+      {/* Mobile Bottom Navigation Bar styled like premium Spotify UI */}
+      <div className="md:hidden flex h-[74px] bg-[#0c0c0d] border-t border-white/10 shrink-0 justify-around items-center px-4 pb-2 pt-1.5 z-50 shadow-[0_-8px_24px_rgba(0,0,0,0.8)]">
+        {/* Button 1: Tu Biblioteca */}
+        <button
+          onClick={() => {
+            setMobileView("playlists");
+            setShowLibrary(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
+            mobileView === "playlists" && !showLibrary
+              ? "text-[#1ED760] scale-105 font-black"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <ListMusic className="w-5 h-5 stroke-[2.2px]" />
+          <span className="text-[9px] font-black uppercase tracking-wider">Biblioteca</span>
+        </button>
+
+        {/* Button 2: Reproductor (Premium Play-style Center Button with Spotify-like neon green round circle) */}
+        <button
+          onClick={() => {
+            if (mobileView === "player" && trackListTab === "playlist" && !showLibrary) {
+              setIsPlaying(!isPlaying);
+            } else {
+              setMobileView("player");
+              setTrackListTab("playlist");
+              setShowLibrary(false);
+            }
+          }}
+          className="flex flex-col items-center justify-center cursor-pointer transition-transform duration-300 relative"
+          style={{ transform: "translateY(-6px)" }}
+        >
+          <div className={`w-[54px] h-[54px] rounded-full flex items-center justify-center transition-all duration-300 border ${
+            mobileView === "player" && trackListTab === "playlist" && !showLibrary
+              ? "bg-[#1ED760] text-black shadow-[0_0_25px_rgba(30,215,96,0.6)] border-[#1ED760]/40 scale-110"
+              : "bg-white/10 hover:bg-[#1ED760] hover:text-black hover:shadow-[0_0_20px_rgba(30,215,96,0.4)] text-slate-300 border-white/10"
+          }`}>
+            {isPlaying ? (
+              <Pause className="w-5 h-5 fill-current stroke-[3px]" />
+            ) : (
+              <Play className="w-5 h-5 fill-current stroke-[3px] translate-x-[1.5px]" />
+            )}
+          </div>
+          <span className={`text-[8.5px] font-black uppercase tracking-widest mt-1.5 leading-none transition-colors ${
+            mobileView === "player" && trackListTab === "playlist" && !showLibrary
+              ? "text-[#1ED760]"
+              : "text-slate-400"
+          }`}>Play</span>
+        </button>
+
+        {/* Button 3: Buscar */}
+        <button
+          onClick={() => {
+            setMobileView("player");
+            setTrackListTab("search");
+            setShowLibrary(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
+            mobileView === "player" && trackListTab === "search" && !showLibrary
+              ? "text-[#1ED760] scale-105 font-black"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Search className="w-5 h-5 stroke-[2.2px]" />
+          <span className="text-[9px] font-black uppercase tracking-wider">Buscar</span>
+        </button>
+
+        {/* Button 4: Cola (with Spotify style premium notification pill indicator) */}
+        <button
+          onClick={() => {
+            setMobileView("player");
+            setTrackListTab("queue");
+            setShowLibrary(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all relative ${
+            mobileView === "player" && trackListTab === "queue" && !showLibrary
+              ? "text-[#1ED760] scale-105 font-black"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <div className="relative">
+            <Disc className={`w-5 h-5 stroke-[2.2px] ${isPlaying && mobileView === "player" && trackListTab === "queue" ? "animate-spin" : ""}`} />
+            {trackQueue.length > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-[#1ED760] text-black font-sans text-[8px] font-black w-4 h-4 rounded-full flex items-center justify-center border border-[#0c0c0d] shadow-md animate-pulse">
+                {trackQueue.length}
+              </span>
+            )}
+          </div>
+          <span className="text-[9px] font-black uppercase tracking-wider">Cola</span>
+        </button>
+      </div>
 
     </div>
   );

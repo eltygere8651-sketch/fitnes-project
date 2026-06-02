@@ -8,7 +8,8 @@ import {
   getRedirectResult, 
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
-  signInAnonymously 
+  signInAnonymously,
+  updateProfile
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -63,9 +64,12 @@ export const loginWithEmail = async (email: string, pass: string) => {
   }
 };
 
-export const signupWithEmail = async (email: string, pass: string) => {
+export const signupWithEmail = async (email: string, pass: string, nickname?: string) => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    if (nickname) {
+      await updateProfile(cred.user, { displayName: nickname });
+    }
     return cred.user;
   } catch (error: any) {
     console.error("Email registration failed:", error);

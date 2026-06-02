@@ -34,9 +34,9 @@ try {
   console.error("AI Init Error:", error);
 }
 
-// Simple Coach Endpoint (Minimal)
+// Simple Assistant Endpoint (Minimal)
 app.post("/api/ai/coach", async (req, res) => {
-  res.json({ reply: "Entrena con foco. La música está lista." });
+  res.json({ reply: "Siente el ritmo. La música está lista." });
 });
 
 // YouTube Search Cache (Eco-Friendly)
@@ -467,6 +467,55 @@ app.get("/api/oembed", async (req, res) => {
     console.error("Proxy oembed error:", error);
     return res.status(500).json({ error: "Internal Fetch Error" });
   }
+});
+
+// Trial Request Notifications & Verification Endpoint
+app.post("/api/trial/request", async (req, res) => {
+  const { uid, email, displayName, fingerprint } = req.body;
+  
+  if (!uid || !email) {
+    return res.status(400).json({ error: "Faltan parámetros requeridos (uid o email)" });
+  }
+
+  // Capturar la IP real del cliente
+  let ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || 'IP_DESCONOCIDA';
+  if (ip.includes(',')) {
+    ip = ip.split(',')[0].trim();
+  }
+
+  console.log(`Solicitud de prueba recibida para ${email}. IP: ${ip}, Fingerprint: ${fingerprint}`);
+
+  // Enviar a Telegram de forma completamente gratuita si está configurado
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (botToken && chatId) {
+    try {
+      const text = `🔥 *Nueva Solicitud de Acceso (7 Días Gratis)*\n\n👤 *Usuario:* ${displayName || 'Sin Nombre'}\n📧 *Email:* ${email}\n🆔 *UID:* ${uid}\n🌐 *IP:* ${ip}\n🖥️ *Huella:* \`${fingerprint || 'N/A'}\`\n\n_Puedes concederle acceso desde el panel de administrador._`;
+      
+      const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          chat_id: chatId,
+          text: text,
+          parse_mode: 'Markdown'
+        })
+      });
+      
+      if (!response.ok) {
+        console.error("Error al enviar notificación a Telegram:", await response.text());
+      } else {
+        console.log("Notificación enviada con éxito a Telegram.");
+      }
+    } catch (err) {
+      console.error("Error al despachar notificación a Telegram:", err);
+    }
+  }
+
+  return res.json({ success: true, clientIp: ip });
 });
 
 // Output raw audio stream removed due to bot blocks

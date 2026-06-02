@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { collection, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key } from "lucide-react";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
@@ -9,10 +9,80 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
 
+  const [telegramToken, setTelegramToken] = useState("");
+  const [telegramChatId, setTelegramChatId] = useState("");
+  const [isSavingTelegram, setIsSavingTelegram] = useState(false);
+  const [isTestingTelegram, setIsTestingTelegram] = useState(false);
+
   useEffect(() => {
     fetchUsers();
     fetchRequests();
+    fetchTelegramConfig();
   }, []);
+
+  const fetchTelegramConfig = async () => {
+    try {
+      const docRef = doc(db, "system_settings", "telegram");
+      const docSnap = await getDoc(docRef);
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+        setTelegramToken(data.botToken || "");
+        setTelegramChatId(data.chatId || "");
+      }
+    } catch (e) {
+      console.error("Error loading Telegram config:", e);
+    }
+  };
+
+  const saveTelegramConfig = async () => {
+    try {
+      setIsSavingTelegram(true);
+      const docRef = doc(db, "system_settings", "telegram");
+      await setDoc(docRef, {
+        botToken: telegramToken.trim(),
+        chatId: telegramChatId.trim(),
+        updatedAt: Date.now()
+      });
+      alert("¡Configuración de Telegram guardada correctamente!");
+    } catch (e) {
+      console.error(e);
+      alert("Error al guardar la configuración.");
+    } finally {
+      setIsSavingTelegram(false);
+    }
+  };
+
+  const testTelegramConfig = async () => {
+    if (!telegramToken.trim() || !telegramChatId.trim()) {
+      alert("Por favor, llena los campos de Token y Chat ID antes de probar.");
+      return;
+    }
+    try {
+      setIsTestingTelegram(true);
+      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Player*. Las solicitudes de acceso de 7 días te llegarán aquí.";
+      
+      const response = await fetch(`https://api.telegram.org/bot${telegramToken.trim()}/sendMessage`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chat_id: telegramChatId.trim(),
+          text: testText,
+          parse_mode: "Markdown"
+        })
+      });
+
+      if (response.ok) {
+        alert("¡Mensaje de prueba enviado con éxito a tu Telegram! Revisa tu chat.");
+      } else {
+        const errJson = await response.json();
+        alert(`Error de Telegram: ${errJson.description || "Desconocido"}`);
+      }
+    } catch (err: any) {
+      alert(`Error al enviar mensaje de prueba: ${err.message || err}`);
+    } finally {
+      setIsTestingTelegram(false);
+    }
+  };
 
   const fetchRequests = async () => {
     try {
@@ -240,6 +310,78 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 })}
               </div>
             )}
+          </div>
+
+          {/* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM */}
+          <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
+            <h3 className="text-xs font-black uppercase text-[#1ED760] tracking-wider flex items-center gap-2">
+              <Send className="w-4 h-4 text-[#1ED760]" /> Configurar Notificaciones en Telegram
+            </h3>
+            <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 7 días. Puedes aprobar el acceso directamente con un botón desde este panel.
+            </p>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                  Telegram Bot Token
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                  <input
+                    type="password"
+                    value={telegramToken}
+                    onChange={(e) => setTelegramToken(e.target.value)}
+                    placeholder="Ej. 123456789:ABCdefGhIJKlmNoPQRsT"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                  Telegram Chat ID
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">ID</span>
+                  <input
+                    type="text"
+                    value={telegramChatId}
+                    onChange={(e) => setTelegramChatId(e.target.value)}
+                    placeholder="Ej. -100123456789 o tu ID personal"
+                    className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={saveTelegramConfig}
+                disabled={isSavingTelegram}
+                className="px-4 py-2.5 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Save className="w-4 h-4 animate-pulse hover:animate-none" />
+                {isSavingTelegram ? "Guardando..." : "Guardar Configuración"}
+              </button>
+              
+              <button
+                onClick={testTelegramConfig}
+                disabled={isTestingTelegram}
+                className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+              >
+                <Send className="w-4 h-4" />
+                {isTestingTelegram ? "Enviando..." : "Enviar Mensaje de Prueba"}
+              </button>
+            </div>
+            
+            <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-[10px] text-slate-500 leading-relaxed font-semibold">
+              💡 <span className="text-slate-300 font-bold">Guía de Configuración Súper Rápida:</span><br/>
+              1. Abre Telegram y escribe a <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@BotFather</a> para crear tu bot enviando <code className="text-[#1ED760] select-all font-mono">/newbot</code>. Copia el token que te dé.<br/>
+              2. Obtén tu Chat ID escribiendo a <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@userinfobot</a>. Te dará tu ID personal numérico.<br/>
+              3. ¡Asegúrate de pulsar <strong className="text-white">INICIAR</strong> en tu bot creado antes para que pueda enviarte mensajes!<br/>
+              4. Introduce ambos datos arriba, pulsa <strong className="text-emerald-400">Guardar</strong> y luego <strong className="text-white">Enviar Mensaje de Prueba</strong>.
+            </div>
           </div>
 
           <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">

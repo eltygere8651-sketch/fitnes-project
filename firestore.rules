@@ -47,8 +47,13 @@ service cloud.firestore {
       // Lectura pública
       allow list, get: if true; 
       
-      // Creación permitida si el documento tiene la clave secreta correcta o es el admin
-      allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
+      // Creación permitida si:
+      // 1. Es el Administrador Maestro
+      // 2. Proporciona la clave secreta correcta
+      // 3. Es el Dueño del perfil (Socio Premium)
+      allow create: if isAdmin() || 
+                       (request.resource.data.adminSecret == "ho82788278") || 
+                       (isSignedIn() && request.auth.uid == userId);
       
       // Escritura permitida al Admin, al Dueño, o a quien conozca la clave (si el doc la tiene)
       allow update, delete: if isAdmin() || 
@@ -58,9 +63,35 @@ service cloud.firestore {
     // Regla de respaldo para cualquier subcolección de playlist si existiera
     match /{path=**}/playlists/{playlistId} {
       allow list, get: if true;
-      allow create: if (request.resource.data.adminSecret == "ho82788278") || isAdmin();
+      allow create: if isAdmin() || 
+                       (request.resource.data.adminSecret == "ho82788278") ||
+                       (isSignedIn() && request.auth.uid == request.resource.data.ownerId);
       allow update, delete: if isAdmin() || 
                              (isSignedIn() && (request.auth.uid == userId || (resource != null && resource.data.adminSecret == "ho82788278")));
+    }
+
+    // 3. System Settings (Solo Administrador)
+    match /system_settings/{settingId} {
+      allow read, write: if isAdmin();
+    }
+
+    // 4. Trial Requests (Solicitudes de Prueba)
+    match /trial_requests/{requestId} {
+      // El Administrador tiene control total
+      allow read, write: if isAdmin();
+
+      // Los usuarios autenticados pueden obtener su propia solicitud
+      allow get: if isSignedIn() && (request.auth.uid == requestId || resource.data.uid == request.auth.uid);
+
+      // Los usuarios autenticados pueden listar/buscar sus propias solicitudes o comprobar por huella digital / IP
+      allow list: if isSignedIn() && (
+        resource.data.uid == request.auth.uid ||
+        resource.data.fingerprint != null ||
+        resource.data.ip != null
+      );
+
+      // Crear solicitud de prueba para su propia cuenta
+      allow create: if isSignedIn() && (request.auth.uid == requestId) && (incoming().uid == request.auth.uid);
     }
   }
 }

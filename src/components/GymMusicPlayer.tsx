@@ -2284,8 +2284,8 @@ export default function GymMusicPlayer() {
     const now = Date.now();
     const isPlayingChanged = lastSyncIsPlayingRef.current !== isPlaying;
     const isNewTrack = lastSyncTrackRef.current !== currentTrackIndex;
-    // Throttle rate is 8 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem with high-frequency updates)
-    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 8000 : 3000);
+    // Throttle rate is 12 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem with high-frequency updates)
+    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 12000 : 3000);
 
     if (isPlayingChanged || isNewTrack || isThrottleTimeoutPassed) {
       if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
@@ -2407,7 +2407,7 @@ export default function GymMusicPlayer() {
   // --- DERIVED UI STATES (already defined above) ---
 
   return (
-    <div className="bg-[#080809]/90 backdrop-blur-3xl text-white shadow-2xl h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]">
+    <div className={`bg-[#080809]/90 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-3xl'} text-white ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]`}>
       <AnimatePresence>
         {notification && (
           <motion.div
@@ -2429,7 +2429,7 @@ export default function GymMusicPlayer() {
             url={currentUrl}
             playing={isPlaying}
             volume={volume / 100}
-            progressInterval={isEcoMode ? 4000 : 1000}
+            progressInterval={isEcoMode ? 5000 : 1000}
             onEnded={() => handleNext()}
             onProgress={(state) => {
               if (document.visibilityState === "visible") {
@@ -2463,7 +2463,7 @@ export default function GymMusicPlayer() {
         />
       </div>
       {/* 1. COMPACT HEADER */}
-      <div className="flex justify-between items-center px-3 py-1 sm:px-6 sm:py-1.5 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
+      <div className={`flex justify-between items-center px-3 py-1 sm:px-6 sm:py-1.5 border-b border-white/5 bg-[#0a0a0b]/60 ${isEcoMode ? 'backdrop-blur-sm' : 'backdrop-blur-xl'} shrink-0 z-40`}>
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <div
             className={`hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 ${isPlaying && isPageVisible && !isEcoMode ? "animate-[spin_12s_linear_infinite] will-change-transform" : ""}`}
@@ -2831,7 +2831,7 @@ export default function GymMusicPlayer() {
         <div className={`${mobileView === "player" ? "flex" : "hidden"} md:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
-          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-1 sm:p-1.5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          <div className={`flex-none bg-[#0a0a0b]/80 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-2xl'} border-b border-white/10 p-1 sm:p-1.5 relative overflow-hidden shrink-0 ${isEcoMode ? 'shadow-md' : 'shadow-[0_10px_30px_rgba(0,0,0,0.5)]'}`}>
             {/* Subtle neon-accent decoration */}
             <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent" />
             
@@ -2852,13 +2852,13 @@ export default function GymMusicPlayer() {
                           />
                         )}
                       </AnimatePresence>
-                      <div
-                        className={`relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${
-                          isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"
-                        } ${
-                          isPlaying && isPageVisible && !isEcoMode ? "animate-disc-spin animate-disc-pulse" : ""
-                        }`}
-                      >
+                        <div
+                          className={`relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} border-2 transition-colors duration-500 ${
+                            isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"
+                          } ${
+                            isPlaying && isPageVisible && !isEcoMode ? "animate-disc-spin animate-disc-pulse" : ""
+                          }`}
+                        >
                         <img
                           src={displayArtwork}
                           alt="Artwork"
@@ -2924,8 +2924,8 @@ export default function GymMusicPlayer() {
                       </button>
 
                       <div className="relative group flex-shrink-0 mx-1 sm:mx-0">
-                        {/* Premium Outer Glow */}
-                        <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
+                        {/* Premium Outer Glow (Disabled in Eco Mode to save GPU) */}
+                        <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying && !isEcoMode ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
                         
                         <motion.button
                           whileTap={{ scale: 0.9 }}

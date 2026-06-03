@@ -176,26 +176,6 @@ function AppContent() {
         </section>
       </main>
 
-      <footer className="hidden sm:block py-4 sm:py-6 text-center shrink-0 border-t border-white/5 bg-black/20">
-        <div className="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-4 text-[10px] uppercase tracking-[0.3em] font-bold">
-          <p className="text-white">
-            2026 FLUX PLAYER • <span className="text-emerald-400 font-black tracking-[0.4em] drop-shadow-[0_0_10px_rgba(52,211,153,0.3)] bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20">CRAFTED BY BIENVE</span>
-          </p>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-1.5">
-              <div
-                className={`w-1.5 h-1.5 rounded-full ${isOnline ? "bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]" : "bg-red-500"}`}
-              />
-              <span>{isOnline ? "ONLINE" : "OFFLINE"}</span>
-            </div>
-            <span className="text-slate-700">|</span>
-            <span className="text-emerald-400 font-extrabold">
-              {user ? (user.displayName || "Socio Premium") : "MODO LECTURA"}
-            </span>
-          </div>
-        </div>
-      </footer>
-
       {/* --- PWA INSTALLATION MODAL --- */}
       <AnimatePresence>
         {showInstallModal && (

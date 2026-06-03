@@ -17,6 +17,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
+  const [activeTab, setActiveTab] = useState<"users" | "support" | "notifications">("users");
+
   useEffect(() => {
     fetchUsers();
     fetchRequests();
@@ -282,8 +284,59 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           </button>
         </div>
 
+        {/* Pestañas de Navegación del Panel */}
+        <div className="flex border-b border-white/5 bg-white/[0.01] px-3 sm:px-6 py-2 gap-1 sm:gap-2 shrink-0 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10">
+          <button
+            onClick={() => setActiveTab("users")}
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+              activeTab === "users"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <Shield className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Usuarios <span className="hidden sm:inline">y Solicitudes</span></span>
+            {requests.filter(r => r.status === "pending").length > 0 && (
+              <span className="ml-1 bg-red-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                {requests.filter(r => r.status === "pending").length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("support")}
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+              activeTab === "support"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Soporte</span>
+            {supportMessages.length > 0 && (
+              <span className="ml-1 bg-purple-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full">
+                {supportMessages.length}
+              </span>
+            )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab("notifications")}
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+              activeTab === "notifications"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Telegram</span>
+          </button>
+        </div>
+
         <div className="overflow-y-auto p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
-          {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
+          {activeTab === "users" && (
+            <>
+              {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
             <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
               <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 7 Días ({requests.filter(r => r.status === "pending").length})
@@ -369,8 +422,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               </div>
             )}
           </div>
+          </>
+          )}
 
-          {/* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM */}
+          {activeTab === "notifications" && (
+            /* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM */
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
             <h3 className="text-xs font-black uppercase text-[#1ED760] tracking-wider flex items-center gap-2">
               <Send className="w-4 h-4 text-[#1ED760]" /> Configurar Notificaciones en Telegram
@@ -441,8 +497,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               4. Introduce ambos datos arriba, pulsa <strong className="text-emerald-400">Guardar</strong> y luego <strong className="text-white">Enviar Mensaje de Prueba</strong>.
             </div>
           </div>
+          )}
 
-          {/* SECCIÓN NUEVA: MENSAJES DE SOPORTE */}
+          {activeTab === "support" && (
+            /* SECCIÓN NUEVA: MENSAJES DE SOPORTE */
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
             <div className="flex justify-between items-center sm:flex-row flex-col gap-2">
               <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2">
@@ -488,8 +546,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               </div>
             )}
           </div>
+          )}
 
-          <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">
+          {activeTab === "users" && (
+            <>
+              <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">
             <Shield className="w-4 h-4 text-purple-400" /> Todos los Usuarios Registrados ({users.length})
           </h3>
 
@@ -589,6 +650,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 )
               })}
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

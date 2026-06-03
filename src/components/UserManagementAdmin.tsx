@@ -26,8 +26,23 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setTelegramToken(data.botToken || "");
-        setTelegramChatId(data.chatId || "");
+        const bToken = data.botToken || "";
+        const cId = data.chatId || "";
+        setTelegramToken(bToken);
+        setTelegramChatId(cId);
+
+        // Warm up backend cache with these credentials
+        if (bToken && cId) {
+          fetch("/api/support/register-telegram", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              botToken: bToken.trim(),
+              chatId: cId.trim(),
+              adminEmail: "eltygere8651@gmail.com"
+            })
+          }).catch(err => console.error("Error warming up backend Telegram parameters:", err));
+        }
       }
     } catch (e) {
       console.error("Error loading Telegram config:", e);
@@ -37,13 +52,28 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const saveTelegramConfig = async () => {
     try {
       setIsSavingTelegram(true);
+      const bToken = telegramToken.trim();
+      const cId = telegramChatId.trim();
+
       const docRef = doc(db, "system_settings", "telegram");
       await setDoc(docRef, {
-        botToken: telegramToken.trim(),
-        chatId: telegramChatId.trim(),
+        botToken: bToken,
+        chatId: cId,
         updatedAt: Date.now()
       });
-      alert("¡Configuración de Telegram guardada correctamente!");
+
+      // Synchronize directly with the backend server as well
+      await fetch("/api/support/register-telegram", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          botToken: bToken,
+          chatId: cId,
+          adminEmail: "eltygere8651@gmail.com"
+        })
+      });
+
+      alert("¡Configuración de Telegram guardada y sincronizada correctamente!");
     } catch (e) {
       console.error(e);
       alert("Error al guardar la configuración.");

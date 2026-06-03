@@ -19,6 +19,8 @@ import {
   Trash2,
   X,
   Loader2,
+  Send,
+  MessageSquare,
   Shuffle,
   Shield,
   ShieldAlert,
@@ -554,6 +556,37 @@ export default function GymMusicPlayer() {
   }, []);
 
   const isAdmin = user?.email === "eltygere8651@gmail.com";
+
+  // Auto-sync Telegram credentials to backend on load for instant support delivery
+  useEffect(() => {
+    if (isAdmin && user) {
+      const syncTelegram = async () => {
+        try {
+          const docRef = doc(db, "system_settings", "telegram");
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data?.botToken && data?.chatId) {
+              await fetch("/api/support/register-telegram", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  botToken: data.botToken.trim(),
+                  chatId: data.chatId.trim(),
+                  adminEmail: "eltygere8651@gmail.com"
+                })
+              });
+              console.log("Successfully synchronized Telegram support credentials on backend.");
+            }
+          }
+        } catch (err) {
+          console.error("Auto-syncing Telegram specs with backend failed (expected if non-admin or disconnected):", err);
+        }
+      };
+      
+      syncTelegram();
+    }
+  }, [isAdmin, user]);
   const [selectedPlaylist, setSelectedPlaylist] =
     useState<MusicPlaylist | null>(null);
   const [playingPlaylist, setPlayingPlaylist] = useState<MusicPlaylist | null>(null);
@@ -635,6 +668,11 @@ export default function GymMusicPlayer() {
   const [modalNewPlaylistDesc, setModalNewPlaylistDesc] = useState("");
   const [modalSelectedPlaylistId, setModalSelectedPlaylistId] = useState<string>("new");
   const [isProcessingModalAdd, setIsProcessingModalAdd] = useState(false);
+
+  // States for Telegram Support integration
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
 
 
 
@@ -1273,6 +1311,42 @@ export default function GymMusicPlayer() {
     setModalSelectedPlaylistId("new");
     setIsAddingToPlaylistModalOpen(true);
     setShowLibrary(false);
+  };
+
+  const handleSendSupportMessage = async () => {
+    if (!supportMessage || !supportMessage.trim()) {
+      showNotification("Por favor, escribe un mensaje primero.");
+      return;
+    }
+
+    try {
+      setIsSendingSupport(true);
+      const res = await fetch("/api/support/telegram", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          userEmail: user?.email || "Anónimo",
+          userName: user?.displayName || "Socio Contigo",
+          message: supportMessage.trim()
+        })
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json();
+        throw new Error(errorData.error || "Error al enviar el mensaje de soporte a Telegram");
+      }
+
+      showNotification("¡Mensaje de soporte enviado con éxito a nuestro Telegram! Te responderemos muy pronto.");
+      setSupportMessage("");
+      setIsSupportModalOpen(false);
+    } catch (err: any) {
+      console.error("Support message error:", err);
+      showNotification(err.message || "Error al enviar. Inténtalo de nuevo.");
+    } finally {
+      setIsSendingSupport(false);
+    }
   };
 
   const startEditing = (pl: MusicPlaylist) => {
@@ -2647,8 +2721,8 @@ export default function GymMusicPlayer() {
                 )}
 
                 <button
-                  onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"}
-                  className="py-1.5 md:py-2 bg-white/5 hover:bg-white/10 text-white font-bold uppercase tracking-wider text-[9px] rounded-lg md:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 border border-white/10"
+                  onClick={() => setIsSupportModalOpen(true)}
+                  className="py-1.5 md:py-2 bg-gradient-to-r from-[#1ED760]/20 to-emerald-500/20 hover:from-[#1ED760]/30 hover:to-emerald-500/30 text-[#1ED760] font-bold uppercase tracking-wider text-[9px] rounded-lg md:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 border border-[#1ED760]/30 shadow-[0_4px_12px_rgba(30,215,96,0.1)] font-black"
                 >
                   Contactar Soporte
                 </button>
@@ -4644,7 +4718,98 @@ export default function GymMusicPlayer() {
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
 
-      {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
+      {/* OVERLAY: TELEGRAM SUPPORT MODAL */}
+      <AnimatePresence>
+        {isSupportModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
+            >
+              {/* Header */}
+              <div className="p-4 flex items-center justify-between border-b border-white/5 bg-white/[0.02]">
+                <div className="flex items-center gap-2">
+                  <div className="p-1.5 bg-[#1ED760]/10 rounded-lg">
+                    <MessageSquare className="w-4 h-4 text-[#1ED760]" />
+                  </div>
+                  <h3 className="text-[11px] font-black uppercase text-white tracking-[0.2em]">
+                    Soporte por Telegram
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsSupportModalOpen(false);
+                    setSupportMessage("");
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Content */}
+              <div className="p-5 space-y-4">
+                <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+                  Escribe tu consulta o informe técnico aquí. Se enviará instantáneamente al Telegram de soporte de la administración para que recibas ayuda rápida.
+                </p>
+
+                <div className="space-y-1.5">
+                  <label className="text-[8.5px] font-black uppercase tracking-widest text-[#1ED760]">Tu mensaje</label>
+                  <textarea
+                    value={supportMessage}
+                    onChange={(e) => setSupportMessage(e.target.value)}
+                    placeholder="Escribe aquí tu mensaje de ayuda..."
+                    rows={6}
+                    maxLength={1000}
+                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-xs text-white outline-none focus:border-[#1ED760]/30 focus:bg-white/[0.05] transition-all font-medium resize-none shadow-inner"
+                  />
+                  <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold px-1">
+                    <span>Máximo 1000 caracteres</span>
+                    <span>{supportMessage.length}/1000</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Footer */}
+              <div className="p-5 flex items-center justify-between border-t border-white/5 bg-white/[0.02]">
+                <button
+                  onClick={() => {
+                    setIsSupportModalOpen(false);
+                    setSupportMessage("");
+                  }}
+                  className="text-[10px] font-black uppercase text-slate-500 hover:text-white transition-colors tracking-widest cursor-pointer px-4 py-2"
+                >
+                  Cancelar
+                </button>
+                <button
+                  disabled={isSendingSupport || !supportMessage.trim()}
+                  onClick={handleSendSupportMessage}
+                  className="bg-[#1ED760] hover:bg-emerald-400 text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-[#1ED760]/10 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale cursor-pointer"
+                >
+                  {isSendingSupport ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin animate-infinite" />
+                      <span>Enviando...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5 stroke-[2.5px]" />
+                      <span>Enviar</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* OVERLAY: SPOTIFY-STYLE MULTI-OPTION PLAYLIST COPIER */}
       <AnimatePresence>
@@ -5017,10 +5182,17 @@ export default function GymMusicPlayer() {
                   )}
 
                   <button 
+                    onClick={() => setIsSupportModalOpen(true)} 
+                    className="w-full bg-gradient-to-r from-emerald-500/20 to-[#1ED760]/20 hover:from-emerald-500/30 hover:to-[#1ED760]/30 border border-[#1ED760]/30 text-[#1ED760] py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
+                  >
+                    💬 Soporte Rápido (Telegram)
+                  </button>
+
+                  <button 
                     onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} 
                     className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
                   >
-                    Contactar por Email
+                    ✉️ Contactar por Email
                   </button>
 
                   <button 

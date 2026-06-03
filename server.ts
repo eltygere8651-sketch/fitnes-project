@@ -4,6 +4,9 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { Innertube } from 'youtubei.js';
 import dotenv from "dotenv";
+import admin from "firebase-admin";
+import { getFirestore } from "firebase-admin/firestore";
+import fs from "fs";
 
 dotenv.config();
 
@@ -526,6 +529,184 @@ app.post("/api/trial/request", async (req, res) => {
   }
 
   return res.json({ success: true, clientIp: ip });
+});
+
+let isFirebaseAdminInitialized = false;
+
+function getFirestoreDb() {
+  if (!isFirebaseAdminInitialized) {
+    try {
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        admin.initializeApp({
+          projectId: config.projectId
+        });
+        isFirebaseAdminInitialized = true;
+      }
+    } catch (e) {
+      console.error("Error initializing Firebase Admin in backend:", e);
+    }
+  }
+  if (isFirebaseAdminInitialized) {
+    try {
+      const configPath = path.join(process.cwd(), "firebase-applet-config.json");
+      if (fs.existsSync(configPath)) {
+        const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+        const dbId = config.firestoreDatabaseId;
+        if (dbId) {
+          return getFirestore(dbId);
+        }
+      }
+      return getFirestore();
+    } catch (e) {
+      console.error("Error getting firestore instance in backend:", e);
+    }
+  }
+  return null;
+}
+
+let cachedTelegramConfig: { botToken: string; chatId: string } | null = null;
+const CACHE_FILE_PATH = path.join(process.cwd(), "telegram_cache.json");
+
+// Helper to load cache on startup
+function loadTelegramCache() {
+  try {
+    if (fs.existsSync(CACHE_FILE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE_PATH, "utf-8"));
+      if (data && data.botToken && data.chatId) {
+        cachedTelegramConfig = data;
+        console.log("Loaded cached Telegram config from disk successfully.");
+      }
+    }
+  } catch (err) {
+    console.error("Error reading Telegram cache from disk:", err);
+  }
+}
+loadTelegramCache();
+
+async function getTelegramConfig() {
+  // 1. Try env variables first
+  const botToken = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+
+  if (botToken && chatId) {
+    return { botToken, chatId };
+  }
+
+  // 2. Try the warmed-up cache memory/file
+  if (cachedTelegramConfig && cachedTelegramConfig.botToken && cachedTelegramConfig.chatId) {
+    return cachedTelegramConfig;
+  }
+
+  // 3. Fallback to reading file directly
+  try {
+    if (fs.existsSync(CACHE_FILE_PATH)) {
+      const data = JSON.parse(fs.readFileSync(CACHE_FILE_PATH, "utf-8"));
+      if (data && data.botToken && data.chatId) {
+        cachedTelegramConfig = data;
+        return data;
+      }
+    }
+  } catch (e) {
+    // ignore
+  }
+
+  // 4. Try Firestore system_settings/telegram (and suppress permission errors cleanly so they don't block the response flow)
+  try {
+    const db = getFirestoreDb();
+    if (db) {
+      const doc = await db.collection("system_settings").doc("telegram").get();
+      if (doc.exists) {
+        const data = doc.data();
+        if (data?.botToken && data?.chatId) {
+          const configObj = { botToken: data.botToken, chatId: data.chatId };
+          // Cache it locally too
+          cachedTelegramConfig = configObj;
+          try {
+            fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(configObj, null, 2), "utf-8");
+          } catch (writeErr) {
+            console.error("Failed to write to file cache during lazy fetch:", writeErr);
+          }
+          return configObj;
+        }
+      }
+    }
+  } catch (err: any) {
+    console.warn("Notice: Firestore Admin SDK lookup failed (likely permission/IAM issue). Using fallback settings:", err?.message || err);
+  }
+
+  return null;
+}
+
+// Endpoint to Register/Warm-up Telegram credentials from secure Admin UI
+app.post("/api/support/register-telegram", async (req, res) => {
+  const { botToken, chatId, adminEmail } = req.body;
+  
+  // Enforce security check: must be from the admin email
+  if (adminEmail !== "eltygere8651@gmail.com") {
+    return res.status(403).json({ error: "No autorizado. Solo el administrador maestro puede registrar credenciales." });
+  }
+
+  if (!botToken || !chatId) {
+    return res.status(400).json({ error: "Faltan parámetros de Telegram botToken o chatId." });
+  }
+
+  try {
+    cachedTelegramConfig = {
+      botToken: botToken.trim(),
+      chatId: chatId.trim()
+    };
+
+    // Save to disk cache to survive server restarts
+    fs.writeFileSync(CACHE_FILE_PATH, JSON.stringify(cachedTelegramConfig, null, 2), "utf-8");
+    console.log("Cached Telegram credentials registered and saved to disk.");
+    return res.json({ success: true, message: "Configuración de Telegram guardada y sincronizada correctamente en el servidor." });
+  } catch (err: any) {
+    console.error("Error saving Telegram cache:", err);
+    return res.status(500).json({ error: "Error al guardar el caché de Telegram en el servidor" });
+  }
+});
+
+// Telegram Support Message Endpoint
+app.post("/api/support/telegram", async (req, res) => {
+  const { userEmail, userName, message } = req.body;
+  if (!message || !message.trim()) {
+    return res.status(400).json({ error: "El mensaje no puede estar vacío" });
+  }
+
+  try {
+    const config = await getTelegramConfig();
+    if (!config || !config.botToken || !config.chatId) {
+      return res.status(503).json({ error: "El soporte por Telegram no está configurado en este momento" });
+    }
+
+    const title = `🚨 *Nuevo Mensaje de Soporte* 🚨`;
+    const userLine = `👤 *Usuario:* ${userName || 'Anónimo'} (${userEmail || 'Sin email'})`;
+    const messageLine = `💬 *Mensaje:*\n_${message.trim()}_`;
+    const text = `${title}\n\n${userLine}\n\n${messageLine}`;
+
+    const tgRes = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: config.chatId,
+        text: text,
+        parse_mode: "Markdown"
+      })
+    });
+
+    if (!tgRes.ok) {
+      const errorText = await tgRes.text();
+      console.error("Error from Telegram support message API:", errorText);
+      return res.status(502).json({ error: "No se pudo entregar el mensaje al bot de Telegram" });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Telegram support API error:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
 });
 
 // Output raw audio stream removed due to bot blocks

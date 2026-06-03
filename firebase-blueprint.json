@@ -50,6 +50,18 @@
         "createdAt": { "type": "integer" }
       },
       "required": ["uid", "email", "status"]
+    },
+    "SupportMessage": {
+      "title": "Support Message",
+      "description": "User queries or feedback submitted to support",
+      "type": "object",
+      "properties": {
+        "userEmail": { "type": "string" },
+        "userName": { "type": "string" },
+        "message": { "type": "string" },
+        "createdAt": { "type": "integer" }
+      },
+      "required": ["userEmail", "userName", "message", "createdAt"]
     }
   },
   "firestore": {
@@ -68,6 +80,10 @@
     "/trial_requests/{requestId}": {
       "schema": "TrialRequest",
       "description": "Customer trial request entries"
+    },
+    "/support_messages/{messageId}": {
+      "schema": "SupportMessage",
+      "description": "Customer support and query entries"
     }
   }
 }

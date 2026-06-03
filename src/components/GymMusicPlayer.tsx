@@ -1321,29 +1321,106 @@ export default function GymMusicPlayer() {
 
     try {
       setIsSendingSupport(true);
-      const res = await fetch("/api/support/telegram", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          userEmail: user?.email || "Anónimo",
-          userName: user?.displayName || "Socio Contigo",
-          message: supportMessage.trim()
-        })
-      });
+      const emailVal = user?.email || "Anónimo";
+      const nameVal = user?.displayName || "Socio Contigo";
+      const msgText = supportMessage.trim();
 
-      if (!res.ok) {
-        const errorData = await res.json();
-        throw new Error(errorData.error || "Error al enviar el mensaje de soporte a Telegram");
+      // 1. Guardar siempre en la colección Firestore support_messages (Seguridad absoluta de datos)
+      let storedInDb = false;
+      try {
+        const supportRef = collection(db, "support_messages");
+        await addDoc(supportRef, {
+          userEmail: emailVal,
+          userName: nameVal,
+          message: msgText,
+          createdAt: Date.now()
+        });
+        storedInDb = true;
+      } catch (dbErr) {
+        console.error("Failed to write to Firestore support_messages:", dbErr);
       }
 
-      showNotification("¡Mensaje de soporte enviado con éxito a nuestro Telegram! Te responderemos muy pronto.");
+      // 2. Intentar enviar a Telegram a través del backend servidor /api/support/telegram
+      let sentToTelegram = false;
+      try {
+        const res = await fetch("/api/support/telegram", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            userEmail: emailVal,
+            userName: nameVal,
+            message: msgText
+          })
+        });
+
+        if (res.ok) {
+          const contentType = res.headers.get("content-type");
+          if (contentType && contentType.includes("application/json")) {
+            const data = await res.json();
+            if (data?.success) {
+              sentToTelegram = true;
+            }
+          }
+        } else {
+          // El backend falló o es una página 404 estática (como en Vercel)
+          let errorText = `Error ${res.status}`;
+          try {
+            const contentType = res.headers.get("content-type");
+            if (contentType && contentType.includes("application/json")) {
+              const errData = await res.json();
+              errorText = errData.error || errorText;
+            }
+          } catch (_) {
+            // Ignorar para evitar fallos de parseo
+          }
+          console.warn("Backend Telegram dispatch skipped or failed:", errorText);
+        }
+      } catch (backendErr) {
+        console.warn("Backend API not reachable (standard on Vercel dynamic endpoints):", backendErr);
+      }
+
+      // 3. Fallback: Si el backend no respondió, intentar envío directo desde el cliente si las variables VITE están configuradas
+      if (!sentToTelegram) {
+        const directBotToken = (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN;
+        const directChatId = (import.meta as any).env?.VITE_TELEGRAM_CHAT_ID;
+        
+        if (directBotToken && directChatId) {
+          try {
+            const formattedText = `💬 *SOPORTE FLUX PLAYER (Directo Vercel)*\n\n*Usuario:* ${nameVal}\n*Email:* ${emailVal}\n\n*Mensaje:*\n${msgText}`;
+            const teleRes = await fetch(`https://api.telegram.org/bot${directBotToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                chat_id: directChatId,
+                text: formattedText,
+                parse_mode: "Markdown"
+              })
+            });
+            if (teleRes.ok) {
+              sentToTelegram = true;
+            }
+          } catch (teleErr) {
+            console.error("Direct client Telegram dispatch failed:", teleErr);
+          }
+        }
+      }
+
+      // 4. Feedback final al usuario
+      if (sentToTelegram) {
+        showNotification("¡Mensaje enviado con éxito a Telegram! Te responderemos muy pronto.");
+      } else if (storedInDb) {
+        showNotification("¡Mensaje guardado! Tu consulta se ha registrado con éxito en la base de datos de soporte de FLUX.");
+      } else {
+        throw new Error("No se pudo registrar la consulta en Firestore ni enviar por Telegram. Por favor, revisa tu conexión.");
+      }
+
       setSupportMessage("");
       setIsSupportModalOpen(false);
     } catch (err: any) {
-      console.error("Support message error:", err);
-      showNotification(err.message || "Error al enviar. Inténtalo de nuevo.");
+      console.error("Support submit error:", err);
+      showNotification(err.message || "Error al procesar la solicitud de ayuda.");
     } finally {
       setIsSendingSupport(false);
     }

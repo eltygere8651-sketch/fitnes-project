@@ -288,7 +288,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         <div className="flex border-b border-white/5 bg-white/[0.01] px-3 sm:px-6 py-2 gap-1 sm:gap-2 shrink-0 overflow-x-auto scrollbar-thin scrollbar-thumb-white/10">
           <button
             onClick={() => setActiveTab("users")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
               activeTab === "users"
                 ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
                 : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
@@ -305,7 +305,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
           <button
             onClick={() => setActiveTab("support")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
               activeTab === "support"
                 ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
                 : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
@@ -322,14 +322,14 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
           <button
             onClick={() => setActiveTab("notifications")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
               activeTab === "notifications"
                 ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
                 : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
             }`}
           >
             <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Telegram</span>
+            <span>Notificaciones</span>
           </button>
         </div>
 

@@ -1498,7 +1498,7 @@ export default function GymMusicPlayer() {
       }
       
       const desc = editingDescription.trim();
-      const songsContext = pl.tracks && pl.tracks.length > 0 ? `, inspired by songs like: ${pl.tracks.slice(0, 3).map((t: any) => t.title).join(", ")}` : "";
+      const songsContext = pl.tracks && pl.tracks.length > 0 ? `, inspired by songs like: ${pl.tracks.slice(0, 8).map((t: any) => t.title).join(", ")}` : "";
       const promptBase = `Abstract artistic music album cover for "${editingName}"${desc ? ' theme: ' + desc : ''}${songsContext}`;
       const prompt = encodeURIComponent(`${promptBase}, highly detailed, stunning lighting, 4k, no text, no fonts, no words, beautiful vibrant layout`);
       const randomSeed = Math.floor(Math.random() * 1000000);
@@ -1844,7 +1844,7 @@ export default function GymMusicPlayer() {
         let generatedCoverUrl = firstTrackCover || trackDestCover || "";
 
         if (!generatedCoverUrl) {
-          const songsInPlaylist = finalTracksToAdd.slice(0, 3).map(t => t.title).join(", ");
+          const songsInPlaylist = finalTracksToAdd.slice(0, 8).map(t => t.title).join(", ");
           const contextInfo = desc ? ` theme: ${desc}` : '';
           const promptContext = songsInPlaylist ? `, inspired by songs like: ${songsInPlaylist}` : '';
           const promptBase = `Abstract artistic music album cover for "${name}"${contextInfo}${promptContext}`;
@@ -2463,7 +2463,7 @@ export default function GymMusicPlayer() {
         />
       </div>
       {/* 1. COMPACT HEADER */}
-      <div className="flex justify-between items-center px-3 py-3 sm:px-6 sm:py-4 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
+      <div className="flex justify-between items-center px-3 py-1 sm:px-6 sm:py-1.5 border-b border-white/5 bg-[#0a0a0b]/60 backdrop-blur-xl shrink-0 z-40">
         <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
           <div
             className={`hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 ${isPlaying && isPageVisible && !isEcoMode ? "animate-[spin_12s_linear_infinite] will-change-transform" : ""}`}
@@ -2614,9 +2614,9 @@ export default function GymMusicPlayer() {
    
                               {/* Info - Takes main space, shrinks cleanly */}
                               <div className="min-w-0 text-left flex flex-col justify-center items-start flex-1">
-                                  <p className={`text-[12px] md:text-[13px] font-bold truncate leading-snug w-full ${
-                                    isSelected ? 'text-[#1ED760]' : 'text-white/90 group-hover:text-white'
-                                  }`}>
+                                  <p className={`text-[12px] md:text-[13px] font-bold truncate leading-none w-full ${
+                          isSelected ? 'text-[#1ED760]' : 'text-white/90 group-hover:text-white'
+                        }`}>
                                       {pl.name}
                                   </p>
                                   <p className="text-[10px] md:text-[11px] text-slate-400 font-extrabold mt-0.5 truncate w-full" title={`${pl.tracks?.length || 0} pistas`}>
@@ -2831,16 +2831,16 @@ export default function GymMusicPlayer() {
         <div className={`${mobileView === "player" ? "flex" : "hidden"} md:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
-          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-3 sm:p-5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
+          <div className="flex-none bg-[#0a0a0b]/80 backdrop-blur-2xl border-b border-white/10 p-1 sm:p-1.5 relative overflow-hidden shrink-0 shadow-[0_10px_30px_rgba(0,0,0,0.5)]">
             {/* Subtle neon-accent decoration */}
             <div className="absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent" />
             
             {selectedPlaylist ? (
-              <div className="flex flex-col gap-3 sm:gap-4 items-center justify-center w-full max-w-2xl mx-auto">
+              <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-center w-full max-w-2xl mx-auto">
                 
                 {/* UP/CENTER: Artwork + Title centered visually */}
                 <div className="flex items-center justify-center w-full min-w-0 px-2">
-                  <div className="flex items-center justify-center gap-3 sm:gap-4 max-w-full">
+                  <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-full">
                     <div className="relative shrink-0">
                       <AnimatePresence>
                         {isPlaying && !isEcoMode && (
@@ -2853,7 +2853,7 @@ export default function GymMusicPlayer() {
                         )}
                       </AnimatePresence>
                       <div
-                        className={`relative z-10 w-14 h-14 sm:w-16 sm:h-16 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${
+                        className={`relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden shadow-2xl border-2 transition-colors duration-500 ${
                           isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"
                         } ${
                           isPlaying && isPageVisible && !isEcoMode ? "animate-disc-spin animate-disc-pulse" : ""
@@ -2888,7 +2888,7 @@ export default function GymMusicPlayer() {
                 </div>
 
                 {/* BOTTOM/CENTER: Timeline + Controls combined */}
-                <div className="flex flex-col w-full max-w-md gap-4 sm:gap-6 px-4 sm:px-0">
+                <div className="flex flex-col w-full max-w-md gap-1 sm:gap-2 px-4 sm:px-0">
                   
                   {/* Controls Row - Premium 3-column layout to keep play button centered */}
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
@@ -2914,7 +2914,7 @@ export default function GymMusicPlayer() {
                     </div>
 
                     {/* Center Column: Primary Playback Controls */}
-                    <div className="flex items-center justify-center gap-1 sm:gap-6">
+                    <div className="flex items-center justify-center gap-1 sm:gap-4">
                       <button
                         onClick={handlePrev}
                         title="Anterior"
@@ -2931,7 +2931,7 @@ export default function GymMusicPlayer() {
                           whileTap={{ scale: 0.9 }}
                           whileHover={{ scale: 1.05 }}
                           onClick={togglePlayback}
-                          className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
+                          className={`relative z-10 w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
                             isPlaying 
                               ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
                               : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
@@ -3050,54 +3050,32 @@ export default function GymMusicPlayer() {
           {selectedPlaylist ? (
             <div className="flex flex-col min-h-0 bg-black/40 flex-1">
               <div 
-                className="w-full relative px-3 py-2.5 sm:px-5 sm:py-3.5 border-b border-white/5 flex flex-col gap-3 shrink-0 bg-[#080809]/40"
+                className="w-full relative px-3 py-1 sm:px-5 sm:py-1 border-b border-white/5 flex flex-col gap-1 shrink-0 bg-[#080809]/40"
               >
-                <div className="flex flex-col gap-3 sm:gap-4 w-full">
+                <div className="flex flex-col gap-1 sm:gap-2 w-full">
                   {/* Premium Integrated Header & Actions */}
                   <div className="flex items-center justify-between w-full gap-3 px-1 mt-0.5">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-[8px] sm:text-[9.5px] font-black uppercase tracking-[0.3em] text-[#1ED760]/90">
-                        Canal Seleccionado
-                      </p>
-                      <h3 className="text-xs sm:text-[14px] font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-[280px]">
-                        {selectedPlaylist.name}
-                      </h3>
-                    </div>
+                      <div className="min-w-0 flex-1">
+                        <h3 className="text-xs sm:text-[13px] font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-[280px] flex items-center gap-2">
+                          <span className="text-[7.5px] font-black uppercase tracking-widest text-[#1ED760]/70 shrink-0">CANAL:</span>
+                          <span className="truncate">{selectedPlaylist.name}</span>
+                        </h3>
+                      </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Copy other user playlist */}
-                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && selectedPlaylist.name?.toLowerCase() !== 'favoritos' && (
-                        <button
-                          onClick={() => handleCopyPlaylistToProfile(selectedPlaylist)}
-                          className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
-                          title="Sincronizar y guardar este canal en tu biblioteca"
-                        >
-                          <Plus className="w-3 h-3 stroke-[3px]" />
-                          <span>Guardar</span>
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {/* Copy other user playlist */}
+                        {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && selectedPlaylist.name?.toLowerCase() !== 'favoritos' && (
+                          <button
+                            onClick={() => handleCopyPlaylistToProfile(selectedPlaylist)}
+                            className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
+                            title="Sincronizar y guardar este canal en tu biblioteca"
+                          >
+                            <Plus className="w-3 h-3 stroke-[3px]" />
+                            <span>Guardar</span>
+                          </button>
+                        )}
 
-                      {/* Add Track to own playlist */}
-                      {selectedPlaylist?.id && selectedPlaylist.id !== "all" && (
-                        isAdmin ||
-                        savedSecurityCode === "ho82788278" ||
-                        (user && selectedPlaylist.ownerId === user?.uid) ||
-                        accessData?.isValid
-                      ) && (
-                        <button
-                          onClick={() => {
-                            setTrackListTab("search");
-                            showNotification("Busca música para añadir a esta playlist.");
-                          }}
-                          title="Añadir pista a esta lista"
-                          className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
-                        >
-                          <Plus className="w-3 h-3 stroke-[3px]" />
-                          <span>Añadir Pista</span>
-                        </button>
-                      )}
-
-                      {trackListTab === "queue" && trackQueue.length > 0 && (
+                        {trackListTab === "queue" && trackQueue.length > 0 && (
                         <button
                           onClick={() => {
                             setTrackQueue([]);
@@ -3112,20 +3090,20 @@ export default function GymMusicPlayer() {
                   </div>
 
                   {/* Premium Integrated Segmented Switcher */}
-                  <div className="hidden sm:flex w-full p-1 bg-[#121214] border border-white/5 rounded-2xl items-center justify-between gap-1 mb-2">
+                  <div className="flex w-full p-0.5 sm:p-0.5 bg-[#121214] border border-white/5 rounded-2xl items-center justify-between gap-1 mb-0.5 sm:mb-1">
                     <button
                       onClick={() => {
                         setTrackListTab("playlist");
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
                         trackListTab === "playlist"
                           ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
                           : "text-slate-400 hover:text-white border-transparent"
                       }`}
                     >
-                      <ListMusic className="w-3.5 h-3.5" />
-                      <span>Pistas</span>
+                      <ListMusic className="w-3 h-3" />
+                      <span>{selectedPlaylist.name?.toLowerCase() === 'favoritos' ? 'Fav' : 'Pistas'}</span>
                     </button>
 
                     <button
@@ -3133,13 +3111,13 @@ export default function GymMusicPlayer() {
                         setTrackListTab("search");
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
                         trackListTab === "search"
                           ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
                           : "text-slate-400 hover:text-white border-transparent"
                       }`}
                     >
-                      <Search className="w-3.5 h-3.5" />
+                      <Search className="w-3 h-3" />
                       <span>Explorar</span>
                     </button>
 
@@ -3148,20 +3126,18 @@ export default function GymMusicPlayer() {
                         setTrackListTab("queue");
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 px-3 text-[11px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border relative ${
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border relative ${
                         trackListTab === "queue"
                           ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
                           : "text-slate-400 hover:text-white border-transparent"
                       }`}
                     >
-                      <Disc className="w-3.5 h-3.5" />
+                      <Disc className="w-3 h-3" />
                       <span>Cola</span>
                       {trackQueue.length > 0 && (
-                        <span className={`px-1.5 py-0.2 rounded-full text-[9px] font-black ml-1 ${
-                          trackListTab === "queue" ? "bg-[#1ED760] text-black" : "bg-white/20 text-white"
-                        }`}>
+                        <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 text-black text-[8px] font-black rounded-full flex items-center justify-center shadow-lg">
                           {trackQueue.length}
-                        </span>
+                        </div>
                       )}
                     </button>
                   </div>
@@ -3169,7 +3145,7 @@ export default function GymMusicPlayer() {
                   {/* Search Bar matching Tab */}
                   <div className="relative w-full group">
                     <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                      <Search className={`w-4 h-4 transition-colors ${searchQuery ? 'text-emerald-500' : 'text-slate-500 group-focus-within:text-emerald-500'}`} />
+                      <Search className={`w-3.5 h-3.5 transition-colors ${searchQuery ? 'text-emerald-500' : 'text-slate-500 group-focus-within:text-emerald-500'}`} />
                     </div>
                     <form onSubmit={(e) => {
                       e.preventDefault();
@@ -3181,7 +3157,7 @@ export default function GymMusicPlayer() {
                         placeholder={
                           trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
                           trackListTab === "queue" ? "¿Qué hay en la cola?" :
-                          "¿Qué te apetece escuchar? Canciones o playlists..."
+                          "¿Qué te apetece escuchar?..."
                         }
                         value={searchQuery}
                         onChange={(e) => {
@@ -3190,7 +3166,7 @@ export default function GymMusicPlayer() {
                             setYoutubeResults([]);
                           }
                         }}
-                        className="w-full bg-[#111113] border border-white/5 rounded-full py-2 sm:py-2.5 pl-9 pr-10 text-[11px] sm:text-xs text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/30 focus:bg-white/[0.05] focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
+                        className="w-full bg-[#111113] border border-white/5 rounded-full py-1 sm:py-1.5 pl-8 pr-10 text-[10px] sm:text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/30 focus:bg-white/[0.05] focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
                       />
                     </form>
                     {searchQuery && (
@@ -3211,7 +3187,7 @@ export default function GymMusicPlayer() {
               </div>
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-1 sm:p-3 premium-scrollbar relative">
+                <div className="flex-1 overflow-y-auto p-0 sm:p-0 premium-scrollbar relative">
                   {trackListTab === "search" ? (
                     <div className="space-y-1">
                       {communitySearchResults.length > 0 && (
@@ -3295,7 +3271,7 @@ export default function GymMusicPlayer() {
                                 RECOMENDADO PARA TI
                               </p>
                               <div className="grid grid-cols-2 gap-2 text-left">
-                                {communityPlaylists.map(p => ({ p, score: Math.random() })).sort((a,b)=>b.score-a.score).slice(0, 4).map(({p}) => (
+                                {communityPlaylists.map(p => ({ p, score: Math.random() })).sort((a,b)=>b.score-a.score).slice(0, 8).map(({p}) => (
                                   <div 
                                     key={`rec-${p.id}`}
                                     onClick={() => {
@@ -3365,7 +3341,7 @@ export default function GymMusicPlayer() {
                             className="flex flex-col gap-1 p-1.5 bg-white/[0.01] hover:bg-white/[0.02] rounded-2xl border border-transparent hover:border-white/5 transition-all text-left mb-2 group/yt"
                           >
                             <div className="flex items-center gap-3 p-1 relative">
-                              <div className="relative w-12 h-12 rounded-lg overflow-hidden shrink-0 bg-black/40 shadow-md">
+                              <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-black/40 shadow-md">
                                 <img 
                                   src={ytTrack.thumbnail} 
                                   alt="" 
@@ -3502,7 +3478,7 @@ export default function GymMusicPlayer() {
                                     No se encontraron pistas o mix de audio en esta playlist.
                                   </div>
                                 ) : (
-                                  <div className="space-y-1 max-h-[420px] overflow-y-auto premium-scrollbar pr-1">
+                                  <div className="space-y-0.5 max-h-[600px] overflow-y-auto premium-scrollbar pr-1">
                                     <div className="flex items-center justify-between px-2 py-1 mb-1 border-b border-white/5">
                                       <p className="text-[8px] text-slate-400 font-black uppercase tracking-widest">
                                         Pistas del Canal ({expandedPlaylistTracks.length})
@@ -3662,7 +3638,7 @@ export default function GymMusicPlayer() {
                                   </span>
                                 </div>
 
-                                <div className="relative w-7 h-7 sm:w-8 sm:h-8 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                                <div className="relative w-6 h-6 sm:w-7 sm:h-7 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
                                   {track.artwork_url || track.thumbnail || track.artwork ? (
                                     <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                                   ) : (
@@ -3722,7 +3698,7 @@ export default function GymMusicPlayer() {
                               }
                             }}
                             role="button"
-                            className={`group/track w-full flex items-center gap-2 sm:gap-3 px-2 py-1 sm:px-3 sm:py-1 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer ${
+                            className={`group/track w-full flex items-center gap-1.5 sm:gap-2 px-2 py-0 sm:px-3 sm:py-0 transition-all text-left relative overflow-hidden rounded-lg cursor-pointer ${
                               isActive
                                 ? "bg-white/[0.08] shadow-[inset_0_0_12px_rgba(255,255,255,0.02)] border-l-2 border-emerald-500"
                                 : "bg-transparent hover:bg-white/[0.04]"
@@ -3758,7 +3734,7 @@ export default function GymMusicPlayer() {
                             </div>
                             
                             {/* Thumbnail */}
-                            <div className="relative w-7 h-7 sm:w-8 sm:h-8 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                            <div className="relative w-6 h-6 sm:w-6 sm:h-6 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
                               {track.artwork_url || track.thumbnail || track.artwork ? (
                                 <img src={track.artwork_url || track.thumbnail || track.artwork} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
                               ) : (
@@ -3784,14 +3760,14 @@ export default function GymMusicPlayer() {
                             </div>
                             
                             {/* Track Info */}
-                            <div className="flex-1 min-w-0 pr-1.5 sm:pr-3 relative z-10 flex flex-col justify-center">
-                              <p className={`text-[11.5px] sm:text-xs font-semibold truncate leading-tight transition-colors duration-200 uppercase tracking-wide ${
+                            <div className="flex-1 min-w-0 pr-1.5 sm:pr-3 relative z-10 flex flex-col justify-center gap-0">
+                              <p className={`text-[11px] sm:text-[11px] font-semibold truncate leading-none transition-colors duration-200 uppercase tracking-wide ${
                                 isActive ? "text-emerald-400 font-extrabold" : "text-white"
                               }`}>
                                 {track.title}
                               </p>
                               <div className="flex items-center gap-1.5 flex-wrap min-w-0">
-                                <p className={`text-[9.5px] sm:text-[10px] font-normal truncate transition-colors duration-200 ${
+                                <p className={`text-[9px] sm:text-[9.5px] font-normal truncate leading-none transition-colors duration-200 mt-[0.5px] ${
                                   isActive ? "text-emerald-500/80 font-bold" : "text-slate-400 group-hover/track:text-white"
                                 }`}>
                                   {track.artist || track.author || "Unknown Artist"}
@@ -3846,9 +3822,9 @@ export default function GymMusicPlayer() {
                   )}
                 </div>
 
-                <div className="p-3.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[8px] font-black uppercase text-slate-500 tracking-widest shrink-0">
-                  <span>Total de canciones: {viewedTracks.length || 0}</span>
-                  <span className="text-emerald-500">Flux Engine Premium</span>
+                <div className="px-3 py-0.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                  <span>Total: {viewedTracks.length || 0} canciones</span>
+                  <span className="text-emerald-500/80">Flux Premium</span>
                 </div>
               </div>
             </div>
@@ -4180,7 +4156,7 @@ export default function GymMusicPlayer() {
                                 onClick={() => {
                                   playPreviewTrack(previewPlaylist, trackIdx);
                                 }}
-                                className={`w-full flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer text-left ${
+                                className={`w-full flex items-center justify-between p-1.5 rounded-xl border transition-all cursor-pointer text-left ${
                                   isCurrentlyActiveInPlayer
                                     ? "bg-emerald-500/10 border-emerald-500/20 text-white"
                                     : "bg-white/[0.01] hover:bg-white/[0.04] border-transparent text-slate-300 hover:text-white"

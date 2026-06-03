@@ -70,7 +70,11 @@ service cloud.firestore {
                              (isSignedIn() && (request.auth.uid == userId || (resource != null && resource.data.adminSecret == "ho82788278")));
     }
 
-    // 3. System Settings (Solo Administrador)
+    // 3. System Settings (Sección de configuración de notificaciones)
+    match /system_settings/telegram {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
     match /system_settings/{settingId} {
       allow read, write: if isAdmin();
     }

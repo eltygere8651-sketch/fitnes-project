@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from "react";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare } from "lucide-react";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [requests, setRequests] = useState<any[]>([]);
   const [loadingRequests, setLoadingRequests] = useState(true);
+
+  const [supportMessages, setSupportMessages] = useState<any[]>([]);
+  const [loadingMessages, setLoadingMessages] = useState(true);
 
   const [telegramToken, setTelegramToken] = useState("");
   const [telegramChatId, setTelegramChatId] = useState("");
@@ -18,7 +21,32 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     fetchUsers();
     fetchRequests();
     fetchTelegramConfig();
+    fetchSupportMessages();
   }, []);
+
+  const fetchSupportMessages = async () => {
+    try {
+      setLoadingMessages(true);
+      const snap = await getDocs(collection(db, "support_messages"));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      list.sort((a: any, b: any) => (b.createdAt || 0) - (a.createdAt || 0));
+      setSupportMessages(list);
+    } catch (e) {
+      console.error("Error loaded support messages:", e);
+    } finally {
+      setLoadingMessages(false);
+    }
+  };
+
+  const handleDeleteSupportMessage = async (msgId: string) => {
+    try {
+      if (!window.confirm("¿Eliminar este mensaje de soporte?")) return;
+      await deleteDoc(doc(db, "support_messages", msgId));
+      fetchSupportMessages();
+    } catch (err) {
+      console.error("Error deleting support message:", err);
+    }
+  };
 
   const fetchTelegramConfig = async () => {
     try {
@@ -412,6 +440,53 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               3. ¡Asegúrate de pulsar <strong className="text-white">INICIAR</strong> en tu bot creado antes para que pueda enviarte mensajes!<br/>
               4. Introduce ambos datos arriba, pulsa <strong className="text-emerald-400">Guardar</strong> y luego <strong className="text-white">Enviar Mensaje de Prueba</strong>.
             </div>
+          </div>
+
+          {/* SECCIÓN NUEVA: MENSAJES DE SOPORTE */}
+          <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
+            <div className="flex justify-between items-center sm:flex-row flex-col gap-2">
+              <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-purple-400" /> Mensajes de Soporte Recibidos ({supportMessages.length})
+              </h3>
+              <button
+                onClick={fetchSupportMessages}
+                className="text-[10px] bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-bold border border-white/5 cursor-pointer transition-all uppercase tracking-wider"
+              >
+                Actualizar
+              </button>
+            </div>
+
+            {loadingMessages ? (
+              <div className="text-xs text-slate-500 animate-pulse">Cargando mensajes de soporte...</div>
+            ) : supportMessages.length === 0 ? (
+              <p className="text-xs text-slate-500 font-medium">No hay mensajes de soporte guardados en la base de datos.</p>
+            ) : (
+              <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-white/5">
+                {supportMessages.map((msg: any) => (
+                  <div key={msg.id} className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col sm:flex-row justify-between items-start gap-4 hover:border-purple-500/20 transition-all">
+                    <div className="space-y-2 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-white font-black text-xs uppercase tracking-wide">{msg.userName || "Anónimo"}</span>
+                        <span className="text-[10px] text-slate-400 font-semibold truncate">({msg.userEmail || "Sin email"})</span>
+                        <span className="text-[9px] text-slate-500 font-mono">
+                          {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "N/A"}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-200 bg-black/30 p-3 rounded-xl border border-white/[0.03] whitespace-pre-wrap leading-relaxed font-medium">
+                        {msg.message}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteSupportMessage(msg.id)}
+                      className="p-2 bg-red-500/10 hover:bg-red-500/25 border border-red-500/20 text-red-400 rounded-xl transition-all cursor-pointer shrink-0 self-end sm:self-start flex items-center justify-center animate-pulse hover:animate-none"
+                      title="Eliminar Mensaje"
+                    >
+                      <Trash className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2 pt-2 border-t border-white/5">

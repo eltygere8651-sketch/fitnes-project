@@ -1381,11 +1381,28 @@ export default function GymMusicPlayer() {
         console.warn("Backend API not reachable (standard on Vercel dynamic endpoints):", backendErr);
       }
 
-      // 3. Fallback: Si el backend no respondió, intentar envío directo desde el cliente si las variables VITE están configuradas
+      // 3. Fallback: Si el backend no respondió, intentar obtener la configuración de Telegram directamente desde Firestore y enviar
       if (!sentToTelegram) {
-        const directBotToken = (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN;
-        const directChatId = (import.meta as any).env?.VITE_TELEGRAM_CHAT_ID;
-        
+        let directBotToken = "";
+        let directChatId = "";
+
+        try {
+          const teleSnap = await getDoc(doc(db, "system_settings", "telegram"));
+          if (teleSnap.exists()) {
+            const data = teleSnap.data();
+            directBotToken = (data?.botToken || "").trim();
+            directChatId = (data?.chatId || "").trim();
+          }
+        } catch (dbErr) {
+          console.warn("Could not retrieve Telegram config from Firestore directly (falling back to VITE envs):", dbErr);
+        }
+
+        if (!directBotToken || !directChatId) {
+          // Fallback to VITE env variables built into the bundle
+          directBotToken = (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || "";
+          directChatId = (import.meta as any).env?.VITE_TELEGRAM_CHAT_ID || "";
+        }
+
         if (directBotToken && directChatId) {
           try {
             const formattedText = `💬 *SOPORTE FLUX PLAYER (Directo Vercel)*\n\n*Usuario:* ${nameVal}\n*Email:* ${emailVal}\n\n*Mensaje:*\n${msgText}`;
@@ -1400,6 +1417,9 @@ export default function GymMusicPlayer() {
             });
             if (teleRes.ok) {
               sentToTelegram = true;
+            } else {
+              const teleErrText = await teleRes.text();
+              console.error("Direct Telegram endpoint returned error:", teleErrText);
             }
           } catch (teleErr) {
             console.error("Direct client Telegram dispatch failed:", teleErr);

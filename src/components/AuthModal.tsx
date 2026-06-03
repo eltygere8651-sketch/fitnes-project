@@ -7,8 +7,9 @@ import { motion, AnimatePresence } from "motion/react";
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useFirebase();
   const [authType, setAuthType] = useState<"login" | "signup">("login");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState(() => localStorage.getItem("gym_music_saved_email") || "");
+  const [password, setPassword] = useState(() => localStorage.getItem("gym_music_saved_password") || "");
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("gym_music_remember_login") === "true");
   const [nickname, setNickname] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -61,6 +62,15 @@ export const AuthModal: React.FC = () => {
       if (authType === "login") {
         await loginWithEmail(email.trim(), password);
         setSuccessMsg("¡Sesión iniciada con éxito! Iniciando...");
+        if (rememberMe) {
+          localStorage.setItem("gym_music_saved_email", email.trim());
+          localStorage.setItem("gym_music_saved_password", password);
+          localStorage.setItem("gym_music_remember_login", "true");
+        } else {
+          localStorage.removeItem("gym_music_saved_email");
+          localStorage.removeItem("gym_music_saved_password");
+          localStorage.setItem("gym_music_remember_login", "false");
+        }
       } else {
         await signupWithEmail(email.trim(), password, nickname.trim());
         setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito! Iniciando...");
@@ -264,6 +274,22 @@ export const AuthModal: React.FC = () => {
                   </button>
                 </div>
               </div>
+              
+              {/* Remember Login Checkbox */}
+              {authType === "login" && (
+                <div className="flex items-center gap-2 mt-2">
+                  <input
+                    type="checkbox"
+                    id="rememberMe"
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                    className="w-3.5 h-3.5 rounded border-slate-600 bg-[#121214] text-[#1ED760] focus:ring-[#1ED760]/50 accent-[#1ED760] cursor-pointer"
+                  />
+                  <label htmlFor="rememberMe" className="text-[10px] uppercase font-bold text-slate-400 tracking-wider cursor-pointer select-none pb-[1px]">
+                    Recordar acceso
+                  </label>
+                </div>
+              )}
 
               {/* Action main button based on tab */}
               <button

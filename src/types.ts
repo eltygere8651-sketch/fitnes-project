@@ -6,6 +6,9 @@ export interface MusicTrack {
   duration: string;
   url?: string;
   description?: string;
+  artwork_url?: string;
+  thumbnail?: string;
+  artwork?: string;
 }
 
 export interface MusicPlaylist {

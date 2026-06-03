@@ -273,7 +273,9 @@ app.get("/api/youtube/playlist", async (req, res) => {
   try {
     const playlist: any = await yt.getPlaylist(playlistId);
     let rawVideos: any[] = [];
-    if (playlist.videos) {
+    if (playlist.items && Array.isArray(playlist.items)) {
+      rawVideos = playlist.items;
+    } else if (playlist.videos) {
       if (Array.isArray(playlist.videos)) {
         rawVideos = playlist.videos;
       } else if (playlist.videos.entries && Array.isArray(playlist.videos.entries)) {
@@ -292,6 +294,13 @@ app.get("/api/youtube/playlist", async (req, res) => {
         const duration = v.duration?.text || v.duration?.toString() || "N/A";
         const id = v.id || v.video_id;
         
+        let thumbnail = "";
+        if (v.thumbnails && Array.isArray(v.thumbnails) && v.thumbnails.length > 0) {
+          thumbnail = v.thumbnails[0].url || "";
+        } else if (v.thumbnail && v.thumbnail.thumbnails && Array.isArray(v.thumbnail.thumbnails) && v.thumbnail.thumbnails.length > 0) {
+          thumbnail = v.thumbnail.thumbnails[0].url || "";
+        }
+        
         if (id && title) {
           return {
             id,
@@ -299,6 +308,7 @@ app.get("/api/youtube/playlist", async (req, res) => {
             artist,
             duration,
             url: `https://www.youtube.com/watch?v=${id}`,
+            thumbnail: thumbnail || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
           };
         }
       } catch (err) {

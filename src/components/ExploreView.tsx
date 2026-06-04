@@ -1,6 +1,7 @@
 import React from 'react';
 import { Play, ListPlus, Sparkles, ChevronRight } from 'lucide-react';
 import { MusicTrack } from '../types';
+import { Carousel } from './Carousel';
 
 interface ExploreViewProps {
   exploreData: any;
@@ -39,11 +40,15 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
     <div className="space-y-8 pb-32 px-2">
       {sections.map((section, idx) => (
         <section key={idx} className="space-y-4">
-          <h2 className="text-sm font-bold text-white flex items-center gap-2 px-1">
-            {section.title}
-            <ChevronRight className="w-4 h-4 text-emerald-500" />
-          </h2>
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none snap-x px-1">
+          <Carousel 
+            title={
+              <h2 className="text-sm font-bold text-white flex items-center gap-2 cursor-pointer hover:underline w-fit">
+                {section.title}
+                <ChevronRight className="w-5 h-5 text-slate-400" />
+              </h2>
+            }
+            className="gap-4 pb-4 snap-x px-1"
+          >
             {section.data.map((item: any) => (
               <div key={item.id + idx} className="snap-start shrink-0 w-36 group cursor-pointer" onClick={() => {
                 if (item.isPlaylist) {
@@ -73,7 +78,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
                 <p className="text-[9px] text-slate-500 truncate">{item.artist}</p>
               </div>
             ))}
-          </div>
+          </Carousel>
         </section>
       ))}
     </div>

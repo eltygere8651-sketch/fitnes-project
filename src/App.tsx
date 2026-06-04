@@ -11,7 +11,8 @@ import {
   Download,
   Headphones,
   Menu,
-  Shield
+  Shield,
+  ChevronDown
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
@@ -116,10 +117,13 @@ function AppContent() {
                   if (window.innerWidth < 640) setIsMobileMenuOpen(!isMobileMenuOpen);
                   else setIsDesktopMenuOpen(!isDesktopMenuOpen);
                 }}
-                className="flex items-center justify-center h-8 w-8 rounded-lg border border-white/10 text-white bg-white/5 hover:bg-white/10 transition-all duration-200 active:scale-95 cursor-pointer"
+                className="flex items-center justify-center h-8 px-2.5 rounded-lg border border-[#1ED760]/30 text-[#1ED760] bg-[#1ED760]/10 hover:bg-[#1ED760]/20 transition-all duration-200 active:scale-95 cursor-pointer gap-1.5"
                 title="Menú"
              >
                 <Menu className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-black uppercase tracking-widest mt-0.5 hidden sm:inline-block">MENÚ</span>
+                <span className="text-[10px] font-black uppercase tracking-widest mt-0.5 sm:hidden">MENÚ</span>
+                <ChevronDown className="w-3.5 h-3.5" />
              </button>
           </div>
 

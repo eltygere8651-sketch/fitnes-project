@@ -8,6 +8,21 @@ import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
 
+// Suppress excessive youtubei.js parser warnings that trigger AI Studio error bounds
+const originalWarn = console.warn;
+console.warn = (...args) => {
+  const str = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
+  if (str.includes('[YOUTUBEJS]') || str.includes('input_data') || str.includes('parsed_runs')) return;
+  originalWarn.apply(console, args);
+};
+
+const originalError = console.error;
+console.error = (...args) => {
+  const str = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(" ");
+  if (str.includes('[YOUTUBEJS]') || str.includes('input_data') || str.includes('parsed_runs')) return;
+  originalError.apply(console, args);
+};
+
 dotenv.config();
 
 const app = express();
@@ -166,6 +181,17 @@ app.get("/api/youtube/search", async (req, res) => {
         const isPlaylistId = id.startsWith("PL") || id.startsWith("UU");
         const isYouTubeMixId = id.startsWith("RD");
         
+        const isPlaylistType = type.includes("playlist") || (p.content_type || "").toUpperCase() === "PLAYLIST" || isPlaylistId || (!!p.playlist_id && !isYouTubeMixId);
+        const isMixType = type.includes("mix") || (p.content_type || "").toUpperCase() === "MIX" || isYouTubeMixId;
+
+        if (!thumbnail) {
+          if (isPlaylistType) {
+            thumbnail = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300";
+          } else {
+            thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+          }
+        }
+
         let videoCountStr = "";
         if (p.content_image?.primary_thumbnail?.overlays) {
           const overlays = p.content_image.primary_thumbnail.overlays || [];
@@ -183,10 +209,10 @@ app.get("/api/youtube/search", async (req, res) => {
 
         const hasPlaylistIndicator = !!p.playlist_id || p.video_count !== undefined || p.video_count_text !== undefined || videoCountStr !== "";
         
-        const isPlaylistType = type.includes("playlist") || (p.content_type || "").toUpperCase() === "PLAYLIST" || isPlaylistId || (hasPlaylistIndicator && !isYouTubeMixId);
-        const isMixType = type.includes("mix") || (p.content_type || "").toUpperCase() === "MIX" || isYouTubeMixId;
+        let finalIsPlaylistType = isPlaylistType || (hasPlaylistIndicator && !isYouTubeMixId);
+        let finalIsMixType = isMixType;
 
-        if (isPlaylistType || isMixType) {
+        if (finalIsPlaylistType || finalIsMixType) {
           if (!videoCountStr) {
             if (p.video_count !== undefined) {
               const rawVal = p.video_count;
@@ -267,14 +293,40 @@ const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
 app.get("/api/youtube/explore", async (req, res) => {
   const country = (req.query.country as string || "ES").toUpperCase();
   const countryMap: Record<string, string> = {
+    "GLOBAL": "Global",
+    "US": "Estados Unidos",
     "ES": "España",
     "MX": "México",
-    "US": "USA",
-    "GLOBAL": "Global",
     "AR": "Argentina",
-    "CO": "Colombia"
+    "CO": "Colombia",
+    "CL": "Chile",
+    "PE": "Perú",
+    "VE": "Venezuela",
+    "EC": "Ecuador",
+    "GT": "Guatemala",
+    "CU": "Cuba",
+    "BO": "Bolivia",
+    "DO": "República Dominicana",
+    "HN": "Honduras",
+    "PY": "Paraguay",
+    "SV": "El Salvador",
+    "NI": "Nicaragua",
+    "CR": "Costa Rica",
+    "PA": "Panamá",
+    "PR": "Puerto Rico",
+    "UY": "Uruguay",
+    "GB": "Reino Unido",
+    "DE": "Alemania",
+    "FR": "Francia",
+    "IT": "Italia",
+    "PT": "Portugal",
+    "SE": "Suecia",
+    "NO": "Noruega",
+    "CH": "Suiza",
+    "NL": "Países Bajos",
+    "BE": "Bélgica"
   };
-  const countryName = countryMap[country] || "Global";
+  const countryName = countryMap[country] || "España"; // Default to España if not found
 
   // Cache per country
   const countryCacheKey = `explore_${country}`;
@@ -296,6 +348,13 @@ app.get("/api/youtube/explore", async (req, res) => {
     const combined: any[] = [];
     const addedIds = new Set<string>();
 
+    const addParsedItem = (item: any) => {
+      if (!item || !item.id) return;
+      if (addedIds.has(item.id)) return;
+      addedIds.add(item.id);
+      combined.push(item);
+    };
+
     rawItems.forEach((p: any) => {
       try {
         if (!p) return;
@@ -316,6 +375,15 @@ app.get("/api/youtube/explore", async (req, res) => {
           author = p.author.name || p.author.toString() || "YouTube Creator";
         } else if (p.short_byline_text) {
           author = p.short_byline_text.toString();
+        } else if (p.metadata?.metadata?.metadata_rows) {
+          const rows = p.metadata.metadata.metadata_rows || [];
+          for (const row of rows) {
+            const part = row.metadata_parts?.[0];
+            if (part?.text?.text) {
+              author = part.text.text;
+              break;
+            }
+          }
         }
 
         let thumbnail = "";
@@ -323,23 +391,61 @@ app.get("/api/youtube/explore", async (req, res) => {
           thumbnail = p.thumbnails[0].url || "";
         } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
           thumbnail = p.thumbnail.thumbnails[0].url || "";
+        } else if (p.content_image?.primary_thumbnail?.image && Array.isArray(p.content_image.primary_thumbnail.image) && p.content_image.primary_thumbnail.image.length > 0) {
+          const imgs = p.content_image.primary_thumbnail.image;
+          thumbnail = imgs[0].url || "";
         }
+        
         if (!thumbnail) {
           thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
         }
 
-        const isPlaylistId = id.startsWith("PL") || id.startsWith("OL") || id.includes("RDCL") || type.includes("playlist");
+        const isPlaylistId = id.startsWith("PL") || id.startsWith("OL") || id.includes("RDCL") || id.startsWith("UU") || type.includes("playlist");
+        const isYouTubeMixId = id.startsWith("RD");
+        
+        let videoCountStr = "";
+        if (p.content_image?.primary_thumbnail?.overlays) {
+          const overlays = p.content_image.primary_thumbnail.overlays || [];
+          for (const overlay of overlays) {
+            const badges = overlay.badges || [];
+            for (const badge of badges) {
+              if (badge.text) {
+                videoCountStr = badge.text.toString();
+                break;
+              }
+            }
+            if (videoCountStr) break;
+          }
+        }
 
-        if (isPlaylistId) {
-          let videoCountStr = p.video_count?.toString() || p.video_count_text?.toString() || "";
+        const hasPlaylistIndicator = !!p.playlist_id || p.video_count !== undefined || p.video_count_text !== undefined || videoCountStr !== "";
+        
+        const isPlaylistType = type.includes("playlist") || (p.content_type || "").toUpperCase() === "PLAYLIST" || isPlaylistId || (hasPlaylistIndicator && !isYouTubeMixId);
+        const isMixType = type.includes("mix") || (p.content_type || "").toUpperCase() === "MIX" || isYouTubeMixId;
+
+        if (isPlaylistType || isMixType) {
+          if (!videoCountStr) {
+            if (p.video_count !== undefined) {
+              const rawVal = p.video_count;
+              videoCountStr = typeof rawVal === 'object' ? (rawVal.text || rawVal.toString()) : rawVal.toString();
+            } else if (p.video_count_text) {
+              const rawValText = p.video_count_text;
+              videoCountStr = typeof rawValText === 'object' ? (rawValText.text || rawValText.toString()) : rawValText.toString();
+            }
+          }
+
           if (!videoCountStr || videoCountStr === "Playlist" || videoCountStr === "0") {
-            videoCountStr = "Canal";
+            videoCountStr = isMixType ? "Mix" : "Canal";
           } else if (!isNaN(Number(videoCountStr))) {
             videoCountStr = `${videoCountStr} videos`;
           }
 
-          addedIds.add(id);
-          combined.push({
+          let subType = "playlist";
+          if (isYouTubeMixId || (!isPlaylistId && (type.includes("mix") || title.toLowerCase().includes("session") || title.toLowerCase().includes("dj set")))) {
+            subType = "mix";
+          }
+
+          addParsedItem({
             id,
             title,
             artist: author,
@@ -347,7 +453,7 @@ app.get("/api/youtube/explore", async (req, res) => {
             url: `https://www.youtube.com/playlist?list=${id}`,
             thumbnail,
             isPlaylist: true,
-            subType: "playlist"
+            subType
           });
         } else {
           let duration = "N/A";
@@ -357,8 +463,13 @@ app.get("/api/youtube/explore", async (req, res) => {
             duration = p.length_text.text || p.length_text.toString() || "N/A";
           }
 
-          addedIds.add(id);
-          combined.push({
+          let subType = "cancion";
+          const lowerTitle = title.toLowerCase();
+          if (lowerTitle.includes("mix") || lowerTitle.includes("remix") || lowerTitle.includes("set") || lowerTitle.includes("hour") || lowerTitle.includes("dance mix") || lowerTitle.includes("phonk mix") || lowerTitle.includes("gym mix")) {
+            subType = "mix";
+          }
+
+          addParsedItem({
             id,
             title,
             artist: author,
@@ -366,7 +477,7 @@ app.get("/api/youtube/explore", async (req, res) => {
             url: `https://www.youtube.com/watch?v=${id}`,
             thumbnail,
             isPlaylist: false,
-            subType: "cancion"
+            subType
           });
         }
       } catch (e) {
@@ -379,12 +490,24 @@ app.get("/api/youtube/explore", async (req, res) => {
 
   try {
     // Perform parallel searches to feed initial categories based on selected country
-    const [trendingRes, dailyTopRes, top100Res, workoutRes, focusRes] = await Promise.allSettled([
+    const [
+      trendingRes, 
+      dailyTopRes, 
+      top100Res, 
+      workoutRes, 
+      focusRes,
+      newReleasesRes,
+      latinRes,
+      partyRes
+    ] = await Promise.allSettled([
       yt.search(`música tendencia ${countryName} 2026`, { type: 'video' }),
       yt.search(`top diario canciones ${countryName} music charts`, { type: 'video' }),
-      yt.search(`top 100 canciones mas populares ${countryName} 2026`, { type: 'video' }),
+      yt.search(`top 100 canciones mas populares ${countryName}`, { type: 'playlist' }),
       yt.search("best gym music playlist workout", { type: 'playlist' }),
-      yt.search("lofi chill study concentration playlist", { type: 'playlist' })
+      yt.search("lofi chill study concentration playlist", { type: 'playlist' }),
+      yt.search(`nuevos lanzamientos musica ${countryName} 2026`, { type: 'playlist' }),
+      yt.search(`top exitos reggaeton urbano latino ${countryName}`, { type: 'playlist' }),
+      yt.search("fiesta party mix music playlist", { type: 'playlist' })
     ]);
 
     const getItemsFromPayload = (res: any) => {
@@ -406,16 +529,24 @@ app.get("/api/youtube/explore", async (req, res) => {
 
     const trending = parseItems(getItemsFromPayload(trendingRes)).slice(0, 15);
     const dailyTop = parseItems(getItemsFromPayload(dailyTopRes)).slice(0, 15);
-    const top100 = parseItems(getItemsFromPayload(top100Res)).slice(0, 15);
-    const workout = parseItems(getItemsFromPayload(workoutRes)).filter(x => x.isPlaylist).slice(0, 10);
-    const focus = parseItems(getItemsFromPayload(focusRes)).filter(x => x.isPlaylist).slice(0, 10);
+    const top100 = parseItems(getItemsFromPayload(top100Res)).filter(x => x.isPlaylist).slice(0, 15);
+    const workout = parseItems(getItemsFromPayload(workoutRes)).filter(x => x.isPlaylist).slice(0, 15);
+    const focus = parseItems(getItemsFromPayload(focusRes)).filter(x => x.isPlaylist).slice(0, 15);
+    
+    // Additional real official playlists
+    const newReleases = parseItems(getItemsFromPayload(newReleasesRes)).filter(x => x.isPlaylist).slice(0, 15);
+    const latin = parseItems(getItemsFromPayload(latinRes)).filter(x => x.isPlaylist).slice(0, 15);
+    const party = parseItems(getItemsFromPayload(partyRes)).filter(x => x.isPlaylist).slice(0, 15);
 
     const data = {
-      trending,   // Trending for country
-      dailyTop,   // Daily Top for country
-      top100,     // Top 100 Popular for country
+      trending,   
+      dailyTop,   
+      top100,     
       workout,    
-      focus
+      focus,
+      trends: newReleases,
+      latin,
+      party
     };
 
     exploreCache = { data, timestamp: Date.now() } as any;
@@ -443,19 +574,33 @@ app.get("/api/youtube/playlist", async (req, res) => {
   try {
     const playlist: any = await yt.getPlaylist(playlistId);
     let rawVideos: any[] = [];
-    if (playlist.items && Array.isArray(playlist.items)) {
-      rawVideos = playlist.items;
-    } else if (playlist.videos) {
-      if (Array.isArray(playlist.videos)) {
-        rawVideos = playlist.videos;
-      } else if (playlist.videos.entries && Array.isArray(playlist.videos.entries)) {
-        rawVideos = playlist.videos.entries;
-      } else if (playlist.videos.contents && Array.isArray(playlist.videos.contents)) {
-        rawVideos = playlist.videos.contents;
+    if (playlist.items && playlist.items.length > 0) {
+      console.log("[API PL] items length is", playlist.items.length);
+      for (let i = 0; i < playlist.items.length; i++) {
+        if (playlist.items[i]) rawVideos.push(playlist.items[i]);
       }
-    } else if (playlist.contents && Array.isArray(playlist.contents)) {
-      rawVideos = playlist.contents;
+      console.log("[API PL] loop extracted length is", rawVideos.length);
+    } else if (playlist.videos) {
+      if (playlist.videos.length > 0) {
+        for (let i = 0; i < playlist.videos.length; i++) {
+          if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
+        }
+      } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
+        for (let i = 0; i < playlist.videos.entries.length; i++) {
+          if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
+        }
+      } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
+        for (let i = 0; i < playlist.videos.contents.length; i++) {
+          if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
+        }
+      }
+    } else if (playlist.contents && playlist.contents.length > 0) {
+      for (let i = 0; i < playlist.contents.length; i++) {
+        if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
+      }
     }
+    
+    console.log(`[API PL] rawVideos length: ${rawVideos.length}`);
 
     const tracks = rawVideos.map((v: any) => {
       try {

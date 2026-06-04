@@ -1,3 +1,4 @@
+export const maxDuration = 60;
 import { Innertube, UniversalCache } from 'youtubei.js';
 
 let yt: Innertube | null = null;

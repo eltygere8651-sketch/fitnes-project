@@ -549,12 +549,12 @@ app.get("/api/youtube/explore", async (req, res) => {
       party
     };
 
-    exploreCache = { data, timestamp: Date.now() } as any;
+    const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300", isPlaylist: true }; if (data.trending.length === 0) data.trending.push({ ...fallback, id: "PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", title: "Top Tendencias" }); if (data.dailyTop.length === 0) data.dailyTop.push({ ...fallback, id: "PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", title: "Lo Más Nuevo" }); if (data.top100.length === 0) data.top100.push({ ...fallback, id: "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", title: "Top 100 Popular" }); if (data.workout.length === 0) data.workout.push({ ...fallback, id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Gym Motivation" }); if (data.focus.length === 0) data.focus.push({ ...fallback, id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Focus & Relax" }); if (data.trends.length === 0) data.trends.push({ ...fallback, id: "PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", title: "Novedades" }); if (data.latin.length === 0) data.latin.push({ ...fallback, id: "PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", title: "Ritmos Latinos" }); if (data.party.length === 0) data.party.push({ ...fallback, id: "PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", title: "Party Mix" }); exploreCache = { data, timestamp: Date.now() } as any;
     (exploreCache as any).country = country;
     res.json(data);
   } catch (error) {
     console.error("Explore YouTube failed:", error);
-    res.status(500).json({ error: "Failed to generate explore sections" });
+    const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://i.ytimg.com/vi/1zJcoPT-0VI/mqdefault.jpg", isPlaylist: true }; res.json({ trending: [fallback], dailyTop: [fallback], top100: [fallback], workout: [fallback], focus: [fallback], trends: [fallback], latin: [fallback], party: [fallback] });
   }
 });
 

@@ -1,0 +1,81 @@
+import React from 'react';
+import { Play, ListPlus, Sparkles, ChevronRight } from 'lucide-react';
+import { MusicTrack } from '../types';
+
+interface ExploreViewProps {
+  exploreData: any;
+  setOverrideCurrentTrack: (track: MusicTrack) => void;
+  setIsPlaying: (playing: boolean) => void;
+  showNotification: (msg: string) => void;
+  addYoutubeTrackToPlaylist: (track: any) => void;
+  loadPlaylistAndPlay: (item: any) => void;
+}
+
+export const ExploreView: React.FC<ExploreViewProps> = ({
+  exploreData,
+  setOverrideCurrentTrack,
+  setIsPlaying,
+  showNotification,
+  addYoutubeTrackToPlaylist,
+  loadPlaylistAndPlay
+}) => {
+  if (!exploreData) {
+    return <div className="p-8 text-center text-slate-400">Cargando...</div>;
+  }
+
+  const sections = [
+    { title: "Últimos Lanzamientos", data: exploreData.trends || [] },
+    { title: "Descubrimiento Diario", data: exploreData.dailyTop || [] },
+    { title: "Canciones en Tendencia", data: exploreData.trending || [] },
+    { title: "Listas Comunidad Populares", data: exploreData.latin || [] },
+    { title: "Lista Destacada Para Ti", data: exploreData.workout || [] },
+    { title: "Urbano", data: exploreData.latin || [] },
+    { title: "Mixes Personalizados", data: exploreData.top100 || [] },
+    { title: "Álbumes Para Ti", data: exploreData.focus || [] },
+    { title: "Tops de Playlist", data: exploreData.top100 || [] },
+  ];
+
+  return (
+    <div className="space-y-8 pb-32 px-2">
+      {sections.map((section, idx) => (
+        <section key={idx} className="space-y-4">
+          <h2 className="text-sm font-bold text-white flex items-center gap-2 px-1">
+            {section.title}
+            <ChevronRight className="w-4 h-4 text-emerald-500" />
+          </h2>
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-none snap-x px-1">
+            {section.data.map((item: any) => (
+              <div key={item.id + idx} className="snap-start shrink-0 w-36 group cursor-pointer" onClick={() => {
+                if (item.isPlaylist) {
+                  loadPlaylistAndPlay(item);
+                } else {
+                  const mapped: MusicTrack = {
+                    id: item.id,
+                    title: item.title,
+                    artist: item.artist || "Artista",
+                    url: item.url,
+                    duration: item.duration || "0:00",
+                    bpm: 120
+                  };
+                  setOverrideCurrentTrack(mapped);
+                  setIsPlaying(true);
+                  showNotification(`Reproduciendo: ${item.title}`);
+                }
+              }}>
+                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative mb-2">
+                    <img src={item.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
+                    <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors" />
+                    {item.isPlaylist && (
+                        <div className="absolute bottom-2 right-2 bg-black/70 text-[8px] font-bold text-white px-2 py-1 rounded-full uppercase tracking-wider backdrop-blur-sm">Playlist</div>
+                    )}
+                </div>
+                <p className="text-[11px] font-bold text-white truncate">{item.title}</p>
+                <p className="text-[9px] text-slate-500 truncate">{item.artist}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
+};

@@ -22,6 +22,7 @@ import {
   Send,
   MessageSquare,
   Shuffle,
+  Repeat,
   Shield,
   ShieldAlert,
   LogOut,
@@ -39,6 +40,8 @@ import {
   Folder,
   ChevronRight,
   Check,
+  Download,
+  Users,
 } from "lucide-react";
 import {
   collection,
@@ -60,6 +63,7 @@ import { db, loginWithGoogle, logout } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
 import { UserManagementAdmin } from "./UserManagementAdmin";
+import { ExploreView } from "./ExploreView";
 
 const COVER_THEMES = [
   {
@@ -402,7 +406,9 @@ const calculatePlaylistDuration = (tracks: MusicTrack[]) => {
 };
 
 export default function GymMusicPlayer() {
-  const { user, loading: authLoading, setAuthModalOpen, accessData } = useFirebase();
+  const isIOS = typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  const { user, loading: authLoading, setAuthModalOpen, accessData, logout } = useFirebase();
   
   const [trialRequestStatus, setTrialRequestStatus] = useState<"idle" | "sent" | "already_claimed">("idle");
   const [isCheckingTrialRequest, setIsCheckingTrialRequest] = useState(false);
@@ -605,6 +611,18 @@ export default function GymMusicPlayer() {
     }
   }, [user, authLoading]);
 
+  useEffect(() => {
+    const handleOpenSupport = () => setIsSupportModalOpen(true);
+    window.addEventListener('open-support', handleOpenSupport);
+    return () => window.removeEventListener('open-support', handleOpenSupport);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenAdmin = () => setIsAdminPanelOpen(true);
+    window.addEventListener('open-admin-panel', handleOpenAdmin);
+    return () => window.removeEventListener('open-admin-panel', handleOpenAdmin);
+  }, []);
+
   const handleSaveNickname = async () => {
     if (!user || !nicknameInput.trim()) return;
     try {
@@ -642,6 +660,8 @@ export default function GymMusicPlayer() {
   const [mobileView, setMobileView] = useState<'playlists' | 'player'>('player');
 
   const [showLibrary, setShowLibrary] = useState(false);
+  const [searchSubTab, setSearchSubTab] = useState<"novedades" | "charts" | "moods">("novedades");
+  const [isTrackListExpanded, setIsTrackListExpanded] = useState<boolean>(false);
   const [previewPlaylist, setPreviewPlaylist] = useState<MusicPlaylist | null>(null);
   const [folderExpanded, setFolderExpanded] = useState<boolean>(() => {
     const saved = localStorage.getItem("gym_music_folder_expanded");
@@ -655,6 +675,17 @@ export default function GymMusicPlayer() {
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
+  const [exploreData, setExploreData] = useState<{
+    trends: any[];
+    chartsSpain: any[];
+    workout: any[];
+    focus: any[];
+    latin: any[];
+  } | null>(null);
+  const [isLoadingExplore, setIsLoadingExplore] = useState<boolean>(false);
+  const [selectedCountry, setSelectedCountry] = useState<string>(() => {
+    return localStorage.getItem("gym_music_selected_country") || "ES";
+  });
   
   // Expanded playlist/mix tracks viewer states
   const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
@@ -840,12 +871,48 @@ export default function GymMusicPlayer() {
   }, [volume]);
   const [position, setPosition] = useState(0);
   const [duration, setDuration] = useState(0);
-  const [isShuffle, setIsShuffle] = useState(false);
+  const [isShuffle, setIsShuffle] = useState(() => {
+    const saved = localStorage.getItem("gym_music_is_shuffle");
+    return saved === "true";
+  });
+  const [isRepeat, setIsRepeat] = useState(() => {
+    const saved = localStorage.getItem("gym_music_is_repeat");
+    return saved === "true";
+  });
   const isShuffleRef = useRef(isShuffle);
-  useEffect(() => { isShuffleRef.current = isShuffle; }, [isShuffle]);
+  useEffect(() => { 
+    isShuffleRef.current = isShuffle; 
+    localStorage.setItem("gym_music_is_shuffle", isShuffle.toString());
+  }, [isShuffle]);
+
+  useEffect(() => {
+    localStorage.setItem("gym_music_is_repeat", isRepeat.toString());
+  }, [isRepeat]);
 
   const youtubePlayerRef = useRef<any>(null);
   const expectedPlayingRef = useRef(false);
+  const initialLoadRef = useRef(true);
+  const lastPosSaveRef = useRef(0);
+  const wasUnexpectedlyPausedRef = useRef(false);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden && wasUnexpectedlyPausedRef.current) {
+        showNotification("El sistema pausó el audio en segundo plano. Para evitar cortes, no bloquees el móvil.");
+        wasUnexpectedlyPausedRef.current = false;
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
+  }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    if (now - lastPosSaveRef.current > 3000) {
+      localStorage.setItem("gym_music_saved_position", position.toString());
+      lastPosSaveRef.current = now;
+    }
+  }, [position]);
 
   // Initialize security code from localStorage
   useEffect(() => {
@@ -878,25 +945,16 @@ export default function GymMusicPlayer() {
   }, [viewedTracks, searchQuery]);
 
   const communityPlaylists = React.useMemo(() => {
-    const seenNames = new Set<string>();
     return userPlaylists
       .filter(pl => {
         const isMine = pl.ownerId === user?.uid;
         const isPublic = pl.isPublic !== false;
         const isNotFav = pl.name.toLowerCase() !== 'favoritos';
-        const isNotCopy = pl.description !== "Canal guardado desde la comunidad";
+        const isNotCopy = pl.description !== "Canal guardado desde la comunidad" && pl.description !== "Canal guardado desde novedades";
         
         if (isMine || !isPublic || !isNotFav || !isNotCopy) return false;
         
-        const nameKey = pl.name.trim().toLowerCase();
-        if (seenNames.has(nameKey)) return false;
-        seenNames.add(nameKey);
         return true;
-      })
-      .sort((a, b) => {
-        const dateA = a.createdAt?.seconds || 0;
-        const dateB = b.createdAt?.seconds || 0;
-        return dateB - dateA;
       });
   }, [userPlaylists, user?.uid]);
 
@@ -961,6 +1019,13 @@ export default function GymMusicPlayer() {
     }
 
     const tracksList = displayTracks;
+    if (isRepeat) {
+      if (youtubePlayerRef.current) {
+        youtubePlayerRef.current.seekTo(0);
+      }
+      setIsPlaying(true);
+      return;
+    }
     if (currentTrackIndex < tracksList.length - 1) {
       setCurrentTrackIndex((prev) => prev + 1);
     } else if (tracksList.length > 0) {
@@ -1065,11 +1130,17 @@ export default function GymMusicPlayer() {
           return !url.toLowerCase().includes("soundcloud.com") && !url.toLowerCase().includes("snd.sc");
         });
 
+        const randomNames = ["Alex G.", "Sam Rivera", "Jordan P.", "Mika T.", "Chris M.", "Valerie S.", "Dani R.", "Noah K.", "Robin B.", "Pat S."];
+        const nameIndex = doc.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % randomNames.length;
+        const fakeOwnerName = randomNames[nameIndex];
+
         return {
           id: doc.id,
           ...data,
           ownerId: ownerId,
-          ownerName: data.ownerName || (data.adminSecret === "ho82788278" ? "Administrador" : "Curador"),
+          ownerName: (data.ownerName && data.ownerName !== "Administrador" && data.ownerName !== "eltygere8651") 
+            ? data.ownerName 
+            : (data.adminSecret === "ho82788278" ? fakeOwnerName : "Curador"),
           tracks: cleanedTracks,
         };
       })
@@ -1136,6 +1207,26 @@ export default function GymMusicPlayer() {
     }
   }, [playingPlaylist]);
 
+  useEffect(() => {
+    if (trackListTab === "search" && !exploreData && !isLoadingExplore) {
+      const fetchExplore = async () => {
+        setIsLoadingExplore(true);
+        try {
+          const res = await fetch(`/api/youtube/explore?country=${selectedCountry || 'ES'}`);
+          if (res.ok) {
+            const data = await res.json();
+            setExploreData(data);
+          }
+        } catch (err) {
+          console.error("Error loading explore data:", err);
+        } finally {
+          setIsLoadingExplore(false);
+        }
+      };
+      fetchExplore();
+    }
+  }, [trackListTab, exploreData, isLoadingExplore, selectedCountry]);
+
   const isPlayingRef = useRef(isPlaying);
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -1173,7 +1264,7 @@ export default function GymMusicPlayer() {
     }
     setPlaylistToCopy(pl);
     setCopyPlaylistNameInput(pl.name);
-    setCopyPlaylistDescInput(pl.description || "Canal guardado desde la comunidad");
+    setCopyPlaylistDescInput(pl.description || "Canal guardado desde novedades");
     setTargetPlaylistIdForCopy("new");
   };
 
@@ -1230,7 +1321,7 @@ export default function GymMusicPlayer() {
         const newPlDoc = {
           name: copyPlaylistNameInput.trim() || playlistToCopy.name,
           genre: playlistToCopy.genre || "Personalizado",
-          description: copyPlaylistDescInput.trim() || "Canal guardado desde la comunidad",
+          description: copyPlaylistDescInput.trim() || "Canal guardado desde novedades",
           icon: playlistToCopy.icon || "📂",
           thumbnail_url: playlistToCopy.thumbnail_url || "",
           ownerId: user.uid,
@@ -1804,7 +1895,7 @@ export default function GymMusicPlayer() {
           return;
         }
 
-        // Detectar si ya existe en la comunidad para redirigir/evitar duplicación pública
+        // Detectar si ya existe en novedades para redirigir/evitar duplicación pública
         const normalizeStr = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
         
         const existsPublicly = userPlaylists.find(p => {
@@ -1830,7 +1921,7 @@ export default function GymMusicPlayer() {
         });
 
         if (existsPublicly) {
-          showNotification(`El nombre "${name}" ya existe en la Comunidad. Usa el buscador para añadirlo a tu biblioteca. Si deseas una versión propia, elige otro nombre.`);
+          showNotification(`El nombre "${name}" ya existe en Novedades. Usa el buscador para añadirlo a tu biblioteca. Si deseas una versión propia, elige otro nombre.`);
           setIsProcessingModalAdd(false);
           setIsAddingToPlaylistModalOpen(false);
           return;
@@ -2090,13 +2181,13 @@ export default function GymMusicPlayer() {
       return;
     }
     
-    // Find "Favoritos" playlist for user
-    const favPlaylist = userPlaylists.find(p => p.ownerId === user.uid && p.name.toLowerCase() === "favoritos");
+    // Find "Favoritos"/"Siguiente" playlist for user
+    const favPlaylist = userPlaylists.find(p => p.ownerId === user.uid && (p.name.toLowerCase() === "favoritos" || p.name.toLowerCase() === "siguiente"));
     
     if (!favPlaylist) {
       const newPl: any = {
-        name: "Favoritos",
-        genre: "Favoritos",
+        name: "Siguiente",
+        genre: "Siguiente",
         description: "Tus pistas favoritas",
         tracks: [track],
         thumbnail_url: "",
@@ -2157,6 +2248,7 @@ export default function GymMusicPlayer() {
     
     if (isSamePlaylist) {
       if (currentTrackIndex === trackIdx) {
+        expectedPlayingRef.current = !isPlaying;
         setIsPlaying(!isPlaying);
       } else {
         setIsLoadingTrack(true);
@@ -2284,8 +2376,8 @@ export default function GymMusicPlayer() {
     const now = Date.now();
     const isPlayingChanged = lastSyncIsPlayingRef.current !== isPlaying;
     const isNewTrack = lastSyncTrackRef.current !== currentTrackIndex;
-    // Throttle rate is 12 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem with high-frequency updates)
-    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 12000 : 3000);
+    // Throttle rate is 8 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem)
+    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 8000 : 3000);
 
     if (isPlayingChanged || isNewTrack || isThrottleTimeoutPassed) {
       if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
@@ -2429,17 +2521,35 @@ export default function GymMusicPlayer() {
             url={currentUrl}
             playing={isPlaying}
             volume={volume / 100}
-            progressInterval={isEcoMode ? 5000 : 1000}
-            onEnded={() => handleNext()}
-            onProgress={(state) => {
-              if (document.visibilityState === "visible") {
-                setPosition(state.playedSeconds * 1000);
+            progressInterval={1000}
+            onReady={(player) => {
+              if (initialLoadRef.current) {
+                const savedPos = localStorage.getItem("gym_music_saved_position");
+                if (savedPos) {
+                  const posInSecs = Number(savedPos) / 1000;
+                  if (posInSecs > 0) {
+                      player.seekTo(posInSecs, "seconds");
+                  }
+                }
+                initialLoadRef.current = false;
               }
             }}
+            onPlay={() => {
+               wasUnexpectedlyPausedRef.current = false;
+               setIsPlaying(true);
+            }}
+            onPause={() => {
+               if (expectedPlayingRef.current && document.hidden) {
+                  wasUnexpectedlyPausedRef.current = true;
+               }
+               setIsPlaying(false);
+            }}
+            onEnded={() => handleNext()}
+            onProgress={(state) => {
+              setPosition(state.playedSeconds * 1000);
+            }}
             onDuration={(dur) => {
-              if (document.visibilityState === "visible") {
-                setDuration(dur * 1000);
-              }
+              setDuration(dur * 1000);
             }}
             config={{ 
               youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },
@@ -2462,42 +2572,9 @@ export default function GymMusicPlayer() {
           className="hidden"
         />
       </div>
-      {/* 1. COMPACT HEADER */}
-      <div className={`flex justify-between items-center px-3 py-1 sm:px-6 sm:py-1.5 border-b border-white/5 bg-[#0a0a0b]/60 ${isEcoMode ? 'backdrop-blur-sm' : 'backdrop-blur-xl'} shrink-0 z-40`}>
-        <div className="flex items-center gap-2 sm:gap-4 min-w-0 flex-1">
-          <div
-            className={`hidden sm:flex bg-emerald-500/10 p-2.5 rounded-xl border border-emerald-500/20 ${isPlaying && isPageVisible && !isEcoMode ? "animate-[spin_12s_linear_infinite] will-change-transform" : ""}`}
-          >
-            <Music className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="min-w-0">
-            <p className="text-[8px] sm:text-[9px] font-black tracking-[0.3em] uppercase text-emerald-500 mb-0.5 opacity-70">
-              Flux Player
-            </p>
-            <h2 className="text-xs sm:text-sm font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-md uppercase">
-              {displayTitle}
-            </h2>
-          </div>
-        </div>
 
-        <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
-          <button
-            onClick={() => {
-              setShowLibrary(!showLibrary);
-            }}
-            className={`flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 rounded-xl transition-all border text-[10px] font-black uppercase ${
-              showLibrary
-                ? "bg-white text-black border-white shadow-lg"
-                : "bg-white/5 hover:bg-white/10 border-white/10 text-slate-400 hover:text-white"
-            }`}
-          >
-            <ListMusic className="w-3.5 h-3.5" />
-            <span className="hidden sm:block">Comunidad</span>
-          </button>
-        </div>
-        </div>
 
-         {/* 2. MAIN SPLIT STAGE */}
+
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
         {/* SIDEBAR */}
         <div className={`${mobileView === "playlists" ? "flex w-full" : "hidden"} md:flex md:w-[240px] flex-col bg-[#050505] border-r border-white/5 shrink-0 overflow-hidden z-30`}>
@@ -2546,8 +2623,8 @@ export default function GymMusicPlayer() {
                   }
 
                   // 1) Extract 'Favoritos' system-playlist
-                  const favoritosPlaylist = filteredList.find(pl => pl.name?.toLowerCase() === 'favoritos');
-                  const otherPlaylists = filteredList.filter(pl => pl.name?.toLowerCase() !== 'favoritos');
+                  const favoritosPlaylist = filteredList.find(pl => pl.name?.toLowerCase() === 'favoritos' || pl.name?.toLowerCase() === 'siguiente');
+                  const otherPlaylists = filteredList.filter(pl => pl.name?.toLowerCase() !== 'favoritos' && pl.name?.toLowerCase() !== 'siguiente');
 
                   // 2) Group other playlists: default folder is "Tus Listas" (folder !== "root")
                   const folderPlaylists = otherPlaylists.filter(pl => pl.folder !== "root" && localFoldersMap[pl.id] !== "root");
@@ -2691,7 +2768,7 @@ export default function GymMusicPlayer() {
                             {/* Text details */}
                             <div className="flex-1 min-w-0 text-left flex flex-col justify-center items-start">
                               <p className="text-[12px] md:text-[13px] font-black text-rose-400 group-hover:text-pink-400 transition-colors uppercase tracking-wider leading-none">
-                                Tus Favoritos
+                                Tus Siguiente
                               </p>
                               <p className="text-[10px] md:text-[11px] text-slate-400 font-extrabold mt-1 uppercase tracking-wide truncate w-full">
                                 {favoritosPlaylist.tracks?.length || 0} {favoritosPlaylist.tracks?.length === 1 ? 'Canción' : 'Canciones'}
@@ -2797,32 +2874,43 @@ export default function GymMusicPlayer() {
               </div>
             ) : (
               <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-black/20 flex flex-col items-stretch gap-2 shrink-0">
-                <div className="hidden md:block text-left shrink-0">
-                  <p className="text-[8px] font-black uppercase tracking-wider text-slate-300">
-                    Suscripción Activa
-                  </p>
-                  <p className="text-[9px] text-emerald-400 font-bold mt-0.5">
-                    {accessData?.daysRemaining || 0} Días restantes
-                  </p>
-                </div>
-                
-                {isAdmin && (
+                {/* Desktop Version */}
+                <div className="hidden md:flex items-center justify-between shrink-0">
+                  <div className="text-left shrink-0">
+                    <p className="text-[8px] font-black uppercase tracking-wider text-slate-300">
+                      Suscripción Activa
+                    </p>
+                    <p className="text-[9px] text-emerald-400 font-bold mt-0.5">
+                      {accessData?.daysRemaining || 0} Días restantes
+                    </p>
+                  </div>
+                  
                   <button
-                    onClick={() => setIsAdminPanelOpen(true)}
-                    className="py-1.5 md:py-2 bg-purple-500/10 hover:bg-purple-500 text-purple-400 hover:text-black border border-purple-500/20 hover:border-purple-500 font-black uppercase tracking-wider text-[9px] rounded-lg md:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 shadow-lg shadow-purple-500/5"
-                    title="Panel Maestro de Suscripciones (Usuarios)"
+                    onClick={() => logout()}
+                    className="hidden p-1.5 px-2 md:py-1 md:px-2 rounded-lg border border-transparent text-slate-400 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all cursor-pointer items-center justify-center shadow-lg shadow-black/50"
+                    title="Cerrar Sesión"
                   >
-                    <Shield className="w-3.5 h-3.5" />
-                    <span>Panel Control</span>
+                    <LogOut className="w-3.5 h-3.5 mr-1.5 md:w-3 md:h-3" />
+                    <span className="font-bold uppercase tracking-widest text-[8px]">Salir</span>
                   </button>
-                )}
+                </div>
 
-                <button
-                  onClick={() => setIsSupportModalOpen(true)}
-                  className="py-1.5 md:py-2 bg-gradient-to-r from-[#1ED760]/20 to-emerald-500/20 hover:from-[#1ED760]/30 hover:to-emerald-500/30 text-[#1ED760] font-bold uppercase tracking-wider text-[9px] rounded-lg md:rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95 border border-[#1ED760]/30 shadow-[0_4px_12px_rgba(30,215,96,0.1)] font-black"
-                >
-                  Contactar Soporte
-                </button>
+                {/* Mobile Version - Beautifully Optimized Green Stack - Cleaned for minimalism */}
+                <div className="block md:hidden space-y-3 p-1">
+                  <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
+                    <div className="text-left">
+                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
+                        Suscripción Activa
+                      </p>
+                      <p className="text-[11px] text-[#1ED760] font-black mt-0.5">
+                        {accessData?.daysRemaining || 0} Días restantes
+                      </p>
+                    </div>
+                    <span className="px-2.5 py-1 text-[8px] font-black uppercase tracking-widest bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 rounded-full">
+                      MÚSICA PREMIUM
+                    </span>
+                  </div>
+                </div>
               </div>
             )}
         </div>
@@ -2830,6 +2918,8 @@ export default function GymMusicPlayer() {
         {/* CONTAINER PLAYER + TRACKLIST */}
         <div className={`${mobileView === "player" ? "flex" : "hidden"} md:flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
+          {/* QUICK MOODS & GENRES REMOVED FROM HERE AS REQUESTED (Moving to Explorar) */}
+
           {/* PLAYER BAR */}
           <div className={`flex-none bg-[#0a0a0b]/80 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-2xl'} border-b border-white/10 p-1 sm:p-1.5 relative overflow-hidden shrink-0 ${isEcoMode ? 'shadow-md' : 'shadow-[0_10px_30px_rgba(0,0,0,0.5)]'}`}>
             {/* Subtle neon-accent decoration */}
@@ -2840,8 +2930,15 @@ export default function GymMusicPlayer() {
                 
                 {/* UP/CENTER: Artwork + Title centered visually */}
                 <div className="flex items-center justify-center w-full min-w-0 px-2">
-                  <div className="flex items-center justify-center gap-2 sm:gap-4 max-w-full">
-                    <div className="relative shrink-0">
+                  <div 
+                    onClick={() => {
+                      setTrackListTab("playlist");
+                      setIsTrackListExpanded(!isTrackListExpanded);
+                    }}
+                    title="Hacer clic para abrir lista de canciones"
+                    className="flex items-center justify-center gap-2 sm:gap-4 max-w-full cursor-pointer hover:opacity-95 active:scale-[0.98] transition-all group"
+                  >
+                    <div className="relative shrink-0 group-hover:scale-105 transition-transform duration-300">
                       <AnimatePresence>
                         {isPlaying && !isEcoMode && (
                           <motion.div
@@ -2853,10 +2950,8 @@ export default function GymMusicPlayer() {
                         )}
                       </AnimatePresence>
                         <div
-                          className={`relative z-10 w-12 h-12 sm:w-14 sm:h-14 rounded-full overflow-hidden ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} border-2 transition-colors duration-500 ${
-                            isPlaying ? "border-emerald-500/50 shadow-emerald-500/20" : "border-white/10 shadow-black/40"
-                          } ${
-                            isPlaying && isPageVisible && !isEcoMode ? "animate-disc-spin animate-disc-pulse" : ""
+                          className={`relative z-10 w-12 h-12 sm:w-16 sm:h-16 rounded-xl overflow-hidden ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} border-2 transition-all duration-500 ${
+                            isPlaying ? "border-emerald-500/50 shadow-emerald-500/20 scale-105" : "border-white/10 shadow-black/40"
                           }`}
                         >
                         <img
@@ -2864,16 +2959,13 @@ export default function GymMusicPlayer() {
                           alt="Artwork"
                           className="w-full h-full object-cover"
                         />
-                        {/* Vinyl Record Center Hole Decor */}
-                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-3 h-3 bg-[#080809] rounded-full border border-white/20 shadow-inner" />
-                          <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/10" />
-                        </div>
+                        {/* Artwork Overlay Decor */}
+                        <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5" />
                       </div>
                     </div>
                   <div className="flex flex-col min-w-0 shrink justify-center">
                     <div className="flex items-center gap-1.5 overflow-hidden">
-                      <h1 className="text-[11px] sm:text-sm font-black text-white uppercase tracking-tight truncate max-w-[200px] sm:max-w-[320px] text-left">
+                      <h1 className="text-[11px] sm:text-sm font-black text-white uppercase tracking-tight truncate max-w-[200px] sm:max-w-[320px] text-left group-hover:text-emerald-400 transition-colors">
                         {displayTitle}
                       </h1>
                       {isLoadingTrack && (
@@ -2887,18 +2979,48 @@ export default function GymMusicPlayer() {
                   </div>
                 </div>
 
-                {/* BOTTOM/CENTER: Timeline + Controls combined */}
-                <div className="flex flex-col w-full max-w-md gap-1 sm:gap-2 px-4 sm:px-0">
+                {/* BOTTOM/CENTER: Timeline + Controls combined (YTM Style: Timeline above buttons) */}
+                <div className="flex flex-col w-full max-w-md gap-2 sm:gap-3 px-4 sm:px-0">
                   
-                  {/* Controls Row - Premium 3-column layout to keep play button centered */}
+                  {/* Progress Timeline Row (YTM style: Above buttons) */}
+                  <div className="flex flex-col gap-1 w-full">
+                    <div 
+                      onPointerDown={handleTimelinePointerDown}
+                      className="flex-1 relative flex items-center h-2.5 cursor-pointer min-w-0 group/timeline select-none touch-none"
+                    >
+                      <div className="w-full h-1 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/timeline:h-1.5 transition-all">
+                        <div
+                          className="h-full bg-white rounded-full relative"
+                          style={{
+                            width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
+                          }}
+                        />
+                      </div>
+                      
+                      {/* YTM Style Interactive Handle (Red or White dot) */}
+                      <div 
+                        className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-150 shadow-md pointer-events-none"
+                        style={{
+                          left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 6px)`,
+                        }}
+                      />
+                    </div>
+                    
+                    <div className="flex justify-between text-[8px] font-bold text-slate-500 uppercase tracking-widest px-0.5">
+                      <span>{formatTime(position)}</span>
+                      <span>{formatTime(duration)}</span>
+                    </div>
+                  </div>
+
+                  {/* Controls Row - Premium 3-column layout */}
                   <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
                     
-                    {/* Left Column: Shuffle Button */}
-                    <div className="flex justify-start">
+                    {/* Left Column: Shuffle & Repeat Buttons */}
+                    <div className="flex justify-start items-center gap-1">
                       <button
                         onClick={() => setIsShuffle(!isShuffle)}
                         title="Aleatorio"
-                        className={`group/shuffle relative p-1.5 sm:p-2 transition-all transform active:scale-90 ${
+                        className={`group/shuffle relative p-1.5 sm:p-2 transition-all transform active:scale-95 ${
                           isShuffle ? "text-emerald-500" : "text-slate-500 hover:text-white"
                         }`}
                       >
@@ -2906,137 +3028,70 @@ export default function GymMusicPlayer() {
                         {isShuffle && (
                           <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-emerald-500 rounded-full shadow-[0_0_8px_rgba(16,185,129,0.8)]" />
                         )}
-                        {/* Tooltip-like label for Shuffle on hover */}
-                        <span className="absolute -top-8 left-1/2 -translate-x-1/2 bg-slate-900 border border-white/10 text-[10px] py-1 px-2 rounded opacity-0 group-hover/shuffle:opacity-100 transition-opacity whitespace-nowrap pointer-events-none uppercase tracking-tighter">
-                          Mezcla
-                        </span>
                       </button>
+                      <button
+                         onClick={() => setIsRepeat(!isRepeat)}
+                         className={`p-1.5 sm:p-2 transition-all ${isRepeat ? "text-emerald-500" : "text-slate-500 hover:text-white"}`}
+                         title="Repetir"
+                       >
+                         <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
+                       </button>
                     </div>
 
                     {/* Center Column: Primary Playback Controls */}
-                    <div className="flex items-center justify-center gap-1 sm:gap-4">
+                    <div className="flex items-center justify-center gap-4 sm:gap-8">
                       <button
                         onClick={handlePrev}
                         title="Anterior"
-                        className="p-1 sm:p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                        className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
                       >
-                        <SkipBack className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                        <SkipBack className="w-6 h-6 sm:w-7 sm:h-7 fill-current" />
                       </button>
 
-                      <div className="relative group flex-shrink-0 mx-1 sm:mx-0">
-                        {/* Premium Outer Glow (Disabled in Eco Mode to save GPU) */}
-                        <div className={`absolute -inset-4 rounded-full blur-2xl transition-all duration-1000 ${isPlaying && !isEcoMode ? "bg-emerald-500/30 opacity-100 scale-110" : "bg-white/5 opacity-0 group-hover:opacity-100"}`} />
-                        
-                        <motion.button
-                          whileTap={{ scale: 0.9 }}
-                          whileHover={{ scale: 1.05 }}
-                          onClick={togglePlayback}
-                          className={`relative z-10 w-10 h-10 sm:w-14 sm:h-14 rounded-full flex items-center justify-center transition-all duration-500 shadow-[0_15px_50px_rgba(0,0,0,0.6)] border-2 ${
-                            isPlaying 
-                              ? "bg-emerald-500 border-emerald-400/40 text-black shadow-emerald-500/40 hover:shadow-emerald-500/50" 
-                              : "bg-white border-white/20 text-black hover:bg-slate-50 shadow-white/10"
-                          }`}
-                        >
-                          {isPlaying ? (
-                            <Pause className="w-5 h-5 sm:w-8 sm:h-8 fill-current" />
-                          ) : (
-                            <Play className="w-5 h-5 sm:w-8 sm:h-8 fill-current ml-1" />
-                          )}
-                        </motion.button>
-                      </div>
+                      <motion.button
+                        whileTap={{ scale: 0.9 }}
+                        whileHover={{ scale: 1.05 }}
+                        onClick={togglePlayback}
+                        className={`w-12 h-12 sm:w-16 sm:h-16 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl ${
+                          isPlaying 
+                            ? "bg-white text-black" 
+                            : "bg-white text-black pl-1"
+                        }`}
+                      >
+                        {isPlaying ? (
+                          <Pause className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+                        ) : (
+                          <Play className="w-6 h-6 sm:w-8 sm:h-8 fill-current" />
+                        )}
+                      </motion.button>
 
                       <button
                         onClick={handleNext}
                         title="Siguiente"
-                        className="p-1 sm:p-2 text-slate-400 hover:text-white transition-all transform active:scale-90 hover:scale-110 flex-shrink-0"
+                        className="flex flex-col items-center gap-1 p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0 group"
                       >
-                        <SkipForward className="w-5 h-5 sm:w-6 sm:h-6 fill-current" />
+                        <SkipForward className="w-6 h-6 sm:w-7 sm:h-7 fill-current" />
+                        <span className="text-[7px] font-black uppercase tracking-tighter text-slate-500 group-hover:text-emerald-400 transition-colors">Siguiente</span>
                       </button>
                     </div>
 
-                    {/* Right Column: Optimized Volume Control */}
-                    <div className="flex justify-end min-w-0 pr-1">
-                      <div className="flex items-center gap-1.5 sm:gap-2 px-2.5 py-1.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/[0.08] transition-all duration-300 w-full max-w-[110px] sm:max-w-[150px] shadow-md select-none">
-                        <button
-                          onClick={() => {
-                            if (volume > 0) {
-                              setLastVolume(volume);
-                              handleVolumeChange(0);
-                            } else {
-                              handleVolumeChange(lastVolume > 0 ? lastVolume : 70);
-                            }
-                          }}
-                          className="text-slate-400 hover:text-emerald-400 p-0.5 sm:p-1 rounded-full hover:bg-white/10 transition-colors shrink-0 cursor-pointer"
-                          title={volume > 0 ? "Silenciar" : "Activar sonido"}
-                        >
-                          {volume === 0 ? (
-                            <VolumeX className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-500" />
-                          ) : volume < 50 ? (
-                            <Volume1 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-500/80" />
-                          ) : (
-                            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-400" />
-                          )}
-                        </button>
-                        
-                        <div
-                          onPointerDown={handleVolumePointerDown}
-                          className="flex-1 relative flex items-center h-4 cursor-pointer select-none touch-none group/volume-slider min-w-[35px] sm:min-w-[65px]"
-                        >
-                          <div className="w-full h-1 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/volume-slider:h-1.5 transition-all">
-                            <div
-                              className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full"
-                              style={{ width: `${volume}%` }}
-                            />
-                          </div>
-                          <div
-                            className="absolute w-2 h-2 sm:w-2.5 sm:h-2.5 bg-white rounded-full opacity-100 sm:opacity-0 sm:group-hover/volume-slider:opacity-100 transition-opacity shadow-[0_0_4px_rgba(255,255,255,0.7)] pointer-events-none"
-                            style={{ left: `calc(${volume}% - 4px)` }}
-                          />
-                        </div>
-
-                        <span className="text-[8px] sm:text-[10px] font-mono font-bold text-slate-400 w-5 sm:w-6 text-right shrink-0 select-none">
-                          {volume}
-                        </span>
+                    {/* Volume Control */}
+                    <div className="flex flex-col gap-2 mt-4 px-4">
+                      <div className="flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-white shrink-0" />
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={volume}
+                          onChange={(e) => handleVolumeChange(parseInt(e.target.value))}
+                          className="w-full h-1 bg-white/20 rounded-lg appearance-none cursor-pointer accent-emerald-500"
+                        />
                       </div>
-                    </div>
-                  </div>
-
-                  {/* Progress Timeline Row */}
-                  <div className="flex flex-col gap-3 w-full mt-1">
-                    <div 
-                      onPointerDown={handleTimelinePointerDown}
-                      className="flex-1 relative flex items-center h-4 cursor-pointer min-w-0 group/timeline select-none touch-none"
-                    >
-                      <div className="w-full h-1.5 bg-white/5 rounded-full relative overflow-hidden border border-white/5 pointer-events-none">
-                        <div
-                          className="h-full bg-gradient-to-r from-emerald-600 to-emerald-400 rounded-full relative shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                          style={{
-                            width: `${duration > 0 ? (position / duration) * 100 : 0}%`,
-                          }}
-                        >
-                          <div className="absolute right-0 inset-y-0 w-12 bg-white/20 blur-md pointer-events-none" />
-                        </div>
-                      </div>
-                      
-                      {/* Premium Spotify-Style Interactive Handle */}
-                      <div 
-                        className="absolute w-3 h-3 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-150 shadow-[0_0_5px_rgba(255,255,255,0.8)] pointer-events-none"
-                        style={{
-                          left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 6px)`,
-                        }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between text-[9px] font-black font-mono text-slate-500 uppercase tracking-[0.2em] w-full px-0.5">
-                      <span className="shrink-0">{formatTime(position)}</span>
-                      <div className="flex items-center gap-1.5 opacity-30">
-                        <Sparkles className="w-2.5 h-2.5" />
-                        <span className="hidden sm:inline">Quantum Engine</span>
-                      </div>
-                      <span className="shrink-0">{formatTime(duration)}</span>
                     </div>
                   </div>
                 </div>
+
 
               </div>
             ) : (
@@ -3090,20 +3145,42 @@ export default function GymMusicPlayer() {
                   </div>
 
                   {/* Premium Integrated Segmented Switcher */}
-                  <div className="flex w-full p-0.5 sm:p-0.5 bg-[#121214] border border-white/5 rounded-2xl items-center justify-between gap-1 mb-0.5 sm:mb-1">
+                  <div className="flex w-full p-0.5 bg-transparent items-center justify-between gap-1 mb-0.5 sm:mb-1">
                     <button
                       onClick={() => {
-                        setTrackListTab("playlist");
+                        if (trackListTab === "playlist") {
+                          setIsTrackListExpanded(!isTrackListExpanded);
+                        } else {
+                          setTrackListTab("playlist");
+                          setIsTrackListExpanded(true);
+                        }
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border ${
                         trackListTab === "playlist"
-                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
-                          : "text-slate-400 hover:text-white border-transparent"
+                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
+                          : "text-slate-500 hover:text-slate-300 border-transparent"
                       }`}
                     >
                       <ListMusic className="w-3 h-3" />
-                      <span>{selectedPlaylist.name?.toLowerCase() === 'favoritos' ? 'Fav' : 'Pistas'}</span>
+                      <span>{selectedPlaylist.name?.toLowerCase() === 'favoritos' ? 'Fav' : 'Siguiente'}</span>
+                      <span className="text-[7.5px] px-1 bg-white/5 rounded-sm text-slate-400">
+                        {isTrackListExpanded ? "▲" : "▼"}
+                      </span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowLibrary(true);
+                      }}
+                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border ${
+                        showLibrary
+                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
+                          : "text-slate-500 hover:text-slate-300 border-transparent"
+                      }`}
+                    >
+                      <Users className="w-3 h-3 text-[#1ED760]" />
+                      <span>Comunidad</span>
                     </button>
 
                     <button
@@ -3111,10 +3188,10 @@ export default function GymMusicPlayer() {
                         setTrackListTab("search");
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border ${
+                      className={`hidden sm:flex flex-1 items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border ${
                         trackListTab === "search"
-                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
-                          : "text-slate-400 hover:text-white border-transparent"
+                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
+                          : "text-slate-500 hover:text-slate-300 border-transparent"
                       }`}
                     >
                       <Search className="w-3 h-3" />
@@ -3126,16 +3203,16 @@ export default function GymMusicPlayer() {
                         setTrackListTab("queue");
                         setSearchQuery("");
                       }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer border relative ${
+                      className={`hidden sm:flex flex-1 items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border relative ${
                         trackListTab === "queue"
-                          ? "bg-white/10 text-[#1ED760] border-emerald-500/10 font-black shadow-md"
-                          : "text-slate-400 hover:text-white border-transparent"
+                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
+                          : "text-slate-500 hover:text-slate-300 border-transparent"
                       }`}
                     >
                       <Disc className="w-3 h-3" />
                       <span>Cola</span>
                       {trackQueue.length > 0 && (
-                        <div className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 text-black text-[8px] font-black rounded-full flex items-center justify-center shadow-lg">
+                        <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-emerald-500 text-black text-[7px] font-black rounded-full flex items-center justify-center shadow-md">
                           {trackQueue.length}
                         </div>
                       )}
@@ -3190,12 +3267,87 @@ export default function GymMusicPlayer() {
                 <div className="flex-1 overflow-y-auto p-0 sm:p-0 premium-scrollbar relative">
                   {trackListTab === "search" ? (
                     <div className="space-y-1">
-                      {communitySearchResults.length > 0 && (
+                      {/* SUB-TABS SELECTOR FOR SEARCH - HORIZONTAL SCROLL ENABLED FOR MOBILE */}
+                      <div className="flex px-3 pt-2.5 pb-2.5 gap-2 border-b border-white/5 bg-[#050506]/90 shrink-0 select-none z-10 sticky top-0 backdrop-blur-md overflow-x-auto scrollbar-none no-scrollbar snap-x">
+                        <button
+                          onClick={() => {
+                            setSearchSubTab("novedades");
+                            setPreviewPlaylist(null);
+                          }}
+                          className={`shrink-0 px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border snap-start ${
+                            searchSubTab === "novedades"
+                              ? "bg-white text-black border-white shadow-md"
+                              : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Novedades
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSearchSubTab("charts");
+                            setPreviewPlaylist(null);
+                          }}
+                          className={`shrink-0 px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border snap-start ${
+                            searchSubTab === "charts"
+                              ? "bg-white text-black border-white shadow-md"
+                              : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Listas de éxitos
+                        </button>
+                        <button
+                          onClick={() => {
+                            setSearchSubTab("moods");
+                            setPreviewPlaylist(null);
+                          }}
+                          className={`shrink-0 px-3.5 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer border snap-start ${
+                            searchSubTab === "moods"
+                              ? "bg-white text-black border-white shadow-md"
+                              : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
+                          }`}
+                        >
+                          Ánimos y géneros
+                        </button>
+                      </div>
+
+                      {/* COUNTRY SELECTOR FOR CHARTS */}
+                      {searchSubTab === "charts" && (
+                        <div className="px-3 pt-3 pb-1">
+                          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar scrollbar-none snap-x">
+                            {[
+                              { code: "GLOBAL", label: "Global", flag: "🌎" },
+                              { code: "ES", label: "España", flag: "🇪🇸" },
+                              { code: "MX", label: "México", flag: "🇲🇽" },
+                              { code: "US", label: "USA", flag: "🇺🇸" },
+                              { code: "AR", label: "Argentina", flag: "🇦🇷" },
+                              { code: "CO", label: "Colombia", flag: "🇨🇴" }
+                            ].map((c) => (
+                              <button
+                                key={c.code}
+                                onClick={() => {
+                                  setSelectedCountry(c.code);
+                                  localStorage.setItem("gym_music_selected_country", c.code);
+                                  setExploreData(null); // Force reload
+                                }}
+                                className={`shrink-0 px-3 py-1.5 rounded-lg text-[10px] font-bold flex items-center gap-1.5 transition-all snap-start ${
+                                  selectedCountry === c.code 
+                                    ? "bg-emerald-500 text-black shadow-lg shadow-emerald-500/20" 
+                                    : "bg-white/5 text-slate-400 hover:bg-white/10"
+                                }`}
+                              >
+                                <span>{c.flag}</span>
+                                <span>{c.label}</span>
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                          {communitySearchResults.length > 0 && (
                         <div className="mb-4">
                            <div className="flex items-center justify-between px-2 py-2 mb-1">
                             <span className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] flex items-center gap-2">
                               <div className="w-1.5 h-1.5 rounded-full bg-[#1ED760] animate-pulse" />
-                              Canales de la Comunidad
+                              Canales en Novedades
                             </span>
                           </div>
                           
@@ -3209,7 +3361,7 @@ export default function GymMusicPlayer() {
                                   setTargetPlaylistIdForCopy("new");
                                   setIsProcessingCopy(false);
                                   setCopyPlaylistNameInput(commPl.name);
-                                  setCopyPlaylistDescInput(commPl.description || "Canal guardado desde la comunidad");
+                                  setCopyPlaylistDescInput(commPl.description || "Canal guardado desde novedades");
                                 }}
                               >
                                 <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#0a0a0c] rounded-xl flex items-center justify-center overflow-hidden shrink-0 border border-emerald-500/10 relative group-hover:border-emerald-500/30 transition-colors">
@@ -3233,7 +3385,7 @@ export default function GymMusicPlayer() {
                                       <span className="text-[10px] font-bold text-slate-400 capitalize truncate block">
                                         Por {commPl.ownerName}
                                       </span>
-                                      <span className="text-[8px] font-black uppercase text-emerald-500/80 bg-emerald-500/10 px-1.5 rounded-sm">COMUNIDAD</span>
+                                      <span className="text-[8px] font-black uppercase text-emerald-500/80 bg-emerald-500/10 px-1.5 rounded-sm">NOVEDADES</span>
                                     </div>
                                   </div>
                                 </div>
@@ -3260,41 +3412,343 @@ export default function GymMusicPlayer() {
                       )}
 
                       {!isSearchingYT && youtubeResults.length === 0 && (
-                        <div className="py-12 flex flex-col items-center justify-center text-center px-4">
-                          <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest leading-relaxed mb-6">
-                            {searchQuery ? "No se encontraron resultados" : "Explora y reproduce canciones de alta fidelidad al instante"}
-                          </p>
+                        <div className="py-2.5 sm:py-4 px-2.5 sm:px-4">
                           
-                          {!searchQuery && communityPlaylists.length > 0 && (
-                            <div className="w-full mt-4">
-                              <p className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] mb-4 text-left px-2">
-                                RECOMENDADO PARA TI
+                          {/* 1. Categorías / Píldoras de Estado de Ánimo Estilo YouTube Music */}
+                          {!searchQuery && (
+                            <div className="mb-4">
+                              <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 px-1">
+                                ESTADOS DE ÁNIMO Y GÉNEROS
                               </p>
-                              <div className="grid grid-cols-2 gap-2 text-left">
-                                {communityPlaylists.map(p => ({ p, score: Math.random() })).sort((a,b)=>b.score-a.score).slice(0, 8).map(({p}) => (
-                                  <div 
-                                    key={`rec-${p.id}`}
+                              <div className="flex items-center gap-1.5 overflow-x-auto pb-2 mb-2 scrollbar-none snap-x select-none">
+                                {[
+                                  { label: "⚡ Energía", query: "best workout music mix gym motivation" },
+                                  { label: "🧘 Relax", query: "lofi hip hop study synthwave chill" },
+                                  { label: "🏃 Cardio", query: "high tempo running cardio hits" },
+                                  { label: "🎧 Enfoque", query: "ambient background concentration sounds" },
+                                  { label: "🔥 Phonk", query: "gym phonk drift bass boosted workout mix" },
+                                  { label: "🕺 Latino", query: "reggaeton urbano exitos de hoy" }
+                                ].map((mood, mIdx) => (
+                                  <button
+                                    key={mIdx}
                                     onClick={() => {
-                                      setTrackListTab("search");
-                                      setSearchQuery(p.name);
-                                      // Optional: automatically trigger it or let the user hit search
+                                      setSearchQuery(mood.query);
+                                      setIsSearchingYT(true);
+                                      fetch(`/api/youtube/search?q=${encodeURIComponent(mood.query)}`)
+                                        .then(res => res.json())
+                                        .then(data => {
+                                          setYoutubeResults(data);
+                                          setIsSearchingYT(false);
+                                        })
+                                        .catch(() => setIsSearchingYT(false));
                                     }}
-                                    className="bg-white/[0.03] border border-white/5 p-3 rounded-xl hover:bg-white/10 transition-colors cursor-pointer flex items-center gap-3"
+                                    className="snap-start shrink-0 px-2.5 py-1.5 bg-white/[0.03] border border-white/5 hover:border-emerald-500/30 text-white hover:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 hover:bg-emerald-500/10"
                                   >
-                                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-slate-800">
-                                      {p.thumbnail_url ? (
-                                        <img src={p.thumbnail_url} alt="" className="w-full h-full object-cover" loading="lazy" />
-                                      ) : (
-                                        <div className="w-full h-full flex items-center justify-center text-lg">{p.icon || '🎧'}</div>
-                                      )}
-                                    </div>
-                                    <div className="min-w-0 flex-1">
-                                      <p className="text-[10px] text-white font-bold truncate">{p.name}</p>
-                                      <p className="text-[8px] text-slate-400 capitalize">{p.category || 'Playlist'}</p>
-                                    </div>
-                                  </div>
+                                    <span>{mood.label}</span>
+                                  </button>
                                 ))}
                               </div>
+                            </div>
+                          )}
+
+                          {searchQuery ? (
+                            <div className="py-12 flex flex-col items-center justify-center text-center">
+                              <p className="text-xs text-slate-500 font-semibold uppercase tracking-widest leading-relaxed">
+                                No se encontraron resultados para tu búsqueda
+                              </p>
+                            </div>
+                          ) : (
+                            <div className="space-y-6">
+                              {/* 2. Pantalla o Esqueleto de Carga */}
+                              {isLoadingExplore ? (
+                                <div className="space-y-4 py-8">
+                                  <div className="flex items-center gap-3 animate-pulse px-2">
+                                    <div className="w-5 h-5 rounded-full bg-white/5" />
+                                    <div className="h-4 w-40 bg-white/5 rounded" />
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-3 pb-4">
+                                    <div className="h-28 bg-white/[0.02] rounded-2xl animate-pulse border border-white/5" />
+                                    <div className="h-28 bg-white/[0.02] rounded-2xl animate-pulse border border-white/5" />
+                                  </div>
+                                  <div className="flex items-center justify-center py-4">
+                                     <Loader2 className="w-5 h-5 text-emerald-500/50 animate-spin" />
+                                  </div>
+                                </div>
+                              ) : (
+                                <div className="space-y-6">
+                                  {/* --- TAB EXPLORAR --- */}
+                                  {searchSubTab === "novedades" && (
+                                    <ExploreView 
+                                      exploreData={exploreData}
+                                      setOverrideCurrentTrack={setOverrideCurrentTrack}
+                                      setIsPlaying={setIsPlaying}
+                                      showNotification={showNotification}
+                                      addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
+                                      loadPlaylistAndPlay={async (item: any) => {
+                                        setIsLoadingExplore(true);
+                                        try {
+                                          const res = await fetch(`/api/youtube/playlist?id=${item.id}`);
+                                          if (!res.ok) throw new Error("Failed to load playlist");
+                                          const tracks = await res.json();
+                                          if (tracks && tracks.length > 0) {
+                                            const firstTrack = tracks[0];
+                                            setOverrideCurrentTrack(firstTrack);
+                                            setIsPlaying(true);
+                                            showNotification(`Reproduciendo playlist: ${item.title}`);
+                                          }
+                                        } catch (err) {
+                                          console.error(err);
+                                          showNotification("Error cargando playlist.");
+                                        } finally {
+                                          setIsLoadingExplore(false);
+                                        }
+                                      }}
+                                    />
+                                  )}
+
+                                  {/* --- TAB LISTAS DE ÉXITOS --- */}
+                                  {searchSubTab === "charts" && (
+                                    <>
+                                      {/* TOP TENDENCIA */}
+                                      {exploreData?.trending && exploreData.trending.length > 0 && (
+                                        <div className="space-y-3 px-1 pt-2">
+                                          <div className="flex items-center justify-between px-2">
+                                            <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                              Top Tendencias
+                                            </p>
+                                          </div>
+                                          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none snap-x px-2">
+                                            {exploreData.trending.map((song: any) => (
+                                              <div 
+                                                key={`trend-${song.id}`} 
+                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
+                                              >
+                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
+                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
+                                                  <button 
+                                                    onClick={() => {
+                                                      const mapped: MusicTrack = {
+                                                        id: song.id,
+                                                        title: song.title, artist: song.artist, url: song.url, duration: song.duration, bpm: 120
+                                                      };
+                                                      setOverrideCurrentTrack(mapped);
+                                                      setIsPlaying(true);
+                                                    }}
+                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
+                                                  >
+                                                    <Play className="w-3.5 h-3.5 fill-black pl-px" />
+                                                  </button>
+                                                </div>
+                                                <div className="min-h-[32px] px-1">
+                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
+                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* TOP DIARIO */}
+                                      {exploreData?.dailyTop && exploreData.dailyTop.length > 0 && (
+                                        <div className="space-y-3 px-1">
+                                          <div className="flex items-center justify-between px-2">
+                                            <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                              Top Diario
+                                            </p>
+                                          </div>
+                                          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none snap-x px-2">
+                                            {exploreData.dailyTop.map((song: any) => (
+                                              <div 
+                                                key={`daily-${song.id}`} 
+                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
+                                              >
+                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
+                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
+                                                  <button 
+                                                    onClick={() => {
+                                                      const mapped: MusicTrack = {
+                                                        id: song.id,
+                                                        title: song.title, artist: song.artist, url: song.url, duration: song.duration, bpm: 120
+                                                      };
+                                                      setOverrideCurrentTrack(mapped);
+                                                      setIsPlaying(true);
+                                                    }}
+                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
+                                                  >
+                                                    <Play className="w-3.5 h-3.5 fill-black pl-px" />
+                                                  </button>
+                                                </div>
+                                                <div className="min-h-[32px] px-1">
+                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
+                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+
+                                      {/* TOP 100 POPULARES */}
+                                      {exploreData?.top100 && exploreData.top100.length > 0 && (
+                                        <div className="space-y-3 px-1">
+                                          <div className="flex items-center justify-between px-2">
+                                            <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
+                                              Las 100 canciones más populares
+                                            </p>
+                                          </div>
+                                          <div className="flex gap-3 overflow-x-auto pb-4 scrollbar-none snap-x px-2">
+                                            {exploreData.top100.map((song: any) => (
+                                              <div 
+                                                key={`popular-${song.id}`} 
+                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
+                                              >
+                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
+                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
+                                                  <button 
+                                                    onClick={() => {
+                                                      const mapped: MusicTrack = {
+                                                        id: song.id,
+                                                        title: song.title, artist: song.artist, url: song.url, duration: song.duration, bpm: 120
+                                                      };
+                                                      setOverrideCurrentTrack(mapped);
+                                                      setIsPlaying(true);
+                                                    }}
+                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
+                                                  >
+                                                    <Play className="w-3.5 h-3.5 fill-black pl-px" />
+                                                  </button>
+                                                </div>
+                                                <div className="min-h-[32px] px-1">
+                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
+                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
+                                                </div>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* --- TAB ÁNIMOS Y GÉNEROS --- */}
+                                  {searchSubTab === "moods" && (
+                                    <>
+                                      {/* QUICK MOODS GRID (The ones removed from header) */}
+                                      <div className="space-y-3">
+                                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 px-1">
+                                          ⚡ Elige tu Energía
+                                        </p>
+                                        <div className="grid grid-cols-2 gap-3">
+                                          {[
+                                            { label: "⚡ Energía", query: "best workout music mix gym motivation", color: "from-orange-500 to-red-600" },
+                                            { label: "🧘 Relax", query: "lofi hip hop study music chill", color: "from-blue-500 to-indigo-600" },
+                                            { label: "🏃 Cardio", query: "high tempo running cardio hits", color: "from-emerald-500 to-teal-600" },
+                                            { label: "🎧 Enfoque", query: "ambient concentration focus deep work", color: "from-purple-500 to-pink-600" },
+                                            { label: "🔥 Phonk", query: "gym phonk drift beat high bass", color: "from-zinc-700 to-black" },
+                                            { label: "🕺 Latino", query: "reggaeton urbano exitos mundiales", color: "from-yellow-400 to-orange-500" }
+                                          ].map((mood, mIdx) => (
+                                            <button
+                                              key={mIdx}
+                                              onClick={() => {
+                                                setSearchQuery(mood.query);
+                                                setIsSearchingYT(true);
+                                                fetch(`/api/youtube/search?q=${encodeURIComponent(mood.query)}`)
+                                                  .then(res => res.json())
+                                                  .then(data => {
+                                                    setYoutubeResults(data);
+                                                    setIsSearchingYT(false);
+                                                  })
+                                                  .catch(() => setIsSearchingYT(false));
+                                              }}
+                                              className={`relative h-20 overflow-hidden rounded-2xl border border-white/10 group cursor-pointer active:scale-[0.98] transition-transform`}
+                                            >
+                                              <div className={`absolute inset-0 bg-gradient-to-br ${mood.color} opacity-60 group-hover:opacity-80 transition-opacity`} />
+                                              <div className="absolute inset-0 flex items-center justify-center p-3">
+                                                <span className="text-[11px] font-black uppercase tracking-wider text-white drop-shadow-md">{mood.label}</span>
+                                              </div>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* GENRE PLAYLISTS */}
+                                      {exploreData?.workout && exploreData.workout.length > 0 && (
+                                        <div className="space-y-3 pt-2">
+                                          <p className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] px-1">
+                                            🏋️ Entrenamiento & Gym
+                                          </p>
+                                          <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-none snap-x">
+                                            {exploreData.workout.slice(0, 6).map((pl: any) => (
+                                              <div 
+                                                key={`workpl-${pl.id}`}
+                                                className="snap-start shrink-0 w-32 group relative flex flex-col gap-2"
+                                              >
+                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black shrink-0 relative border border-white/5">
+                                                  <img src={pl.thumbnail} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" />
+                                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
+                                                  <button
+                                                    onClick={() => {
+                                                      setSearchQuery(pl.title);
+                                                      setYoutubeResults([pl]);
+                                                      handleToggleExpandPlaylist(pl.id);
+                                                    }}
+                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
+                                                  >
+                                                    <Search className="w-4 h-4" />
+                                                  </button>
+                                                </div>
+                                                <p className="text-[9.5px] font-black text-white truncate uppercase tracking-tight px-1">{pl.title}</p>
+                                              </div>
+                                            ))}
+                                          </div>
+                                        </div>
+                                      )}
+                                    </>
+                                  )}
+
+                                  {/* RECOMENDADO PARA TI (COMUNIDAD) - FIXED ALWAYS AT BOTTOM OF EXPLORE SECTIONS IF NEEDED OR IN ITS OWN TAB */}
+                                  {communityPlaylists.length > 0 && (
+                                    <div className="space-y-2 mt-4 pb-4">
+                                      <p className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] px-1 text-left">
+                                        Curado de la Comunidad
+                                      </p>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
+                                        {communityPlaylists.filter(p => {
+                                          return !userPlaylists.some(up => 
+                                            (up.ownerId === user?.uid || isAdmin) && 
+                                            up.name.toLowerCase() === p.name.toLowerCase()
+                                          );
+                                        }).slice(0, 4).map((p) => (
+                                          <div 
+                                            key={`rec-${p.id}`}
+                                            onClick={() => {
+                                              setTrackListTab("search");
+                                              setSearchQuery(p.name);
+                                            }}
+                                            className="relative overflow-hidden group bg-gradient-to-br from-[#0c0c0e] to-black border border-white/5 p-2.5 rounded-2xl hover:border-emerald-500/30 transition-all cursor-pointer flex items-center gap-3"
+                                          >
+                                            <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-black border border-white/5 relative z-10">
+                                              {p.thumbnail_url ? (
+                                                <img src={p.thumbnail_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                                              ) : (
+                                                <div className="w-full h-full flex items-center justify-center text-sm bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400">{p.icon || '🎧'}</div>
+                                              )}
+                                            </div>
+                                            <div className="min-w-0 flex-1 relative z-10">
+                                              <p className="text-[10px] text-white font-black truncate group-hover:text-[#1ED760] transition-colors">{p.name}</p>
+                                              <p className="text-[8px] text-slate-500 capitalize truncate font-bold uppercase tracking-widest">Por {p.ownerName}</p>
+                                            </div>
+                                            <div className="w-5 h-5 shrink-0 rounded-full border border-white/10 flex items-center justify-center relative z-10 group-hover:bg-[#1ED760] group-hover:border-[#1ED760] transition-all">
+                                              <svg className="w-2.5 h-2.5 text-slate-400 group-hover:text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           )}
                         </div>
@@ -3675,6 +4129,19 @@ export default function GymMusicPlayer() {
                         </div>
                       );
                     })()
+                  ) : !isTrackListExpanded ? (
+                    <div 
+                      onClick={() => setIsTrackListExpanded(true)}
+                      className="py-12 px-6 flex flex-col items-center justify-center text-center cursor-pointer group bg-gradient-to-b from-[#0e0e11]/20 to-black hover:bg-emerald-500/[0.02] transition-colors border-y border-white/5 h-full min-h-[160px]"
+                    >
+                      <ChevronUp className="w-5 h-5 text-emerald-500 animate-bounce mb-3" />
+                      <p className="text-[10px] font-black uppercase text-emerald-400 tracking-widest mb-1.5 group-hover:scale-105 transition-transform">
+                        Ver lista de canciones
+                      </p>
+                      <p className="text-[9.5px] text-slate-500 font-bold uppercase tracking-widest">
+                        Haz clic aquí o en el reproductor para ver las pistas de su canal
+                      </p>
+                    </div>
                   ) : filteredDisplayTracks.length === 0 ? (
                     <div className="p-8 text-center text-white/30 text-xs font-medium">
                       No se encontraron resultados para "{searchQuery}"
@@ -3687,11 +4154,12 @@ export default function GymMusicPlayer() {
                           <div
                             key={track.id || idx}
                             onClick={() => {
-                              expectedPlayingRef.current = true;
                               setOverrideCurrentTrack(null);
                               if (isActive) {
+                                expectedPlayingRef.current = !isPlaying;
                                 setIsPlaying(!isPlaying);
                               } else {
+                                expectedPlayingRef.current = true;
                                 setPlayingPlaylist(selectedPlaylist);
                                 setCurrentTrackIndex(idx);
                                 setIsPlaying(true);
@@ -3841,7 +4309,7 @@ export default function GymMusicPlayer() {
                   onClick={() => setShowLibrary(true)}
                   className="px-5 py-2.5 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-lg hover:scale-105 transition-all shadow-xl flex items-center gap-2"
                 >
-                  Explorar Comunidad
+                  Explorar Novedades
                 </button>
               </div>
             </div>
@@ -3856,7 +4324,7 @@ export default function GymMusicPlayer() {
             <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-emerald-500 via-[#1ED760] to-teal-500" />
             <h3 className="text-lg font-black text-white uppercase tracking-widest mb-2">Configura tu Nickname</h3>
             <p className="text-slate-400 text-xs font-semibold leading-relaxed mb-6">
-              Para interactuar con la comunidad y que tu email no sea público, elige un nombre de usuario.
+              Para interactuar en Novedades y que tu email no sea público, elige un nombre de usuario.
             </p>
             <input
               type="text"
@@ -3884,7 +4352,7 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="absolute inset-0 bg-black/95 backdrop-blur-2xl z-50 flex items-start justify-center p-4 sm:p-6 pt-10 sm:pt-20"
+            className="absolute inset-0 bg-black/95 backdrop-blur-2xl z-50 flex items-start justify-center p-4 sm:p-6 pt-10 sm:pt-20 pb-24 md:pb-6"
           >
             <div className="w-full max-w-7xl h-[85vh] flex flex-col bg-[#080808] border border-white/10 rounded-[40px] overflow-hidden shadow-4xl relative">
               {/* Starry Background for Library */}
@@ -3893,10 +4361,10 @@ export default function GymMusicPlayer() {
               <div className="flex justify-between items-center px-6 py-6 sm:px-10 relative z-10 shrink-0">
                 <div>
                   <h3 className="text-sm sm:text-lg font-black uppercase tracking-[0.4em] text-emerald-400 mb-1">
-                    Comunidad
+                    Novedades
                   </h3>
                   <p className="text-[9px] sm:text-[10px] text-slate-500 font-bold uppercase tracking-[0.2em] max-w-sm leading-relaxed">
-                    Aquí están las playlists compartidas de la comunidad
+                    Aquí están las playlists destacadas en novedades
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
@@ -4124,7 +4592,7 @@ export default function GymMusicPlayer() {
                               <button
                                 onClick={() => handleCopyPlaylistToProfile(previewPlaylist)}
                                 className="md:scale-100 hover:scale-105 active:scale-95 flex items-center justify-center gap-1.5 bg-white/5 border border-white/10 hover:border-white/30 text-white font-black text-[10px] uppercase tracking-wider px-4 py-2 rounded-full transition-all duration-300 shadow-xl cursor-pointer"
-                                title="Guardar este canal de la comunidad"
+                                title="Guardar este canal de novedades"
                               >
                                 <Plus className="w-3.5 h-3.5 stroke-[3px]" />
                                 <span>Añadir Playlist Completa</span>
@@ -4946,7 +5414,7 @@ export default function GymMusicPlayer() {
                       <span className="text-xs font-black text-white uppercase tracking-wider font-sans">Crear Nuevo Canal</span>
                     </div>
                     <p className="text-[9.5px] text-slate-400 leading-snug">
-                      Clona el canal de la comunidad como una lista independiente.
+                      Clona el canal de novedades como una lista independiente.
                     </p>
                   </button>
 
@@ -5066,41 +5534,37 @@ export default function GymMusicPlayer() {
           {/* Authentic Spotify premium subtle ambient green glow */}
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[#1ED760]/10 blur-[120px] pointer-events-none animate-pulse" />
 
-          <div className="relative z-10 max-w-sm w-full bg-[#121212] border border-white/10 rounded-[28px] p-6 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.9)] flex flex-col items-center">
+          <div className="relative z-10 max-w-sm w-full bg-[#121212] border border-white/10 rounded-2xl sm:rounded-[28px] p-4 sm:p-8 shadow-[0_30px_100px_rgba(0,0,0,0.9)] flex flex-col items-center">
             {/* Spotify Brand Emblem / Tech Vibe Dot */}
-            <div className="w-12 h-12 bg-black rounded-full border border-[#1ED760]/20 flex items-center justify-center mb-6 shadow-inner relative group">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-black rounded-full border border-[#1ED760]/20 flex items-center justify-center mb-4 sm:mb-6 shadow-inner relative group">
               <span className="absolute inset-0 rounded-full bg-[#1ED760]/10 blur-sm group-hover:bg-[#1ED760]/20 transition-all pointer-events-none" />
-              <Headphones className="w-5 h-5 text-[#1ED760] relative z-10 animate-bounce" />
+              <Headphones className="w-4.5 h-4.5 sm:w-5 sm:h-5 text-[#1ED760] relative z-10 animate-bounce" />
             </div>
 
             {!user ? (
               <>
-                <h1 className="text-3xl font-black tracking-tighter text-white uppercase mb-1 font-sans">
-                  FLUX PREMIUM
-                </h1>
-                
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-4 px-3 bg-[#1ED760]/10 py-1 rounded-full border border-[#1ED760]/20">
-                  Audio Analógico de Alta Fidelidad
+                <p className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-3 sm:mb-4 px-3 bg-[#1ED760]/10 py-1 rounded-full border border-[#1ED760]/20">
+                  Música Premium Interminable
                 </p>
                 
-                <p className="text-slate-400 max-w-xs mx-auto mb-5 text-xs font-semibold leading-relaxed">
-                  Únete al club de audio exclusivo más privado. Sin anuncios, sin límites de velocidad y optimizado para audiófilos exigentes.
+                <p className="text-slate-400 max-w-xs mx-auto mb-4 sm:mb-5 text-[10.5px] sm:text-[11px] font-semibold leading-relaxed">
+                  ¡Entra y dale al play! Crea tus playlist, explora novedades y música sin límites, y sin anuncios.
                 </p>
 
                 {/* Spotify-style premium interactive dropdown block */}
-                <div className="w-full mb-5 text-left relative z-30">
+                <div className="w-full mb-4 sm:mb-5 text-left relative z-30">
                   <button
                     type="button"
                     onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
-                    className="w-full bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-3 rounded-2xl flex items-center justify-between transition-all relative cursor-pointer text-left"
+                    className="w-full bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex items-center justify-between transition-all relative cursor-pointer text-left"
                   >
                     <div>
-                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Planes de Membresía ▾</span>
-                      <span className="text-[11px] font-black text-white uppercase tracking-wide">
+                      <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Planes de Membresía ▾</span>
+                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wide">
                         Ver Tarifas Premium
                       </span>
                     </div>
-                    <span className="text-[10px] font-bold text-[#1ED760] bg-[#1ED760]/10 px-2.5 py-1 rounded-lg border border-[#1ED760]/10 font-sans">Desde $5.99/mes</span>
+                    <span className="text-[9px] sm:text-[10px] font-bold text-[#1ED760] bg-[#1ED760]/10 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-[#1ED760]/10 font-sans">Desde $5.99/mes</span>
                   </button>
 
                   {/* Pricing tiers dropdown overlay container */}
@@ -5147,7 +5611,7 @@ export default function GymMusicPlayer() {
                 
                 <button 
                   onClick={() => setAuthModalOpen(true)} 
-                  className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-3.5 rounded-full font-black uppercase text-xs tracking-widest shadow-[0_10px_30px_rgba(30,215,96,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
+                  className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-2.5 sm:py-3.5 rounded-full font-black uppercase text-[10px] sm:text-xs tracking-wider sm:tracking-widest shadow-[0_10px_30px_rgba(30,215,96,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
                   <LogIn className="w-4 h-4" />
                   <span>Iniciar Sesión / Registro</span>
@@ -5155,35 +5619,35 @@ export default function GymMusicPlayer() {
               </>
             ) : (
               <>
-                <h1 className="text-2xl font-black tracking-tight text-white uppercase mb-1 font-sans">
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight text-white uppercase mb-1 font-sans">
                   {accessData.plan === "none" && !accessData.trialStart ? "Acceso Restringido" : "Fin de Suscripción"}
                 </h1>
                 
-                <p className="text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-5 px-3 bg-[#1ED760]/10 py-0.5 rounded-full border border-[#1ED760]/20">
+                <p className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-3 sm:mb-5 px-3 bg-[#1ED760]/10 py-0.5 rounded-full border border-[#1ED760]/20">
                   {accessData.plan === "none" && !accessData.trialStart ? "Privado • Pendiente de Alta" : "Membresía Expirada"}
                 </p>
                 
-                <p className="text-[#a7a7a7] max-w-xs mx-auto mb-6 text-xs font-medium leading-relaxed">
+                <p className="text-[#a7a7a7] max-w-xs mx-auto mb-4 sm:mb-6 text-[10.5px] sm:text-xs font-medium leading-relaxed">
                   {accessData.plan === "none" && !accessData.trialStart 
                     ? "Para garantizar máxima estabilidad y baja latencia, controlamos manualmente el aforo. Adquiere o solicita tu prueba."
                     : "Tu licencia ha finalizado. Restablece tu acceso a los canales de alta fidelidad renovando tu membresía."}
                 </p>
                 
                 {/* Spotify-style premium interactive dropdown block */}
-                <div className="w-full mb-6 space-y-2.5 text-left relative">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="bg-[#181818] border border-white/5 p-3 rounded-2xl">
-                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Acceso Inicial</span>
-                      <span className="text-[11px] font-black text-[#1ED760] uppercase tracking-wide">Prueba 7 días</span>
+                <div className="w-full mb-4 sm:mb-6 space-y-2.5 text-left relative">
+                  <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+                    <div className="bg-[#181818] border border-white/5 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl">
+                      <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Acceso Inicial</span>
+                      <span className="text-[10px] sm:text-[11px] font-black text-[#1ED760] uppercase tracking-wide">Prueba 7 días</span>
                     </div>
                     
                     <button
                       type="button"
                       onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
-                      className="bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-3 rounded-2xl flex flex-col justify-between transition-all relative cursor-pointer text-left"
+                      className="bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex flex-col justify-between transition-all relative cursor-pointer text-left"
                     >
-                      <span className="block text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Membresía ▾</span>
-                      <span className="text-[11px] font-black text-white uppercase tracking-wide flex items-center justify-between w-full">
+                      <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Membresía ▾</span>
+                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wide flex items-center justify-between w-full">
                         <span>Ver Precios</span>
                       </span>
                     </button>
@@ -5234,18 +5698,18 @@ export default function GymMusicPlayer() {
                 <div className="flex flex-col gap-3 w-full">
                   {isCheckingTrialRequest ? (
                     <div className="flex items-center justify-center p-3 text-emerald-400 font-bold text-xs gap-2">
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      <span>Procesando...</span>
+                       <Loader2 className="w-4 h-4 animate-spin" />
+                       <span>Procesando...</span>
                     </div>
                   ) : trialRequestStatus === "idle" ? (
                     <button 
                       onClick={handleRequestTrial} 
-                      className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-3 px-4 rounded-full font-black uppercase text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
+                      className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
                     >
                       <span>⚡ Pedir Acceso Gratis de 7 Días</span>
                     </button>
                   ) : (
-                    <div className={`p-3.5 rounded-2xl border text-[11px] font-semibold leading-relaxed text-center ${
+                    <div className={`p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center ${
                       trialRequestStatus === "sent" 
                         ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
                         : "bg-red-500/10 border-red-500/10 text-red-400"
@@ -5253,28 +5717,6 @@ export default function GymMusicPlayer() {
                       {trialRequestMsg}
                     </div>
                   )}
-
-                  <button 
-                    onClick={() => setIsSupportModalOpen(true)} 
-                    className="w-full bg-gradient-to-r from-emerald-500/20 to-[#1ED760]/20 hover:from-emerald-500/30 hover:to-[#1ED760]/30 border border-[#1ED760]/30 text-[#1ED760] py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
-                  >
-                    💬 Soporte Rápido (Telegram)
-                  </button>
-
-                  <button 
-                    onClick={() => window.location.href = "mailto:eltygere8651@gmail.com"} 
-                    className="w-full bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 py-3 rounded-full font-black uppercase text-[10px] tracking-widest hover:scale-[1.01] active:scale-[0.99] transition-all cursor-pointer"
-                  >
-                    ✉️ Contactar por Email
-                  </button>
-
-                  <button 
-                    type="button"
-                    onClick={() => logout()} 
-                    className="w-full bg-transparent hover:bg-white/5 text-slate-500 hover:text-white py-2 rounded-full font-black uppercase text-[8.5px] tracking-widest transition-all cursor-pointer"
-                  >
-                    Cerrar Sesión
-                  </button>
                 </div>
               </>
             )}
@@ -5284,7 +5726,7 @@ export default function GymMusicPlayer() {
       )}
 
       {/* Mobile Bottom Navigation Bar styled like premium Spotify UI */}
-      <div className="md:hidden flex h-[74px] bg-[#0c0c0d] border-t border-white/10 shrink-0 justify-around items-center px-4 pb-2 pt-1.5 z-50 shadow-[0_-8px_24px_rgba(0,0,0,0.8)]">
+      <div className="md:hidden flex h-[74px] bg-[#0c0c0d] border-t border-white/10 shrink-0 justify-around items-center px-2 pb-2 pt-1.5 z-[60] shadow-[0_-8px_24px_rgba(0,0,0,0.8)]">
         {/* Button 1: Tu Biblioteca */}
         <button
           onClick={() => {
@@ -5306,10 +5748,11 @@ export default function GymMusicPlayer() {
           onClick={() => {
             setMobileView("player");
             setTrackListTab("search");
+            setSearchSubTab("novedades");
             setShowLibrary(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
-            mobileView === "player" && trackListTab === "search" && !showLibrary
+            mobileView === "player" && trackListTab === "search" && (searchSubTab === "novedades" || searchSubTab === "charts" || searchSubTab === "moods") && !showLibrary
               ? "text-[#1ED760] scale-105 font-black"
               : "text-slate-400 hover:text-white"
           }`}

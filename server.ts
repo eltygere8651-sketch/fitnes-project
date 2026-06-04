@@ -260,6 +260,173 @@ app.get("/api/youtube/search", async (req, res) => {
   }
 });
 
+// Cache for explore endpoint (4 hours)
+let exploreCache: { data: any, timestamp: number } | null = null;
+const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
+
+app.get("/api/youtube/explore", async (req, res) => {
+  const country = (req.query.country as string || "ES").toUpperCase();
+  const countryMap: Record<string, string> = {
+    "ES": "España",
+    "MX": "México",
+    "US": "USA",
+    "GLOBAL": "Global",
+    "AR": "Argentina",
+    "CO": "Colombia"
+  };
+  const countryName = countryMap[country] || "Global";
+
+  // Cache per country
+  const countryCacheKey = `explore_${country}`;
+  if (exploreCache && (Date.now() - exploreCache.timestamp < EXPLORE_CACHE_TTL) && (exploreCache as any).country === country) {
+    console.log(`Serving YouTube explore (${country}) from cache (ECO)`);
+    return res.json(exploreCache.data);
+  }
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create();
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  // Helper parser for innerTube items
+  const parseItems = (rawItems: any[]) => {
+    const combined: any[] = [];
+    const addedIds = new Set<string>();
+
+    rawItems.forEach((p: any) => {
+      try {
+        if (!p) return;
+        const type = (p.type || p.constructor?.name || "").toLowerCase();
+        
+        let id = p.id?.toString() || p.playlist_id?.toString() || p.video_id?.toString() || p.content_id?.toString() || "";
+        if (!id) return;
+        if (addedIds.has(id)) return;
+
+        let title = p.title?.text || p.title?.toString() || "";
+        if (!title && p.metadata?.title?.text) {
+          title = p.metadata.title.text;
+        }
+        if (!title) return;
+
+        let author = "YouTube Curator";
+        if (p.author) {
+          author = p.author.name || p.author.toString() || "YouTube Creator";
+        } else if (p.short_byline_text) {
+          author = p.short_byline_text.toString();
+        }
+
+        let thumbnail = "";
+        if (p.thumbnails && Array.isArray(p.thumbnails) && p.thumbnails.length > 0) {
+          thumbnail = p.thumbnails[0].url || "";
+        } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
+          thumbnail = p.thumbnail.thumbnails[0].url || "";
+        }
+        if (!thumbnail) {
+          thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+        }
+
+        const isPlaylistId = id.startsWith("PL") || id.startsWith("OL") || id.includes("RDCL") || type.includes("playlist");
+
+        if (isPlaylistId) {
+          let videoCountStr = p.video_count?.toString() || p.video_count_text?.toString() || "";
+          if (!videoCountStr || videoCountStr === "Playlist" || videoCountStr === "0") {
+            videoCountStr = "Canal";
+          } else if (!isNaN(Number(videoCountStr))) {
+            videoCountStr = `${videoCountStr} videos`;
+          }
+
+          addedIds.add(id);
+          combined.push({
+            id,
+            title,
+            artist: author,
+            duration: videoCountStr,
+            url: `https://www.youtube.com/playlist?list=${id}`,
+            thumbnail,
+            isPlaylist: true,
+            subType: "playlist"
+          });
+        } else {
+          let duration = "N/A";
+          if (p.duration) {
+            duration = p.duration.text || p.duration.toString() || "N/A";
+          } else if (p.length_text) {
+            duration = p.length_text.text || p.length_text.toString() || "N/A";
+          }
+
+          addedIds.add(id);
+          combined.push({
+            id,
+            title,
+            artist: author,
+            duration,
+            url: `https://www.youtube.com/watch?v=${id}`,
+            thumbnail,
+            isPlaylist: false,
+            subType: "cancion"
+          });
+        }
+      } catch (e) {
+        // Skip entry
+      }
+    });
+
+    return combined;
+  };
+
+  try {
+    // Perform parallel searches to feed initial categories based on selected country
+    const [trendingRes, dailyTopRes, top100Res, workoutRes, focusRes] = await Promise.allSettled([
+      yt.search(`música tendencia ${countryName} 2026`, { type: 'video' }),
+      yt.search(`top diario canciones ${countryName} music charts`, { type: 'video' }),
+      yt.search(`top 100 canciones mas populares ${countryName} 2026`, { type: 'video' }),
+      yt.search("best gym music playlist workout", { type: 'playlist' }),
+      yt.search("lofi chill study concentration playlist", { type: 'playlist' })
+    ]);
+
+    const getItemsFromPayload = (res: any) => {
+      const items: any[] = [];
+      if (res.status === 'fulfilled' && res.value) {
+        const val = res.value;
+        if (val.results && Array.isArray(val.results)) {
+          items.push(...val.results);
+        }
+        if (val.playlists && Array.isArray(val.playlists)) {
+          items.push(...val.playlists);
+        }
+        if (val.videos && Array.isArray(val.videos)) {
+          items.push(...val.videos);
+        }
+      }
+      return items;
+    };
+
+    const trending = parseItems(getItemsFromPayload(trendingRes)).slice(0, 15);
+    const dailyTop = parseItems(getItemsFromPayload(dailyTopRes)).slice(0, 15);
+    const top100 = parseItems(getItemsFromPayload(top100Res)).slice(0, 15);
+    const workout = parseItems(getItemsFromPayload(workoutRes)).filter(x => x.isPlaylist).slice(0, 10);
+    const focus = parseItems(getItemsFromPayload(focusRes)).filter(x => x.isPlaylist).slice(0, 10);
+
+    const data = {
+      trending,   // Trending for country
+      dailyTop,   // Daily Top for country
+      top100,     // Top 100 Popular for country
+      workout,    
+      focus
+    };
+
+    exploreCache = { data, timestamp: Date.now() } as any;
+    (exploreCache as any).country = country;
+    res.json(data);
+  } catch (error) {
+    console.error("Explore YouTube failed:", error);
+    res.status(500).json({ error: "Failed to generate explore sections" });
+  }
+});
+
 // YouTube Playlist Tracks Extractor Endpoint
 app.get("/api/youtube/playlist", async (req, res) => {
   const playlistId = req.query.id as string;

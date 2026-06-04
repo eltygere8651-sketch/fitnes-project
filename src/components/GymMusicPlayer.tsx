@@ -1239,11 +1239,15 @@ export default function GymMusicPlayer() {
             setExploreData(data);
           } else {
             console.error("Non-OK response from explore API:", res.status);
-            setExploreData({ trending: [], dailyTop: [], top100: [], workout: [], focus: [] });
+            const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300", isPlaylist: true };
+          const fallbackData = { trending: [{...fallback, title: 'Top Tendencias'}], dailyTop: [{...fallback, title: 'Lo Más Nuevo'}], top100: [{...fallback, title: 'Top 100 Popular'}], workout: [{...fallback, title: 'Gym Motivation'}], focus: [{...fallback, title: 'Focus & Relax'}], trends: [{...fallback, title: 'Últimos Lanzamientos'}], latin: [{...fallback, title: 'Música Latina'}], party: [{...fallback, title: 'Fiesta Mix'}] };
+          setExploreData(fallbackData);
           }
         } catch (err) {
           console.error("Error loading explore data:", err);
-          setExploreData({ trending: [], dailyTop: [], top100: [], workout: [], focus: [] });
+          const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300", isPlaylist: true };
+          const fallbackData = { trending: [{...fallback, title: 'Top Tendencias'}], dailyTop: [{...fallback, title: 'Lo Más Nuevo'}], top100: [{...fallback, title: 'Top 100 Popular'}], workout: [{...fallback, title: 'Gym Motivation'}], focus: [{...fallback, title: 'Focus & Relax'}], trends: [{...fallback, title: 'Últimos Lanzamientos'}], latin: [{...fallback, title: 'Música Latina'}], party: [{...fallback, title: 'Fiesta Mix'}] };
+          setExploreData(fallbackData);
         } finally {
           setIsLoadingExplore(false);
         }

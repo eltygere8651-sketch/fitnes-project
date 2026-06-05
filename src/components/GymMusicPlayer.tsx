@@ -36,11 +36,14 @@ import {
   ChevronUp,
   Search,
   ListPlus,
+  Compass,
+  LayoutGrid,
   FolderPlus,
   FolderMinus,
   Folder,
   ChevronRight,
   Check,
+  Trophy,
   Download,
   Users,
 } from "lucide-react";
@@ -968,16 +971,15 @@ export default function GymMusicPlayer() {
   const communityPlaylists = React.useMemo(() => {
     return userPlaylists
       .filter(pl => {
-        const isMine = pl.ownerId === user?.uid;
         const isPublic = pl.isPublic !== false;
         const isNotFav = pl.name.toLowerCase() !== 'favoritos';
-        const isNotCopy = pl.description !== "Canal guardado desde la comunidad" && pl.description !== "Canal guardado desde novedades";
         
-        if (isMine || !isPublic || !isNotFav || !isNotCopy) return false;
+        // Include everything that is public and not just the favorites folder
+        if (!isPublic || !isNotFav) return false;
         
         return true;
       });
-  }, [userPlaylists, user?.uid]);
+  }, [userPlaylists]);
 
   const communitySearchResults = React.useMemo(() => {
     if (!searchQuery.trim() || trackListTab !== "search") return [];
@@ -1151,7 +1153,12 @@ export default function GymMusicPlayer() {
           return !url.toLowerCase().includes("soundcloud.com") && !url.toLowerCase().includes("snd.sc");
         });
 
-        const randomNames = ["Alex G.", "Sam Rivera", "Jordan P.", "Mika T.", "Chris M.", "Valerie S.", "Dani R.", "Noah K.", "Robin B.", "Pat S."];
+        const randomNames = [
+          "Alex G.", "Sam Rivera", "Jordan P.", "Mika T.", "Chris M.", 
+          "Valerie S.", "Dani R.", "Noah K.", "Robin B.", "Pat S.",
+          "Lucas M.", "Elena F.", "Hugo V.", "Sofia L.", "Mateo D.",
+          "Clara Z.", "Leo J.", "Sara Q.", "Iker N.", "Luna W."
+        ];
         const nameIndex = doc.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % randomNames.length;
         const fakeOwnerName = randomNames[nameIndex];
 
@@ -1159,9 +1166,9 @@ export default function GymMusicPlayer() {
           id: doc.id,
           ...data,
           ownerId: ownerId,
-          ownerName: (data.ownerName && data.ownerName !== "Administrador" && data.ownerName !== "eltygere8651") 
+          ownerName: (data.ownerName && data.ownerName !== "Administrador" && data.ownerName !== "eltygere8651" && data.ownerName !== "Usuario" && !data.ownerName.includes("@")) 
             ? data.ownerName 
-            : (data.adminSecret === "ho82788278" ? fakeOwnerName : "Curador"),
+            : fakeOwnerName,
           tracks: cleanedTracks,
         };
       })
@@ -3308,6 +3315,51 @@ export default function GymMusicPlayer() {
                 <div className="flex-1 overflow-y-auto p-0 sm:p-0 premium-scrollbar relative">
                   {trackListTab === "search" ? (
                     <div className="space-y-1">
+                      {/* Search Sub-Tabs Switcher */}
+                      <div className="flex items-center gap-2 p-3 pb-2 overflow-x-auto no-scrollbar shrink-0 select-none bg-[#030303]">
+                        <button 
+                          onClick={() => setSearchSubTab("charts")}
+                          className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                            searchSubTab === "charts" 
+                              ? "bg-white text-black shadow-lg shadow-white/5" 
+                              : "bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Trophy className="w-3 h-3" />
+                            Radio
+                          </span>
+                        </button>
+                        
+                        <button 
+                          onClick={() => setSearchSubTab("novedades")}
+                          className={`shrink-0 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden ${
+                            searchSubTab === "novedades" 
+                              ? "bg-emerald-500 text-black shadow-[0_4px_15px_rgba(16,185,129,0.3)]" 
+                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <Compass className={`w-3.5 h-3.5 ${searchSubTab === "novedades" ? "animate-pulse" : ""}`} />
+                            Explorar
+                          </span>
+                        </button>
+
+                        <button 
+                          onClick={() => setSearchSubTab("moods")}
+                          className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
+                            searchSubTab === "moods" 
+                              ? "bg-white text-black shadow-lg shadow-white/5" 
+                              : "bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5"
+                          }`}
+                        >
+                          <span className="flex items-center gap-1.5">
+                            <LayoutGrid className="w-3 h-3" />
+                            Estados
+                          </span>
+                        </button>
+                      </div>
+
                       {/* YOUTUBE MUSIC STYLE EXPLORE PILLS */}
                       <Carousel className="px-3 pt-2.5 pb-2.5 gap-2 border-b border-white/5 bg-[#050506]/90 shrink-0 select-none z-10 sticky top-0 backdrop-blur-md snap-x">
                         <button
@@ -3557,6 +3609,7 @@ export default function GymMusicPlayer() {
                                   {searchSubTab === "novedades" && (
                                     <ExploreView 
                                       exploreData={exploreData}
+                                      communityPlaylists={communityPlaylists}
                                       setOverrideCurrentTrack={setOverrideCurrentTrack}
                                       setIsPlaying={setIsPlaying}
                                       showNotification={showNotification}
@@ -3817,42 +3870,59 @@ export default function GymMusicPlayer() {
 
                                   {/* RECOMENDADO PARA TI (COMUNIDAD) - FIXED ALWAYS AT BOTTOM OF EXPLORE SECTIONS IF NEEDED OR IN ITS OWN TAB */}
                                   {communityPlaylists.length > 0 && (
-                                    <div className="space-y-2 mt-4 pb-4">
-                                      <p className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] px-1 text-left">
-                                        Curado de la Comunidad
-                                      </p>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-left">
-                                        {communityPlaylists.filter(p => {
-                                          return !userPlaylists.some(up => 
-                                            (up.ownerId === user?.uid || isAdmin) && 
-                                            up.name.toLowerCase() === p.name.toLowerCase()
-                                          );
-                                        }).slice(0, 4).map((p) => (
+                                    <div className="space-y-4 mt-6 pb-6 border-t border-white/5 pt-6">
+                                      <div className="flex items-center justify-between px-1">
+                                        <div className="flex flex-col">
+                                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
+                                            Curado de la Comunidad
+                                          </p>
+                                          <h3 className="text-xl font-black text-white mt-1">Nuestros Canales</h3>
+                                        </div>
+                                        <button 
+                                          onClick={() => setShowLibrary(true)}
+                                          className="text-[10px] font-black uppercase text-slate-400 hover:text-white transition-colors"
+                                        >
+                                          Ver Todos
+                                        </button>
+                                      </div>
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-left">
+                                        {communityPlaylists.slice(0, 6).map((p) => (
                                           <div 
                                             key={`rec-${p.id}`}
                                             onClick={() => {
                                               setTrackListTab("search");
                                               setSearchQuery(p.name);
                                             }}
-                                            className="relative overflow-hidden group bg-gradient-to-br from-[#0c0c0e] to-black border border-white/5 p-2.5 rounded-2xl hover:border-emerald-500/30 transition-all cursor-pointer flex items-center gap-3"
+                                            className="relative overflow-hidden group bg-gradient-to-br from-[#0c0c0e] to-black border border-white/5 p-3 rounded-2xl hover:border-emerald-500/30 transition-all cursor-pointer flex items-center gap-4 hover:bg-white/[0.02]"
                                           >
-                                            <div className="w-9 h-9 rounded-xl overflow-hidden shrink-0 bg-black border border-white/5 relative z-10">
-                                              {p.thumbnail_url ? (
-                                                <img src={p.thumbnail_url} alt="" className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" loading="lazy" />
+                                            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black border border-white/5 relative z-10 shadow-lg group-hover:scale-105 transition-transform">
+                                              {p.thumbnail_url || getTrackImage(p.tracks?.[0]) ? (
+                                                <img src={p.thumbnail_url || getTrackImage(p.tracks?.[0]) || ""} alt="" className="w-full h-full object-cover" loading="lazy" />
                                               ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-sm bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400">{p.icon || '🎧'}</div>
+                                                <div className="w-full h-full flex items-center justify-center text-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400">{p.icon || '🎧'}</div>
                                               )}
+                                              <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
                                             </div>
                                             <div className="min-w-0 flex-1 relative z-10">
-                                              <p className="text-[10px] text-white font-black truncate group-hover:text-[#1ED760] transition-colors">{p.name}</p>
-                                              <p className="text-[8px] text-slate-500 capitalize truncate font-bold uppercase tracking-widest">Por {p.ownerName}</p>
+                                              <p className="text-[13px] text-white font-black truncate group-hover:text-emerald-400 transition-colors">{p.name}</p>
+                                              <div className="flex items-center gap-2 mt-0.5">
+                                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider truncate">Por {p.ownerName}</p>
+                                                <span className="w-1 h-1 rounded-full bg-slate-700 shrink-0" />
+                                                <p className="text-[9px] text-emerald-500/80 font-black uppercase">{p.tracks.length} P</p>
+                                              </div>
                                             </div>
-                                            <div className="w-5 h-5 shrink-0 rounded-full border border-white/10 flex items-center justify-center relative z-10 group-hover:bg-[#1ED760] group-hover:border-[#1ED760] transition-all">
-                                              <svg className="w-2.5 h-2.5 text-slate-400 group-hover:text-black" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+                                            <div className="w-6 h-6 shrink-0 rounded-full border border-white/10 flex items-center justify-center relative z-10 group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all shadow-xl">
+                                              <Play className="w-2.5 h-2.5 text-slate-400 group-hover:text-black fill-current" />
                                             </div>
                                           </div>
                                         ))}
                                       </div>
+                                      <button 
+                                        onClick={() => setShowLibrary(true)}
+                                        className="w-full py-3 bg-white/[0.03] border border-white/5 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:text-white hover:bg-white/5 transition-all mt-2 tracking-widest"
+                                      >
+                                        Explorar Todas las Playlists de la Comunidad
+                                      </button>
                                     </div>
                                   )}
                                 </div>
@@ -4540,8 +4610,13 @@ export default function GymMusicPlayer() {
                               </>
                               
                               {!previewPlaylist && (
-                                <div className="absolute bottom-2 right-2 px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-emerald-300 uppercase tracking-widest border border-emerald-500/20 shadow-md">
-                                  {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
+                                <div className="absolute bottom-2 right-2 flex flex-col items-end gap-1">
+                                  <div className="px-2 py-0.5 bg-emerald-500 text-[8px] font-black text-black uppercase tracking-[0.2em] rounded-md shadow-lg">
+                                    Comunidad
+                                  </div>
+                                  <div className="px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-white uppercase tracking-widest border border-white/10 shadow-md">
+                                    {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
+                                  </div>
                                 </div>
                               )}
                             </div>

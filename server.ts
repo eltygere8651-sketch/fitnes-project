@@ -550,7 +550,7 @@ app.get("/api/youtube/explore", async (req, res) => {
     };
 
     
-    const createFb = (id, title, imgVid) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=`, thumbnail: `https://i.ytimg.com/vi//mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
+    const createFb = (id: string, title: string, imgVid: string) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=${id}`, thumbnail: `https://i.ytimg.com/vi/${imgVid}/mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
     if (data.trending.length === 0) data.trending.push(createFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo"));
     if (data.dailyTop.length === 0) data.dailyTop.push(createFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A"));
     if (data.top100.length === 0) data.top100.push(createFb("PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", "Top 100 Popular", "mTQ_b9kQ6ko"));
@@ -565,7 +565,7 @@ app.get("/api/youtube/explore", async (req, res) => {
   } catch (error) {
     console.error("Explore YouTube failed:", error);
     
-    const createFb = (id, title, imgVid) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=`, thumbnail: `https://i.ytimg.com/vi//mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
+    const createFb = (id: string, title: string, imgVid: string) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=${id}`, thumbnail: `https://i.ytimg.com/vi/${imgVid}/mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
     res.json({
       trending: [createFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo")],
       dailyTop: [createFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A")],

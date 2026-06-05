@@ -1237,17 +1237,21 @@ export default function GymMusicPlayer() {
           if (res.ok) {
             const data = await res.json();
             setExploreData(data);
-          } else {
-            console.error("Non-OK response from explore API:", res.status);
-            const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300", isPlaylist: true };
-          const fallbackData = { trending: [{...fallback, title: 'Top Tendencias'}], dailyTop: [{...fallback, title: 'Lo Más Nuevo'}], top100: [{...fallback, title: 'Top 100 Popular'}], workout: [{...fallback, title: 'Gym Motivation'}], focus: [{...fallback, title: 'Focus & Relax'}], trends: [{...fallback, title: 'Últimos Lanzamientos'}], latin: [{...fallback, title: 'Música Latina'}], party: [{...fallback, title: 'Fiesta Mix'}] };
-          setExploreData(fallbackData);
+            throw new Error("Explore API failed");
           }
         } catch (err) {
-          console.error("Error loading explore data:", err);
-          const fallback = { id: "PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", title: "Top Exitos", artist: "YouTube", duration: "Playlist", url: "https://www.youtube.com/playlist?list=PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", thumbnail: "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300", isPlaylist: true };
-          const fallbackData = { trending: [{...fallback, title: 'Top Tendencias'}], dailyTop: [{...fallback, title: 'Lo Más Nuevo'}], top100: [{...fallback, title: 'Top 100 Popular'}], workout: [{...fallback, title: 'Gym Motivation'}], focus: [{...fallback, title: 'Focus & Relax'}], trends: [{...fallback, title: 'Últimos Lanzamientos'}], latin: [{...fallback, title: 'Música Latina'}], party: [{...fallback, title: 'Fiesta Mix'}] };
-          setExploreData(fallbackData);
+          console.error("Explore fallback:", err);
+          const mkFb = (id, title, imgVid) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=`, thumbnail: `https://i.ytimg.com/vi//mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
+          setExploreData({
+            trending: [mkFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo")],
+            dailyTop: [mkFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A")],
+            top100: [mkFb("PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", "Top 100 Popular", "mTQ_b9kQ6ko")],
+            workout: [mkFb("PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", "Gym Motivation", "IZ36b3q1elI")],
+            focus: [mkFb("PLOzDu-MXXLliO9fBelCGIawp_EN2kO-dE", "Focus & Relax", "jGflUbPQfW8")],
+            trends: [mkFb("PLxA687tYuMWi8OUus77n7Ziq1j0yL0gGz", "Lanzamientos", "ru0K8uYEZWw")],
+            latin: [mkFb("PLYyq1j1v4R5R20X-bepkF5V66hBWe1a-r", "Ritmos Latinos", "C7vfCJTQ-rw")],
+            party: [mkFb("PL7NXvXjIf-gGqSsswXm7-N0BsiW61wJzB", "Fiesta Mix", "n6N1_sxlBU8")]
+          });
         } finally {
           setIsLoadingExplore(false);
         }

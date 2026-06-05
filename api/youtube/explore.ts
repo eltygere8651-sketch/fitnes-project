@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
   const createItem = (id: string, title: string, artist: string, subType: string = 'playlist', isPlaylist: boolean = true) => ({
     id, title, artist, duration: isPlaylist ? 'Playlist' : 'Canción', 
     url: isPlaylist ? `https://www.youtube.com/playlist?list=${id}` : `https://www.youtube.com/watch?v=${id}`,
-    thumbnail: isPlaylist ? 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&q=80&w=300&h=300' : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+    thumbnail: isPlaylist ? 'https://i.ytimg.com/vi/1zJcoPT-0VI/mqdefault.jpg' : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
     isPlaylist, subType
   });
 

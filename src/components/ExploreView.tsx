@@ -47,6 +47,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
     { title: "Tendencias Globales", data: exploreData.trending || [] }
   ];
 
+  if (mappedCommunity && mappedCommunity.length > 0) {
+    sections.push({ title: "Playlists de la Comunidad", data: mappedCommunity });
+  }
+
   return (
     <div className="space-y-4 pb-32 px-0 sm:px-2">
       {/* COUNTRY SELECTOR */}

@@ -24,7 +24,7 @@ export default async function handler(req: any, res: any) {
   const country = (req.query.country as string || 'ES').toUpperCase();
   const countryMap: Record<string, string> = {
     "ES": "España", "MX": "México", "AR": "Argentina", "CO": "Colombia", "CL": "Chile", "PE": "Perú",
-    "US": "Estados Unidos", "GB": "Reino Unido", "GLOBAL": "Mundial"
+    "US": "Estados Unidos", "GB": "Reino Unido", "DO": "República Dominicana", "GLOBAL": "Mundial"
   };
   const countryName = countryMap[country] || "España";
 
@@ -83,29 +83,25 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
-    // Realizamos búsquedas específicas y separadas para obtener listas de éxitos y canciones reales
+    // Realizamos búsquedas específicas de *PLAYLISTS* para asegurar listas musicales y no canciones individuales
     const [trendingSearch, playlistsSearch, dailySearch] = await Promise.all([
-      yt.search(`top tendencias música oficial ${countryName} 2026`, { type: 'video' }),
-      yt.search(`Top 100 canciones ${countryName} YouTube Music Oficial`, { type: 'playlist' }),
-      yt.search(`Mix Nuevos Lanzamientos y Descubrimiento ${countryName}`, { type: 'playlist' }),
+      yt.search(`Éxitos Top Tendencias ${countryName} Oficial Playlist`, { type: 'playlist' }),
+      yt.search(`Top 100 Canciones Más Escuchadas ${countryName} Mix Oficial`, { type: 'playlist' }),
+      yt.search(`Novedades y Lanzamientos Musicales ${countryName} OficialPlaylist`, { type: 'playlist' }),
     ]);
 
-    const trending = parseYTItems([...(trendingSearch.videos || trendingSearch.results || [])]).slice(0, 15);
+    const trending = parseYTItems([...(trendingSearch.playlists || trendingSearch.results || [])]).slice(0, 15);
     const top100 = parseYTItems([...(playlistsSearch.playlists || playlistsSearch.results || [])]).slice(0, 15);
     const dailyTop = parseYTItems([...(dailySearch.playlists || dailySearch.results || [])]).slice(0, 15);
     
-    // Aprovechamos los resultados de playlists para llenar otras secciones
-    const trends = parseYTItems([...(playlistsSearch.playlists || playlistsSearch.results || [])]).slice(15, 25);
-    const latin = parseYTItems([...(dailySearch.playlists || dailySearch.results || [])]).slice(15, 25);
-
     const finalData = {
       trending,
       dailyTop,
       top100,
       workout: [],
       focus: [],
-      trends,
-      latin,
+      trends: [],
+      latin: [],
       party: []
     };
     

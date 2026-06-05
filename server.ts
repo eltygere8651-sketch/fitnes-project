@@ -170,12 +170,13 @@ app.get("/api/youtube/search", async (req, res) => {
 
         let thumbnail = "";
         if (p.thumbnails && Array.isArray(p.thumbnails) && p.thumbnails.length > 0) {
-          thumbnail = p.thumbnails[0].url || "";
+          thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
         } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
-          thumbnail = p.thumbnail.thumbnails[0].url || "";
+          const thumbs = p.thumbnail.thumbnails;
+          thumbnail = thumbs[thumbs.length - 1].url || thumbs[0].url || "";
         } else if (p.content_image?.primary_thumbnail?.image && Array.isArray(p.content_image.primary_thumbnail.image) && p.content_image.primary_thumbnail.image.length > 0) {
           const imgs = p.content_image.primary_thumbnail.image;
-          thumbnail = imgs[0].url || "";
+          thumbnail = imgs[imgs.length - 1].url || imgs[0].url || "";
         }
 
         const isPlaylistId = id.startsWith("PL") || id.startsWith("UU");
@@ -186,7 +187,7 @@ app.get("/api/youtube/search", async (req, res) => {
 
         if (!thumbnail) {
           if (isPlaylistType) {
-            thumbnail = "https://i.ytimg.com/vi/1zJcoPT-0VI/mqdefault.jpg";
+            thumbnail = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop";
           } else {
             thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
           }
@@ -288,7 +289,7 @@ app.get("/api/youtube/search", async (req, res) => {
 
 // Cache for explore endpoint (4 hours)
 let exploreCache: { data: any, timestamp: number } | null = null;
-const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
+const EXPLORE_CACHE_TTL = 1000 * 60; // 1 minute (for testing/correctness)
 
 app.get("/api/youtube/explore", async (req, res) => {
   const country = (req.query.country as string || "ES").toUpperCase();
@@ -388,12 +389,13 @@ app.get("/api/youtube/explore", async (req, res) => {
 
         let thumbnail = "";
         if (p.thumbnails && Array.isArray(p.thumbnails) && p.thumbnails.length > 0) {
-          thumbnail = p.thumbnails[0].url || "";
+          thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
         } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
-          thumbnail = p.thumbnail.thumbnails[0].url || "";
+          const thumbs = p.thumbnail.thumbnails;
+          thumbnail = thumbs[thumbs.length - 1].url || thumbs[0].url || "";
         } else if (p.content_image?.primary_thumbnail?.image && Array.isArray(p.content_image.primary_thumbnail.image) && p.content_image.primary_thumbnail.image.length > 0) {
           const imgs = p.content_image.primary_thumbnail.image;
-          thumbnail = imgs[0].url || "";
+          thumbnail = imgs[imgs.length - 1].url || imgs[0].url || "";
         }
         
         if (!thumbnail) {
@@ -496,10 +498,10 @@ app.get("/api/youtube/explore", async (req, res) => {
       newReleasesRes,
       latinRes
     ] = await Promise.allSettled([
-      yt.search(`música tendencia ${countryName} 2026`, { type: 'video' }),
-      yt.search(`top 100 canciones mas populares ${countryName}`, { type: 'playlist' }),
-      yt.search(`nuevos lanzamientos musica ${countryName} 2026`, { type: 'playlist' }),
-      yt.search(`top exitos reggaeton urbano latino ${countryName}`, { type: 'playlist' })
+      yt.search(`top tendencias música ${countryName} 2026`, { type: 'playlist' }),
+      yt.search(`top 100 canciones mas escuchadas ${countryName} playlist`, { type: 'playlist' }),
+      yt.search(`grandes exitos musica ${countryName} 2026`, { type: 'playlist' }),
+      yt.search(`top éxitos reggaeton urbano latino ${countryName}`, { type: 'playlist' })
     ]);
 
     const getItemsFromPayload = (res: any) => {

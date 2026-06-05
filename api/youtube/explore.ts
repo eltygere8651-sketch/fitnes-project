@@ -3,7 +3,7 @@ import { Innertube, UniversalCache } from 'youtubei.js';
 
 let yt: Innertube | null = null;
 let exploreCache: { data: any, timestamp: number, country: string } | null = null;
-const EXPLORE_CACHE_TTL = 1000 * 60 * 60;
+const EXPLORE_CACHE_TTL = 1000 * 60; // 1 minute for updates
 
 export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Credentials', 'true');
@@ -16,51 +16,15 @@ export default async function handler(req: any, res: any) {
   }
 
   const country = (req.query.country as string || 'ES').toUpperCase();
+  const countryMap: Record<string, string> = {
+    "ES": "España", "MX": "México", "AR": "Argentina", "CO": "Colombia", "CL": "Chile", "PE": "Perú",
+    "US": "Estados Unidos", "GB": "Reino Unido", "GLOBAL": "Mundial"
+  };
+  const countryName = countryMap[country] || "España";
 
   if (exploreCache && (Date.now() - exploreCache.timestamp < EXPLORE_CACHE_TTL) && exploreCache.country === country) {
     return res.json(exploreCache.data);
   }
-
-  const createItem = (id: string, title: string, artist: string, subType: string = 'playlist', isPlaylist: boolean = true) => ({
-    id, title, artist, duration: isPlaylist ? 'Playlist' : 'Canción', 
-    url: isPlaylist ? `https://www.youtube.com/playlist?list=${id}` : `https://www.youtube.com/watch?v=${id}`,
-    thumbnail: isPlaylist ? 'https://i.ytimg.com/vi/1zJcoPT-0VI/mqdefault.jpg' : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
-    isPlaylist, subType
-  });
-
-  const staticFallback = {
-    trending: [
-      createItem('PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5', 'Top 50 Global Hits', 'YouTube Mix'),
-      createItem('PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i', 'Top 100 Canciones Populares', 'Pop Mix'),
-      createItem('PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI', 'Top Music España', 'Hits 2026'),
-      createItem('PLPDbJgG2g9hJkKkE14iQZ5T_bY8mZ0Xq_', 'Reggaeton 2026', 'Latino Mix')
-    ],
-    dailyTop: [
-      createItem('PLYyq1j1v4R5R20X-bepkF5V66hBWe1a-r', 'Perreo y Reggaeton', 'Top Diario'),
-      createItem('PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf', 'Pop Hits Diarios', 'Exitos')
-    ],
-    top100: [
-      createItem('PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i', 'Top 100 Hits 2026', 'Pop y Urbano'),
-      createItem('PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf', 'Pop Music Playlist', 'Grandes Éxitos')
-    ],
-    workout: [
-      createItem('PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5', 'Gym Motivation & Workout', 'Energy Mix', 'mix')
-    ],
-    focus: [
-      createItem('PLOzDu-MXXLliO9fBelCGIawp_EN2kO-dE', 'Lofi Hip Hop Radio', 'Chill Beats'),
-      createItem('PLj4B1G8qH_N0nU1B3xM7vU8R4G4K3H-2', 'Coding Mix Lofi', 'Relax')
-    ],
-    trends: [
-      createItem('PLxA687tYuMWi8OUus77n7Ziq1j0yL0gGz', 'Novedades Fin de Semana', 'Últimos Lanzamientos')
-    ],
-    latin: [
-      createItem('PLYyq1j1v4R5R20X-bepkF5V66hBWe1a-r', 'Reggaeton Mix', 'Perreo'),
-      createItem('PLPDbJgG2g9hJkKkE14iQZ5T_bY8mZ0Xq_', 'Bachata y Salsa', 'Ritmos Latinos')
-    ],
-    party: [
-      createItem('PL7NXvXjIf-gGqSsswXm7-N0BsiW61wJzB', 'Party Mix 2026', 'Dance & EDM')
-    ]
-  };
 
   try {
     if (!yt) {
@@ -68,45 +32,81 @@ export default async function handler(req: any, res: any) {
     }
   } catch (error) {
     console.error('Explore: YT initialize failed', error);
-    exploreCache = { data: staticFallback, timestamp: Date.now(), country };
-    return res.json(staticFallback);
+    return res.status(503).json({ error: "YouTube unavailable" });
   }
 
-  try {
-     const resultsObj = await yt.search('Top Hits Mix 2026 ' + country, { type: 'playlist' });
-     const newItems: any[] = [];
-     
-     if (resultsObj && resultsObj.playlists) {
-         resultsObj.playlists.slice(0, 15).forEach((p: any) => {
-             const title = p.title?.text || p.title?.toString() || 'Mix';
-             const author = p.author?.name || p.author?.toString() || 'YouTube';
-             const id = p.id || p.playlist_id;
-             let thumbnail = '';
-             if (p.thumbnails && p.thumbnails.length > 0) thumbnail = p.thumbnails[0].url;
-             if (id) {
-               newItems.push({
-                   id, title, artist: author, duration: 'Playlist',
-                   url: `https://www.youtube.com/playlist?list=${id}`,
-                   thumbnail: thumbnail || staticFallback.trending[0].thumbnail,
-                   isPlaylist: true, subType: 'playlist'
-               });
-             }
-         });
-     }
+  const parseYTItems = (items: any[]) => {
+    return items.map((p: any) => {
+      try {
+        const id = p.id || p.playlist_id || p.video_id;
+        if (!id) return null;
 
-     const finalData = { ...staticFallback };
-     if (newItems.length > 0) {
-         finalData.trending = [...newItems.slice(0, 5), ...finalData.trending];
-         finalData.dailyTop = [...newItems.slice(5, 10), ...finalData.dailyTop];
-         finalData.trends = [...newItems.slice(10, 15), ...finalData.trends];
-     }
-     
-     exploreCache = { data: finalData, timestamp: Date.now(), country };
-     return res.json(finalData);
+        const title = p.title?.text || p.title?.toString() || 'Sin título';
+        const artist = p.author?.name || p.author?.toString() || 'YouTube';
+        
+        let thumbnail = '';
+        if (p.thumbnails && p.thumbnails.length > 0) {
+          // Get the highest resolution thumbnail (usually the last one)
+          thumbnail = p.thumbnails[p.thumbnails.length - 1].url;
+        } else if (p.thumbnail && p.thumbnail.thumbnails && p.thumbnail.thumbnails.length > 0) {
+          thumbnail = p.thumbnail.thumbnails[p.thumbnail.thumbnails.length - 1].url;
+        }
+
+        const isPlaylist = !!p.playlist_id || (p.type?.toLowerCase().includes('playlist')) || id.toString().startsWith('PL') || id.toString().startsWith('OL');
+
+        if (!thumbnail) {
+          thumbnail = isPlaylist 
+            ? "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300&auto=format&fit=crop"
+            : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+        }
+
+        return {
+          id,
+          title,
+          artist,
+          duration: isPlaylist ? 'Playlist' : (p.duration?.text || 'N/A'),
+          url: isPlaylist ? `https://www.youtube.com/playlist?list=${id}` : `https://www.youtube.com/watch?v=${id}`,
+          thumbnail,
+          isPlaylist,
+          subType: isPlaylist ? 'playlist' : 'cancion'
+        };
+      } catch (e) {
+        return null;
+      }
+    }).filter(Boolean);
+  };
+
+  try {
+    const [trendingRes, top100Res, newReleasesRes, latinRes] = await Promise.allSettled([
+      yt.search(`top tendencias música ${countryName} 2026`, { type: 'playlist' }),
+      yt.search(`top 100 canciones mas escuchadas ${countryName} playlist`, { type: 'playlist' }),
+      yt.search(`grandes exitos musica ${countryName} 2026`, { type: 'playlist' }),
+      yt.search(`top éxitos reggaeton urbano latino ${countryName}`, { type: 'playlist' })
+    ]);
+
+    const getItems = (res: any) => {
+      if (res.status === 'fulfilled' && res.value) {
+        return [...(res.value.results || []), ...(res.value.playlists || []), ...(res.value.videos || [])];
+      }
+      return [];
+    };
+
+    const finalData = {
+      trending: parseYTItems(getItems(trendingRes)).slice(0, 15),
+      dailyTop: [],
+      top100: parseYTItems(getItems(top100Res)).slice(0, 15),
+      workout: [],
+      focus: [],
+      trends: parseYTItems(getItems(newReleasesRes)).slice(0, 15),
+      latin: parseYTItems(getItems(latinRes)).slice(0, 15),
+      party: []
+    };
+    
+    exploreCache = { data: finalData, timestamp: Date.now(), country };
+    return res.json(finalData);
 
   } catch (err) {
-     console.error('Explore fetch error:', err);
-     exploreCache = { data: staticFallback, timestamp: Date.now(), country };
-     return res.json(staticFallback);
+    console.error('Explore fetch error:', err);
+    return res.status(500).json({ error: "Internal error" });
   }
 }

@@ -26,6 +26,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
 
   const sections = [
     { title: "Últimos Lanzamientos", data: exploreData.trends || [] },
+    { title: "Descubrimiento Diario", data: exploreData.dailyTop || [] },
     { title: "Canciones en Tendencia", data: exploreData.trending || [] },
     { title: "Listas Comunidad Populares", data: exploreData.latin || [] },
     { title: "Tops de Playlist", data: exploreData.top100 || [] }

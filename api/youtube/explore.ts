@@ -15,6 +15,12 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
+  // Desactivar caché de Vercel y Navegador (Solución definitiva para producción)
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Surrogate-Control', 'no-store');
+
   const country = (req.query.country as string || 'ES').toUpperCase();
   const countryMap: Record<string, string> = {
     "ES": "España", "MX": "México", "AR": "Argentina", "CO": "Colombia", "CL": "Chile", "PE": "Perú",
@@ -77,28 +83,31 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
-    const [trendingRes, top100Res, newReleasesRes, latinRes] = await Promise.allSettled([
-      yt.search(`top tendencias música ${countryName} 2026`, { type: 'playlist' }),
-      yt.search(`top 100 canciones mas escuchadas ${countryName} playlist`, { type: 'playlist' }),
-      yt.search(`grandes exitos musica ${countryName} 2026`, { type: 'playlist' }),
-      yt.search(`top éxitos reggaeton urbano latino ${countryName}`, { type: 'playlist' })
+    // Optimización para Vercel (Límite 10s): Un solo registro de búsqueda amplio en lugar de varios.
+    // Esto es mucho más rápido y evita timeouts en el plan gratuito de Vercel.
+    const searchRes = await yt.search(`top música ${countryName} 2026 exitos mix`, { type: 'video' });
+    
+    const allItems = parseYTItems([
+      ...(searchRes.results || []),
+      ...(searchRes.videos || []),
+      ...(searchRes.playlists || [])
     ]);
 
-    const getItems = (res: any) => {
-      if (res.status === 'fulfilled' && res.value) {
-        return [...(res.value.results || []), ...(res.value.playlists || []), ...(res.value.videos || [])];
-      }
-      return [];
-    };
+    // Distribuimos los resultados en diferentes categorías para dar variedad visual
+    const trending = allItems.slice(0, 10);
+    const dailyTop = allItems.slice(10, 20); // Mapeado a Descubrimiento Diario en el UI
+    const top100 = allItems.slice(20, 30);
+    const trends = allItems.slice(30, 40);
+    const latin = allItems.slice(40, 50);
 
     const finalData = {
-      trending: parseYTItems(getItems(trendingRes)).slice(0, 15),
-      dailyTop: [],
-      top100: parseYTItems(getItems(top100Res)).slice(0, 15),
+      trending,
+      dailyTop,
+      top100,
       workout: [],
       focus: [],
-      trends: parseYTItems(getItems(newReleasesRes)).slice(0, 15),
-      latin: parseYTItems(getItems(latinRes)).slice(0, 15),
+      trends,
+      latin,
       party: []
     };
     

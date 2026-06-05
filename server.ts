@@ -289,14 +289,14 @@ app.get("/api/youtube/search", async (req, res) => {
 
 // Cache for explore endpoint (4 hours)
 let exploreCache: { data: any, timestamp: number } | null = null;
-const EXPLORE_CACHE_TTL = 1000 * 60; // 1 minute (for testing/correctness)
+const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
 
 app.get("/api/youtube/explore", async (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
   const country = (req.query.country as string || "ES").toUpperCase();
   const countryMap: Record<string, string> = {
     "GLOBAL": "Global", "US": "Estados Unidos", "ES": "España", "MX": "México", "AR": "Argentina",
-    "CO": "Colombia", "CL": "Chile", "PE": "Perú", "GB": "Reino Unido"
+    "CO": "Colombia", "CL": "Chile", "PE": "Perú", "GB": "Reino Unido", "DO": "República Dominicana"
   };
   const countryName = countryMap[country] || "España";
 
@@ -312,64 +312,97 @@ app.get("/api/youtube/explore", async (req, res) => {
     }
   }
 
-  const parseItems = (rawItems: any[]) => {
-    const combined: any[] = [];
-    const addedIds = new Set<string>();
+  const parseInnertubeItem = (p: any): any => {
+    try {
+      if (!p) return null;
+      let id = p.content_id || p.id?.toString() || p.endpoint?.payload?.videoId || p.endpoint?.payload?.browseId || p.playlist_id?.toString() || "";
+      if (p.type === 'Playlist') id = p.id || p.playlist_id || "";
+      if (!id) return null;
 
-    rawItems.forEach((p: any) => {
-      try {
-        if (!p) return;
-        let id = p.id?.toString() || p.playlist_id?.toString() || p.video_id?.toString() || "";
-        if (!id || addedIds.has(id)) return;
+      let title = p.metadata?.title?.text || p.title?.text || p.title?.toString() || p.name || "";
+      if (!title && typeof p.title === 'string') title = p.title;
+      if (!title && p.title && typeof p.title === 'object' && p.title.text) title = p.title.text;
+      if (!title) return null;
 
-        let title = p.title?.text || p.title?.toString() || "";
-        if (!title) return;
+      let author = "";
+      if (Array.isArray(p.artists) && p.artists.length > 0) {
+        author = p.artists.map((a: any) => a.name).join(", ");
+      } else if (p.author) {
+        author = typeof p.author === 'string' ? p.author : (p.author.name || "");
+      } else if (Array.isArray(p.subtitle?.runs)) {
+        author = p.subtitle.runs.map((r: any) => r.text).join("");
+      }
 
-        let author = p.author?.name || p.author?.toString() || "YouTube";
-        
-        let thumbnail = "";
-        if (p.thumbnails && Array.isArray(p.thumbnails) && p.thumbnails.length > 0) {
-          thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
-        } else if (p.thumbnail && p.thumbnail.thumbnails && Array.isArray(p.thumbnail.thumbnails) && p.thumbnail.thumbnails.length > 0) {
-          thumbnail = p.thumbnail.thumbnails[p.thumbnail.thumbnails.length - 1].url || p.thumbnail.thumbnails[0].url || "";
-        }
+      let thumbnail = "";
+      if (p.content_image?.primary_thumbnail?.image?.length > 0) {
+         const thumbList = p.content_image.primary_thumbnail.image;
+         thumbnail = thumbList[thumbList.length - 1].url;
+      } else if (p.thumbnail && p.thumbnail.contents && p.thumbnail.contents.length > 0) {
+        thumbnail = p.thumbnail.contents[p.thumbnail.contents.length - 1].url || p.thumbnail.contents[0].url || "";
+      } else if (p.thumbnails && p.thumbnails.length > 0) {
+        thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
+      } else if (p.thumbnail && typeof p.thumbnail === 'string') {
+        thumbnail = p.thumbnail;
+      }
 
-        if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+      if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
 
-        const isPlaylist = !!p.playlist_id || id.startsWith("PL") || (p.type || "").toLowerCase().includes("playlist");
+      const isPlaylist = !!p.endpoint?.payload?.browseId || id.startsWith("PL") || id.startsWith("MPRE") || p.type === 'Playlist' || id.startsWith('VL');
 
-        addedIds.add(id);
-        combined.push({
-          id,
-          title,
-          artist: author,
-          duration: isPlaylist ? "Playlist" : (p.duration?.text || "N/A"),
-          url: isPlaylist ? `https://www.youtube.com/playlist?list=${id}` : `https://www.youtube.com/watch?v=${id}`,
-          thumbnail,
-          isPlaylist,
-          subType: isPlaylist ? "playlist" : "cancion"
-        });
-      } catch (e) {}
-    });
-    return combined;
+      return {
+        id: id.replace('VLPL', 'PL'), // Clean up VL prefix sometimes added to playlists
+        title,
+        artist: author || "YouTube Music",
+        duration: isPlaylist ? "Playlist" : (p.duration?.text || "N/A"),
+        url: isPlaylist ? `https://music.youtube.com/playlist?list=${id}` : `https://music.youtube.com/watch?v=${id}`,
+        thumbnail,
+        isPlaylist,
+        subType: isPlaylist ? "playlist" : "cancion"
+      };
+    } catch (e) {
+      return null;
+    }
   };
 
   try {
-    const searchRes = await yt.search(`top música ${countryName} 2026 exitos mix`, { type: 'video' });
-    const allItems = parseItems([
-      ...(searchRes.results || []),
-      ...(searchRes.playlists || []),
-      ...(searchRes.videos || [])
-    ]);
+    const explore = await yt.music.getExplore();
+    
+    let trending: any[] = [];
+    let dailyTop: any[] = [];
+    let trends: any[] = [];
+
+    if (explore.sections) {
+      explore.sections.forEach((s: any) => {
+        const headerText = (s.header?.title?.text || "").toLowerCase();
+        if (!s.contents) return;
+        
+        const parsed = s.contents.map(parseInnertubeItem).filter(Boolean);
+        
+        if (headerText.includes("trending") || headerText.includes("tendencia")) {
+          trending = parsed;
+        } else if (headerText.includes("new music video") || headerText.includes("video")) {
+          dailyTop = parsed;
+        } else if (headerText.includes("new album") || headerText.includes("lanzamiento") || headerText.includes("single")) {
+          trends = parsed;
+        } else if (parsed.length > 0 && trends.length === 0) {
+           trends = parsed.slice(0, 5);
+        }
+      });
+    }
+
+    // Explicitly grab the top playlist based on country
+    const top100Res = await yt.search(`Top 100 Playlist ${countryName} Oficial`, { type: 'playlist' });
+    const playlistsArr = top100Res.playlists || top100Res.results || [];
+    const top100 = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
 
     const data = {
-      trending: allItems.slice(0, 10),
-      dailyTop: allItems.slice(10, 20),
-      top100: allItems.slice(20, 30),
+      trending,
+      dailyTop,
+      top100,
       workout: [],
       focus: [],
-      trends: allItems.slice(30, 40),
-      latin: allItems.slice(40, 50),
+      trends, 
+      latin: [],
       party: []
     };
 
@@ -382,10 +415,20 @@ app.get("/api/youtube/explore", async (req, res) => {
   }
 });
 
+// Playlist Cache (Eco-Friendly)
+const playlistCache = new Map<string, { data: any, timestamp: number }>();
+const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+
 // YouTube Playlist Tracks Extractor Endpoint
 app.get("/api/youtube/playlist", async (req, res) => {
   const playlistId = req.query.id as string;
   if (!playlistId) return res.status(400).json({ error: "Missing playlist ID" });
+
+  const cacheKey = playlistId;
+  const cached = playlistCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < PLAYLIST_CACHE_TTL)) {
+    return res.json(cached.data);
+  }
 
   if (!yt) {
     try {
@@ -396,31 +439,40 @@ app.get("/api/youtube/playlist", async (req, res) => {
   }
 
   try {
-    const playlist: any = await yt.getPlaylist(playlistId);
+    let playlist: any;
     let rawVideos: any[] = [];
-    if (playlist.items && playlist.items.length > 0) {
-      console.log("[API PL] items length is", playlist.items.length);
-      for (let i = 0; i < playlist.items.length; i++) {
-        if (playlist.items[i]) rawVideos.push(playlist.items[i]);
+    
+    if (playlistId.startsWith("MPRE")) {
+      playlist = await yt.music.getAlbum(playlistId);
+      if (playlist.contents) {
+        rawVideos = Array.isArray(playlist.contents) ? playlist.contents : [];
       }
-      console.log("[API PL] loop extracted length is", rawVideos.length);
-    } else if (playlist.videos) {
-      if (playlist.videos.length > 0) {
-        for (let i = 0; i < playlist.videos.length; i++) {
-          if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
+    } else {
+      playlist = await yt.getPlaylist(playlistId);
+      if (playlist.items && playlist.items.length > 0) {
+        console.log("[API PL] items length is", playlist.items.length);
+        for (let i = 0; i < playlist.items.length; i++) {
+          if (playlist.items[i]) rawVideos.push(playlist.items[i]);
         }
-      } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
-        for (let i = 0; i < playlist.videos.entries.length; i++) {
-          if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
+        console.log("[API PL] loop extracted length is", rawVideos.length);
+      } else if (playlist.videos) {
+        if (playlist.videos.length > 0) {
+          for (let i = 0; i < playlist.videos.length; i++) {
+            if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
+          }
+        } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
+          for (let i = 0; i < playlist.videos.entries.length; i++) {
+            if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
+          }
+        } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
+          for (let i = 0; i < playlist.videos.contents.length; i++) {
+            if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
+          }
         }
-      } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
-        for (let i = 0; i < playlist.videos.contents.length; i++) {
-          if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
+      } else if (playlist.contents && playlist.contents.length > 0) {
+        for (let i = 0; i < playlist.contents.length; i++) {
+          if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
         }
-      }
-    } else if (playlist.contents && playlist.contents.length > 0) {
-      for (let i = 0; i < playlist.contents.length; i++) {
-        if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
       }
     }
     
@@ -456,6 +508,7 @@ app.get("/api/youtube/playlist", async (req, res) => {
       return null;
     }).filter(Boolean);
 
+    playlistCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
     res.json(tracks);
   } catch (err) {
     console.error("Error fetching playlist tracks:", err);

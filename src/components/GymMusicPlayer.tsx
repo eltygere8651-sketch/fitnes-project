@@ -744,7 +744,7 @@ export default function GymMusicPlayer() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
-  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("playlist");
+  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("search");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
   useEffect(() => {
@@ -958,24 +958,36 @@ export default function GymMusicPlayer() {
     if (!searchQuery.trim()) {
       return viewedTracks.map((track, idx) => ({ track, idx }));
     }
-    const lowerQuery = searchQuery.toLowerCase();
-    return viewedTracks
-      .map((track, idx) => ({ track, idx }))
-      .filter(({ track }) => {
-        const titleMatch = track.title?.toLowerCase().includes(lowerQuery);
-        const artistMatch = track.artist?.toLowerCase().includes(lowerQuery);
-        return titleMatch || artistMatch;
-      });
+    const lowerQuery = searchQuery.trim().toLowerCase();
+    
+    const mapped = viewedTracks.map((track, idx) => {
+      const lowerTitle = track.title?.toLowerCase() || "";
+      const lowerArtist = track.artist?.toLowerCase() || "";
+      const isArtistMatch = lowerArtist.includes(lowerQuery);
+      const isTitleMatch = lowerTitle.includes(lowerQuery);
+      
+      let priority = -1;
+      if (lowerArtist === lowerQuery) priority = 4;
+      else if (lowerArtist.startsWith(lowerQuery)) priority = 3;
+      else if (lowerTitle === lowerQuery) priority = 2;
+      else if (lowerTitle.startsWith(lowerQuery)) priority = 1;
+      else if (isArtistMatch || isTitleMatch) priority = 0;
+      
+      return { track, idx, priority };
+    });
+
+    return mapped
+      .filter(item => item.priority > -1)
+      .sort((a, b) => b.priority - a.priority)
+      .map(({ track, idx }) => ({ track, idx }));
   }, [viewedTracks, searchQuery]);
 
   const communityPlaylists = React.useMemo(() => {
     return userPlaylists
       .filter(pl => {
-        const isPublic = pl.isPublic !== false;
-        const isNotFav = pl.name.toLowerCase() !== 'favoritos';
+        const isNotFav = pl.name.toLowerCase() !== 'favoritos' && pl.name.toLowerCase() !== 'siguiente';
         
-        // Include everything that is public and not just the favorites folder
-        if (!isPublic || !isNotFav) return false;
+        if (!isNotFav) return false;
         
         return true;
       });
@@ -1366,7 +1378,7 @@ export default function GymMusicPlayer() {
           thumbnail_url: playlistToCopy.thumbnail_url || "",
           ownerId: user.uid,
           ownerName: user.displayName || "Socio Premium",
-          isPublic: false,
+          isPublic: true,
           adminSecret: "ho82788278",
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
@@ -1824,6 +1836,29 @@ export default function GymMusicPlayer() {
   };
 
   const handleLoadExplorePlaylist = async (item: any) => {
+    if (item.isPlaylist === false) {
+      setPreviewPlaylist({
+        id: item.id,
+        name: item.title,
+        description: item.artist || "Sencillo",
+        tracks: [{
+          id: item.id,
+          title: item.title,
+          artist: item.artist || "YouTube",
+          duration: item.duration || "N/A",
+          url: item.url || `https://www.youtube.com/watch?v=${item.id}`,
+          thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
+        }],
+        thumbnail_url: item.thumbnail,
+        ownerId: "youtube",
+        ownerName: item.artist || "YouTube",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      setShowLibrary(true);
+      return;
+    }
+
     setIsLoadingExplore(true);
     try {
       const res = await fetch(`/api/youtube/playlist?id=${item.id}`);
@@ -1969,7 +2004,7 @@ export default function GymMusicPlayer() {
         const normalizeStr = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
         
         const existsPublicly = userPlaylists.find(p => {
-          if (p.ownerId === user?.uid || p.isPublic === false) return false;
+          if (p.ownerId === user?.uid) return false;
           const pName = normalizeStr(p.name);
           const newName = normalizeStr(name);
           
@@ -2220,7 +2255,7 @@ export default function GymMusicPlayer() {
         category: "Local",
         ownerId: currentUser.uid,
         ownerName: currentUser.displayName || nicknameInput || "Premium Member",
-        isPublic: false,
+        isPublic: true,
         folder: "general",
         tracks: pl.tracks || [],
         createdAt: serverTimestamp(),
@@ -2618,7 +2653,63 @@ export default function GymMusicPlayer() {
         />
       </div>
 
-
+      {/* GLOBAL TABS / PILLS HEADER */}
+      <Carousel className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+        <button
+          onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            setTrackListTab("search");
+          }}
+          className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
+            searchQuery === "" && trackListTab === "search"
+              ? "bg-white text-black border-white shadow-md"
+              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+          }`}
+        >
+          Explorar
+        </button>
+        {[
+          { label: "Energía", query: "Energía Mix Oficial YouTube Music Playlist" },
+          { label: "Relax", query: "Relax Chill Mix Oficial YouTube Music Playlist" },
+          { label: "Romance", query: "Romance Amor Mix Oficial YouTube Music Playlist" },
+          { label: "Entretenimiento", query: "Entretenimiento Pop Hits Oficial YouTube Music Playlist" },
+          { label: "Entrenamiento", query: "Entrenamiento Workout Mix Oficial YouTube Music Playlist" },
+          { label: "Triste", query: "Triste Melancolía Mix Oficial YouTube Music Playlist" },
+          { label: "Fiesta", query: "Fiesta Reggaeton Mix Oficial YouTube Music Playlist" },
+          { label: "Concentración", query: "Concentración Focus Mix Oficial YouTube Music Playlist" }
+        ].map((pill, idx) => (
+          <button
+            key={idx}
+            onClick={() => {
+              if (searchQuery === pill.label) {
+                setSearchQuery("");
+                setYoutubeResults([]);
+                setPreviewPlaylist(null);
+                setTrackListTab("search");
+              } else {
+                setSearchQuery(pill.label);
+                setPreviewPlaylist(null);
+                setTrackListTab("search");
+                setIsSearchingYT(true);
+                fetch(`/api/youtube/search?q=${encodeURIComponent(pill.query)}`)
+                  .then(res => res.json())
+                  .then(data => setYoutubeResults(data))
+                  .catch(console.error)
+                  .finally(() => setIsSearchingYT(false));
+              }
+            }}
+            className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
+              searchQuery === pill.label && trackListTab === "search"
+                ? "bg-white text-black border-white shadow-md"
+                : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+            }`}
+          >
+            {pill.label}
+          </button>
+        ))}
+      </Carousel>
 
       <div className="flex-1 flex flex-row min-h-0 relative overflow-hidden">
         {/* SIDEBAR */}
@@ -3200,7 +3291,7 @@ export default function GymMusicPlayer() {
                           setIsTrackListExpanded(!isTrackListExpanded);
                         } else {
                           setTrackListTab("playlist");
-                          setIsTrackListExpanded(true);
+                          setIsTrackListExpanded(false);
                         }
                         setSearchQuery("");
                       }}
@@ -3219,20 +3310,6 @@ export default function GymMusicPlayer() {
 
                     <button
                       onClick={() => {
-                        setShowLibrary(true);
-                      }}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border ${
-                        showLibrary
-                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
-                          : "text-slate-500 hover:text-slate-300 border-transparent"
-                      }`}
-                    >
-                      <Users className="w-3 h-3 text-[#1ED760]" />
-                      <span>Comunidad</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
                         setTrackListTab("search");
                         setSearchQuery("");
                       }}
@@ -3242,14 +3319,30 @@ export default function GymMusicPlayer() {
                           : "text-slate-500 hover:text-slate-300 border-transparent"
                       }`}
                     >
-                      <Search className="w-3 h-3" />
+                      <Search className="w-3 h-3 text-[#1ED760]" />
                       <span>Explorar</span>
+                    </button>
+
+                    <button
+                      onClick={() => {
+                        setShowLibrary(true);
+                        setIsTrackListExpanded(false);
+                      }}
+                      className={`hidden sm:flex flex-1 items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border ${
+                        showLibrary
+                          ? "bg-white/5 text-[#1ED760] border-transparent shadow-sm"
+                          : "text-slate-500 hover:text-slate-300 border-transparent"
+                      }`}
+                    >
+                      <Users className="w-3 h-3" />
+                      <span>Comunidad</span>
                     </button>
 
                     <button
                       onClick={() => {
                         setTrackListTab("queue");
                         setSearchQuery("");
+                        setIsTrackListExpanded(false);
                       }}
                       className={`hidden sm:flex flex-1 items-center justify-center gap-1.5 py-1 px-1 text-[9px] font-bold uppercase tracking-wider rounded-lg transition-all cursor-pointer border relative ${
                         trackListTab === "queue"
@@ -3315,221 +3408,19 @@ export default function GymMusicPlayer() {
                 <div className="flex-1 overflow-y-auto p-0 sm:p-0 premium-scrollbar relative">
                   {trackListTab === "search" ? (
                     <div className="space-y-1">
-                      {/* Search Sub-Tabs Switcher */}
-                      <div className="flex items-center gap-2 p-3 pb-2 overflow-x-auto no-scrollbar shrink-0 select-none bg-[#030303]">
-                        <button 
-                          onClick={() => setSearchSubTab("charts")}
-                          className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                            searchSubTab === "charts" 
-                              ? "bg-white text-black shadow-lg shadow-white/5" 
-                              : "bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5"
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <Trophy className="w-3 h-3" />
-                            Radio
+                      {/* Search results view */}
+
+
+
+
+                      {(searchQuery || youtubeResults.length > 0) && (
+                        <div className="flex items-center justify-between px-2 py-2 mb-1">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                            Resultados de Búsqueda
                           </span>
-                        </button>
-                        
-                        <button 
-                          onClick={() => setSearchSubTab("novedades")}
-                          className={`shrink-0 px-6 py-2 rounded-full text-[10px] font-black uppercase tracking-[0.15em] transition-all relative overflow-hidden ${
-                            searchSubTab === "novedades" 
-                              ? "bg-emerald-500 text-black shadow-[0_4px_15px_rgba(16,185,129,0.3)]" 
-                              : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/20"
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <Compass className={`w-3.5 h-3.5 ${searchSubTab === "novedades" ? "animate-pulse" : ""}`} />
-                            Explorar
-                          </span>
-                        </button>
-
-                        <button 
-                          onClick={() => setSearchSubTab("moods")}
-                          className={`shrink-0 px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest transition-all ${
-                            searchSubTab === "moods" 
-                              ? "bg-white text-black shadow-lg shadow-white/5" 
-                              : "bg-white/5 text-slate-400 hover:bg-white/10 border border-white/5"
-                          }`}
-                        >
-                          <span className="flex items-center gap-1.5">
-                            <LayoutGrid className="w-3 h-3" />
-                            Estados
-                          </span>
-                        </button>
-                      </div>
-
-                      {/* YOUTUBE MUSIC STYLE EXPLORE PILLS */}
-                      <Carousel className="px-3 pt-2.5 pb-2.5 gap-2 border-b border-white/5 bg-[#050506]/90 shrink-0 select-none z-10 sticky top-0 backdrop-blur-md snap-x">
-                        <button
-                          onClick={() => {
-                            setSearchQuery("");
-                            setYoutubeResults([]);
-                            setPreviewPlaylist(null);
-                          }}
-                          className={`shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border snap-start ${
-                            searchQuery === "" 
-                              ? "bg-white text-black border-white shadow-md"
-                              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
-                          }`}
-                        >
-                          Explorar
-                        </button>
-
-                        {[
-                          { label: "Energía", query: "entrenamiento rapido gym energia playlist" },
-                          { label: "Relax", query: "relajacion ambiental lofi chill playlist" },
-                          { label: "Triste", query: "canciones tristes melancolia playlist" },
-                          { label: "Entrenamiento", query: "crossfit pesas motivacion playlist" },
-                          { label: "Romance", query: "canciones romanticas amor playlist" },
-                          { label: "Fiesta", query: "fiesta reggaeton electronica hits playlist" },
-                          { label: "Concentración", query: "focus work concentracion estudio playlist" }
-                        ].map((pill, idx) => (
-                          <button
-                            key={idx}
-                            onClick={() => {
-                              setSearchQuery(pill.label);
-                              setPreviewPlaylist(null);
-                              setIsSearchingYT(true);
-                              fetch(`/api/youtube/search?q=${encodeURIComponent(pill.query)}`)
-                                .then(res => res.json())
-                                .then(data => setYoutubeResults(data))
-                                .catch(console.error)
-                                .finally(() => setIsSearchingYT(false));
-                            }}
-                            className={`shrink-0 px-3.5 py-1.5 rounded-lg text-[10px] font-bold transition-all cursor-pointer border snap-start ${
-                              searchQuery === pill.label
-                                ? "bg-white text-black border-white shadow-md"
-                                : "bg-white/5 border-white/10 text-white hover:bg-white/10"
-                            }`}
-                          >
-                            {pill.label}
-                          </button>
-                        ))}
-                      </Carousel>
-
-                      {/* COUNTRY SELECTOR FOR CHARTS */}
-                      {searchQuery === "" && (
-                        <div className="px-3 pt-3 pb-2">
-                          <div className="relative">
-                            <select
-                              value={selectedCountry}
-                              onChange={(e) => {
-                                const newCountry = e.target.value;
-                                setSelectedCountry(newCountry);
-                                localStorage.setItem("gym_music_selected_country", newCountry);
-                                setExploreData(null); // Force reload
-                              }}
-                              className="w-full appearance-none bg-[#111113] border border-emerald-500/10 text-white rounded-xl px-4 py-2.5 text-[11px] sm:text-xs font-bold outline-none focus:border-emerald-500/50 hover:bg-white/[0.02] transition-colors cursor-pointer text-center"
-                            >
-                              {[
-                                { code: "GLOBAL", label: "Global", flag: "🌎" },
-                                { code: "US", label: "Estados Unidos", flag: "🇺🇸" },
-                                { code: "ES", label: "España", flag: "🇪🇸" },
-                                { code: "MX", label: "México", flag: "🇲🇽" },
-                                { code: "AR", label: "Argentina", flag: "🇦🇷" },
-                                { code: "CO", label: "Colombia", flag: "🇨🇴" },
-                                { code: "CL", label: "Chile", flag: "🇨🇱" },
-                                { code: "PE", label: "Perú", flag: "🇵🇪" },
-                                { code: "VE", label: "Venezuela", flag: "🇻🇪" },
-                                { code: "EC", label: "Ecuador", flag: "🇪🇨" },
-                                { code: "GT", label: "Guatemala", flag: "🇬🇹" },
-                                { code: "CU", label: "Cuba", flag: "🇨🇺" },
-                                { code: "BO", label: "Bolivia", flag: "🇧🇴" },
-                                { code: "DO", label: "República Dominicana", flag: "🇩🇴" },
-                                { code: "HN", label: "Honduras", flag: "🇭🇳" },
-                                { code: "PY", label: "Paraguay", flag: "🇵🇾" },
-                                { code: "SV", label: "El Salvador", flag: "🇸🇻" },
-                                { code: "NI", label: "Nicaragua", flag: "🇳🇮" },
-                                { code: "CR", label: "Costa Rica", flag: "🇨🇷" },
-                                { code: "PA", label: "Panamá", flag: "🇵🇦" },
-                                { code: "PR", label: "Puerto Rico", flag: "🇵🇷" },
-                                { code: "UY", label: "Uruguay", flag: "🇺🇾" },
-                                { code: "GB", label: "Reino Unido", flag: "🇬🇧" },
-                                { code: "DE", label: "Alemania", flag: "🇩🇪" },
-                                { code: "FR", label: "Francia", flag: "🇫🇷" },
-                                { code: "IT", label: "Italia", flag: "🇮🇹" },
-                                { code: "PT", label: "Portugal", flag: "🇵🇹" },
-                                { code: "SE", label: "Suecia", flag: "🇸🇪" },
-                                { code: "NO", label: "Noruega", flag: "🇳🇴" },
-                                { code: "CH", label: "Suiza", flag: "🇨🇭" },
-                                { code: "NL", label: "Países Bajos", flag: "🇳🇱" },
-                                { code: "BE", label: "Bélgica", flag: "🇧🇪" }
-                              ].map((c) => (
-                                <option key={c.code} value={c.code} className="bg-[#111113] text-white">
-                                  {c.flag} Explorar Tops de: {c.label}
-                                </option>
-                              ))}
-                            </select>
-                            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-emerald-500">
-                              <ChevronDown className="w-4 h-4" />
-                            </div>
-                          </div>
                         </div>
                       )}
-                          {communitySearchResults.length > 0 && (
-                        <div className="mb-4">
-                           <div className="flex items-center justify-between px-2 py-2 mb-1">
-                            <span className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] flex items-center gap-2">
-                              <div className="w-1.5 h-1.5 rounded-full bg-[#1ED760] animate-pulse" />
-                              Canales en Novedades
-                            </span>
-                          </div>
-                          
-                          <div className="bg-[#111113] border border-emerald-500/10 rounded-2xl overflow-hidden divide-y divide-white/5">
-                            {communitySearchResults.map((commPl) => (
-                              <div
-                                key={commPl.id}
-                                className="group flex items-center gap-3 p-2.5 sm:p-3 hover:bg-white/[0.03] transition-colors cursor-pointer"
-                                onClick={() => {
-                                  setPlaylistToCopy(commPl);
-                                  setTargetPlaylistIdForCopy("new");
-                                  setIsProcessingCopy(false);
-                                  setCopyPlaylistNameInput(commPl.name);
-                                  setCopyPlaylistDescInput(commPl.description || "Canal guardado desde novedades");
-                                }}
-                              >
-                                <div className="w-10 h-10 sm:w-12 sm:h-12 bg-[#0a0a0c] rounded-xl flex items-center justify-center overflow-hidden shrink-0 border border-emerald-500/10 relative group-hover:border-emerald-500/30 transition-colors">
-                                  <div className="text-xl absolute">{commPl.icon || "🎧"}</div>
-                                  {commPl.thumbnail_url && (
-                                    <img 
-                                      src={commPl.thumbnail_url} 
-                                      alt={commPl.name} 
-                                      className="absolute inset-0 w-full h-full object-cover z-10" 
-                                      referrerPolicy="no-referrer"
-                                      onError={(e) => {
-                                        (e.target as HTMLImageElement).style.display = 'none';
-                                      }}
-                                    />
-                                  )}
-                                </div>
-                                <div className="flex-1 min-w-0 pr-2">
-                                  <div className="flex flex-col">
-                                    <span className="text-sm sm:text-[15px] font-bold text-white truncate group-hover:text-[#1ED760] transition-colors">{commPl.name}</span>
-                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                      <span className="text-[10px] font-bold text-slate-400 capitalize truncate block">
-                                        Por {commPl.ownerName}
-                                      </span>
-                                      <span className="text-[8px] font-black uppercase text-emerald-500/80 bg-emerald-500/10 px-1.5 rounded-sm">NOVEDADES</span>
-                                    </div>
-                                  </div>
-                                </div>
-                                <button className="w-8 h-8 rounded-full bg-white/5 hover:bg-emerald-500 hover:text-black hover:scale-105 active:scale-95 transition-all flex items-center justify-center text-slate-300">
-                                  <Plus className="w-4 h-4 text-inherit" />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      <div className="flex items-center justify-between px-2 py-2 mb-1">
-                        <span className="text-[10px] font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          Resultados de Búsqueda
-                        </span>
-                      </div>
                       
                       {isSearchingYT && (
                         <div className="flex items-center justify-center py-12">
@@ -3540,45 +3431,7 @@ export default function GymMusicPlayer() {
                       {!isSearchingYT && youtubeResults.length === 0 && (
                         <div className="py-2.5 sm:py-4 px-2.5 sm:px-4">
                           
-                          {/* 1. Categorías / Píldoras de Estado de Ánimo Estilo YouTube Music */}
-                          {!searchQuery && (
-                            <div className="mb-4">
-                              <Carousel 
-                                title={
-                                  <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest px-1">
-                                    ESTADOS DE ÁNIMO Y GÉNEROS
-                                  </p>
-                                }
-                                className="items-center gap-1.5 pb-2 mb-2 snap-x select-none px-1">
-                                {[
-                                  { label: "⚡ Energía", query: "best workout music mix gym motivation" },
-                                  { label: "🧘 Relax", query: "lofi hip hop study synthwave chill" },
-                                  { label: "🏃 Cardio", query: "high tempo running cardio hits" },
-                                  { label: "🎧 Enfoque", query: "ambient background concentration sounds" },
-                                  { label: "🔥 Phonk", query: "gym phonk drift bass boosted workout mix" },
-                                  { label: "🕺 Latino", query: "reggaeton urbano exitos de hoy" }
-                                ].map((mood, mIdx) => (
-                                  <button
-                                    key={mIdx}
-                                    onClick={() => {
-                                      setSearchQuery(mood.query);
-                                      setIsSearchingYT(true);
-                                      fetch(`/api/youtube/search?q=${encodeURIComponent(mood.query)}`)
-                                        .then(res => res.json())
-                                        .then(data => {
-                                          setYoutubeResults(data);
-                                          setIsSearchingYT(false);
-                                        })
-                                        .catch(() => setIsSearchingYT(false));
-                                    }}
-                                    className="snap-start shrink-0 px-2.5 py-1.5 bg-white/[0.03] border border-white/5 hover:border-emerald-500/30 text-white hover:text-emerald-400 text-[10px] font-bold uppercase tracking-wider rounded-xl transition-all cursor-pointer active:scale-95 flex items-center gap-1 hover:bg-emerald-500/10"
-                                  >
-                                    <span>{mood.label}</span>
-                                  </button>
-                                ))}
-                              </Carousel>
-                            </div>
-                          )}
+                          {/* Las categorías redundantes fueron removidas a pedido del usuario */}
 
                           {searchQuery ? (
                             <div className="py-12 flex flex-col items-center justify-center text-center">
@@ -3606,21 +3459,23 @@ export default function GymMusicPlayer() {
                               ) : (
                                 <div className="space-y-6">
                                   {/* --- TAB EXPLORAR --- */}
-                                  {searchSubTab === "novedades" && (
-                                    <ExploreView 
-                                      exploreData={exploreData}
-                                      communityPlaylists={communityPlaylists}
-                                      setOverrideCurrentTrack={setOverrideCurrentTrack}
-                                      setIsPlaying={setIsPlaying}
-                                      showNotification={showNotification}
-                                      addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
-                                      loadPlaylistAndPlay={handleLoadExplorePlaylist}
-                                    />
-                                  )}
+                                  <ExploreView 
+                                    exploreData={exploreData}
+                                    communityPlaylists={communityPlaylists}
+                                    setOverrideCurrentTrack={setOverrideCurrentTrack}
+                                    setIsPlaying={setIsPlaying}
+                                    showNotification={showNotification}
+                                    addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
+                                    loadPlaylistAndPlay={handleLoadExplorePlaylist}
+                                    selectedCountry={selectedCountry}
+                                    setSelectedCountry={(c) => {
+                                      setSelectedCountry(c);
+                                      localStorage.setItem("gym_music_selected_country", c);
+                                      setExploreData(null);
+                                    }}
+                                  />
 
-                                  {/* --- TAB LISTAS DE ÉXITOS --- */}
-                                  {searchSubTab === "charts" && (
-                                    <>
+                                  {/* --- LISTAS DE ÉXITOS --- */}
                                       {/* TOP TENDENCIA */}
                                       {exploreData?.trending && exploreData.trending.length > 0 && (
                                         <div className="space-y-3 px-1 pt-2">
@@ -3631,9 +3486,9 @@ export default function GymMusicPlayer() {
                                               </p>
                                             }
                                             className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.trending.map((song: any) => (
+                                            {exploreData.trending.map((song: any, idx: number) => (
                                               <div 
-                                                key={`trend-${song.id}`} 
+                                                key={`trend-${song.id}-${idx}`} 
                                                 className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
                                               >
                                                 <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
@@ -3672,9 +3527,9 @@ export default function GymMusicPlayer() {
                                               </p>
                                             }
                                             className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.dailyTop.map((song: any) => (
+                                            {exploreData.dailyTop.map((song: any, idx: number) => (
                                               <div 
-                                                key={`daily-${song.id}`} 
+                                                key={`daily-${song.id}-${idx}`} 
                                                 className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
                                               >
                                                 <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
@@ -3713,9 +3568,9 @@ export default function GymMusicPlayer() {
                                               </p>
                                             }
                                             className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.top100.map((song: any) => (
+                                            {exploreData.top100.map((song: any, idx: number) => (
                                               <div 
-                                                key={`popular-${song.id}`} 
+                                                key={`popular-${song.id}-${idx}`} 
                                                 className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
                                               >
                                                 <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
@@ -3738,135 +3593,7 @@ export default function GymMusicPlayer() {
                                           </Carousel>
                                         </div>
                                       )}
-                                    </>
-                                  )}
-
-                                  {/* --- TAB ÁNIMOS Y GÉNEROS --- */}
-                                  {searchSubTab === "moods" && (
-                                    <>
-                                      {/* QUICK MOODS GRID (The ones removed from header) */}
-                                      <div className="space-y-3">
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400 px-1">
-                                          ⚡ Elige tu Energía
-                                        </p>
-                                        <div className="grid grid-cols-2 gap-3">
-                                          {[
-                                            { label: "⚡ Energía", query: "best workout music mix gym motivation", color: "from-orange-500 to-red-600" },
-                                            { label: "🧘 Relax", query: "lofi hip hop study music chill", color: "from-blue-500 to-indigo-600" },
-                                            { label: "🏃 Cardio", query: "high tempo running cardio hits", color: "from-emerald-500 to-teal-600" },
-                                            { label: "🎧 Enfoque", query: "ambient concentration focus deep work", color: "from-purple-500 to-pink-600" },
-                                            { label: "🔥 Phonk", query: "gym phonk drift beat high bass", color: "from-zinc-700 to-black" },
-                                            { label: "🕺 Latino", query: "reggaeton urbano exitos mundiales", color: "from-yellow-400 to-orange-500" }
-                                          ].map((mood, mIdx) => (
-                                            <button
-                                              key={mIdx}
-                                              onClick={() => {
-                                                setSearchQuery(mood.query);
-                                                setIsSearchingYT(true);
-                                                fetch(`/api/youtube/search?q=${encodeURIComponent(mood.query)}`)
-                                                  .then(res => res.json())
-                                                  .then(data => {
-                                                    setYoutubeResults(data);
-                                                    setIsSearchingYT(false);
-                                                  })
-                                                  .catch(() => setIsSearchingYT(false));
-                                              }}
-                                              className={`relative h-20 overflow-hidden rounded-2xl border border-white/10 group cursor-pointer active:scale-[0.98] transition-transform`}
-                                            >
-                                              <div className={`absolute inset-0 bg-gradient-to-br ${mood.color} opacity-60 group-hover:opacity-80 transition-opacity`} />
-                                              <div className="absolute inset-0 flex items-center justify-center p-3">
-                                                <span className="text-[11px] font-black uppercase tracking-wider text-white drop-shadow-md">{mood.label}</span>
-                                              </div>
-                                            </button>
-                                          ))}
-                                        </div>
-                                      </div>
-
-                                      {/* GENRE PLAYLISTS */}
-                                      {exploreData?.workout && exploreData.workout.length > 0 && (
-                                        <div className="space-y-3 pt-2">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[10px] font-black uppercase tracking-widest text-[#1ED760] px-1">
-                                                🏋️ Entrenamiento & Gym
-                                              </p>
-                                            }
-                                            className="gap-3 pb-2 snap-x px-1">
-                                            {exploreData.workout.slice(0, 6).map((pl: any) => (
-                                              <div 
-                                                key={`workpl-${pl.id}`}
-                                                className="snap-start shrink-0 w-32 group relative flex flex-col gap-2"
-                                              >
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black shrink-0 relative border border-white/5">
-                                                  <img src={pl.thumbnail} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                                                  <button
-                                                    onClick={() => {
-                                                      handleLoadExplorePlaylist(pl);
-                                                    }}
-                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
-                                                  >
-                                                    <Search className="w-4 h-4" />
-                                                  </button>
-                                                </div>
-                                                <p className="text-[9.5px] font-black text-white truncate uppercase tracking-tight px-1">{pl.title}</p>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-
-                                      {exploreData?.focus && exploreData.focus.length > 0 && (
-                                        <div className="space-y-3 pt-2">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[10px] font-black uppercase tracking-widest text-purple-400 px-1">
-                                                🧘 Relajación & Enfoque
-                                              </p>
-                                            }
-                                            className="gap-3 pb-2 snap-x px-1">
-                                            {exploreData.focus.slice(0, 6).map((pl: any) => (
-                                              <div key={`focpl-${pl.id}`} className="snap-start shrink-0 w-32 group relative flex flex-col gap-2">
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black shrink-0 relative border border-white/5">
-                                                  <img src={pl.thumbnail} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                                                  <button onClick={() => { handleLoadExplorePlaylist(pl); }} className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 cursor-pointer shadow-lg">
-                                                    <Search className="w-4 h-4" />
-                                                  </button>
-                                                </div>
-                                                <p className="text-[9.5px] font-black text-white truncate uppercase tracking-tight px-1">{pl.title}</p>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-
-                                      {exploreData?.latin && exploreData.latin.length > 0 && (
-                                        <div className="space-y-3 pt-2">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[10px] font-black uppercase tracking-widest text-orange-400 px-1">
-                                                🔥 Ritmos Latinos
-                                              </p>
-                                            }
-                                            className="gap-3 pb-2 snap-x px-1">
-                                            {exploreData.latin.slice(0, 6).map((pl: any) => (
-                                              <div key={`latpl-${pl.id}`} className="snap-start shrink-0 w-32 group relative flex flex-col gap-2">
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black shrink-0 relative border border-white/5">
-                                                  <img src={pl.thumbnail} className="w-full h-full object-cover" loading="lazy" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
-                                                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors" />
-                                                  <button onClick={() => { handleLoadExplorePlaylist(pl); }} className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 cursor-pointer shadow-lg">
-                                                    <Search className="w-4 h-4" />
-                                                  </button>
-                                                </div>
-                                                <p className="text-[9.5px] font-black text-white truncate uppercase tracking-tight px-1">{pl.title}</p>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-                                    </>
-                                  )}
+                                  {/* --- END LISTAS DE ÉXITOS --- */}
 
                                   {/* RECOMENDADO PARA TI (COMUNIDAD) - FIXED ALWAYS AT BOTTOM OF EXPLORE SECTIONS IF NEEDED OR IN ITS OWN TAB */}
                                   {communityPlaylists.length > 0 && (
@@ -3886,9 +3613,9 @@ export default function GymMusicPlayer() {
                                         </button>
                                       </div>
                                       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-left">
-                                        {communityPlaylists.slice(0, 6).map((p) => (
+                                        {communityPlaylists.slice(0, 6).map((p, idx) => (
                                           <div 
-                                            key={`rec-${p.id}`}
+                                            key={`rec-${p.id}-${idx}`}
                                             onClick={() => {
                                               setTrackListTab("search");
                                               setSearchQuery(p.name);
@@ -4330,7 +4057,7 @@ export default function GymMusicPlayer() {
                         const isActive = (playingPlaylist?.id === selectedPlaylist?.id) && displayTrackIndex === idx;
                         return (
                           <div
-                            key={track.id || idx}
+                            key={`list_trk_${track.id || 'x'}_${idx}`}
                             onClick={() => {
                               setOverrideCurrentTrack(null);
                               if (isActive) {
@@ -4800,7 +4527,7 @@ export default function GymMusicPlayer() {
                             
                             return (
                               <div
-                                key={track.id || trackIdx}
+                                key={`prev_trk_${track.id || 'x'}_${trackIdx}`}
                                 onClick={() => {
                                   playPreviewTrack(previewPlaylist, trackIdx);
                                 }}
@@ -5912,6 +5639,7 @@ export default function GymMusicPlayer() {
           onClick={() => {
             setMobileView("playlists");
             setShowLibrary(false);
+            setIsTrackListExpanded(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
             mobileView === "playlists" && !showLibrary
@@ -5923,11 +5651,30 @@ export default function GymMusicPlayer() {
           <span className="text-[9px] font-black uppercase tracking-wider">Biblioteca</span>
         </button>
 
-        {/* Button 2: Comunidad */}
+        {/* Button 2: Explorar (Highlighted) */}
+        <button
+          onClick={() => {
+            setMobileView("player");
+            setTrackListTab("search");
+            setSearchSubTab("novedades");
+            setShowLibrary(false);
+          }}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
+            mobileView === "player" && trackListTab === "search" && (searchSubTab === "novedades" || searchSubTab === "charts" || searchSubTab === "moods") && !showLibrary
+              ? "text-emerald-400 font-black relative before:absolute before:-top-1.5 before:w-8 before:h-0.5 before:bg-emerald-400 before:rounded-full before:shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+              : "text-slate-400 hover:text-white"
+          }`}
+        >
+          <Search className={`w-5 h-5 stroke-[2.2px] transition-transform ${mobileView === "player" && trackListTab === "search" && !showLibrary ? "scale-110 drop-shadow-[0_0_4px_rgba(52,211,153,0.3)]" : ""}`} />
+          <span className="text-[9px] font-black uppercase tracking-wider">Explorar</span>
+        </button>
+
+        {/* Button 3: Comunidad */}
         <button
           onClick={() => {
             setMobileView("player");
             setShowLibrary(true);
+            setIsTrackListExpanded(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
             mobileView === "player" && showLibrary
@@ -5939,30 +5686,13 @@ export default function GymMusicPlayer() {
           <span className="text-[9px] font-black uppercase tracking-wider">Comunidad</span>
         </button>
 
-        {/* Button 3: Explorar */}
-        <button
-          onClick={() => {
-            setMobileView("player");
-            setTrackListTab("search");
-            setSearchSubTab("novedades");
-            setShowLibrary(false);
-          }}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all ${
-            mobileView === "player" && trackListTab === "search" && (searchSubTab === "novedades" || searchSubTab === "charts" || searchSubTab === "moods") && !showLibrary
-              ? "text-[#1ED760] scale-105 font-black"
-              : "text-slate-400 hover:text-white"
-          }`}
-        >
-          <Search className="w-5 h-5 stroke-[2.2px]" />
-          <span className="text-[9px] font-black uppercase tracking-wider">Explorar</span>
-        </button>
-
         {/* Button 4: Cola (with Spotify style premium notification pill indicator) */}
         <button
           onClick={() => {
             setMobileView("player");
             setTrackListTab("queue");
             setShowLibrary(false);
+            setIsTrackListExpanded(false);
           }}
           className={`flex-1 flex flex-col items-center justify-center gap-1 cursor-pointer transition-all relative ${
             mobileView === "player" && trackListTab === "queue" && !showLibrary

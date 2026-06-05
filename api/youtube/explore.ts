@@ -83,22 +83,20 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
-    // Optimización para Vercel (Límite 10s): Un solo registro de búsqueda amplio en lugar de varios.
-    // Esto es mucho más rápido y evita timeouts en el plan gratuito de Vercel.
-    const searchRes = await yt.search(`top música ${countryName} 2026 exitos mix`, { type: 'video' });
-    
-    const allItems = parseYTItems([
-      ...(searchRes.results || []),
-      ...(searchRes.videos || []),
-      ...(searchRes.playlists || [])
+    // Realizamos búsquedas específicas y separadas para obtener listas de éxitos y canciones reales
+    const [trendingSearch, playlistsSearch, dailySearch] = await Promise.all([
+      yt.search(`top tendencias música oficial ${countryName} 2026`, { type: 'video' }),
+      yt.search(`Top 100 canciones ${countryName} YouTube Music Oficial`, { type: 'playlist' }),
+      yt.search(`Mix Nuevos Lanzamientos y Descubrimiento ${countryName}`, { type: 'playlist' }),
     ]);
 
-    // Distribuimos los resultados en diferentes categorías para dar variedad visual
-    const trending = allItems.slice(0, 10);
-    const dailyTop = allItems.slice(10, 20); // Mapeado a Descubrimiento Diario en el UI
-    const top100 = allItems.slice(20, 30);
-    const trends = allItems.slice(30, 40);
-    const latin = allItems.slice(40, 50);
+    const trending = parseYTItems([...(trendingSearch.videos || trendingSearch.results || [])]).slice(0, 15);
+    const top100 = parseYTItems([...(playlistsSearch.playlists || playlistsSearch.results || [])]).slice(0, 15);
+    const dailyTop = parseYTItems([...(dailySearch.playlists || dailySearch.results || [])]).slice(0, 15);
+    
+    // Aprovechamos los resultados de playlists para llenar otras secciones
+    const trends = parseYTItems([...(playlistsSearch.playlists || playlistsSearch.results || [])]).slice(15, 25);
+    const latin = parseYTItems([...(dailySearch.playlists || dailySearch.results || [])]).slice(15, 25);
 
     const finalData = {
       trending,

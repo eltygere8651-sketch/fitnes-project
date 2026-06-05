@@ -8,7 +8,7 @@ interface CarouselProps {
   title?: ReactNode;
 }
 
-export const Carousel: React.FC<CarouselProps> = ({ children, className = "", title }) => {
+export const Carousel: React.FC<CarouselProps> = React.memo(({ children, className = "", title }) => {
   const ref = useRef<HTMLDivElement>(null);
   useDraggable(ref);
   const [showLeft, setShowLeft] = useState(false);
@@ -91,4 +91,4 @@ export const Carousel: React.FC<CarouselProps> = ({ children, className = "", ti
       </div>
     </div>
   );
-};
+});

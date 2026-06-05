@@ -492,22 +492,14 @@ app.get("/api/youtube/explore", async (req, res) => {
     // Perform parallel searches to feed initial categories based on selected country
     const [
       trendingRes, 
-      dailyTopRes, 
       top100Res, 
-      workoutRes, 
-      focusRes,
       newReleasesRes,
-      latinRes,
-      partyRes
+      latinRes
     ] = await Promise.allSettled([
       yt.search(`música tendencia ${countryName} 2026`, { type: 'video' }),
-      yt.search(`top diario canciones ${countryName} music charts`, { type: 'video' }),
       yt.search(`top 100 canciones mas populares ${countryName}`, { type: 'playlist' }),
-      yt.search("best gym music playlist workout", { type: 'playlist' }),
-      yt.search("lofi chill study concentration playlist", { type: 'playlist' }),
       yt.search(`nuevos lanzamientos musica ${countryName} 2026`, { type: 'playlist' }),
-      yt.search(`top exitos reggaeton urbano latino ${countryName}`, { type: 'playlist' }),
-      yt.search("fiesta party mix music playlist", { type: 'playlist' })
+      yt.search(`top exitos reggaeton urbano latino ${countryName}`, { type: 'playlist' })
     ]);
 
     const getItemsFromPayload = (res: any) => {
@@ -528,53 +520,38 @@ app.get("/api/youtube/explore", async (req, res) => {
     };
 
     const trending = parseItems(getItemsFromPayload(trendingRes)).slice(0, 15);
-    const dailyTop = parseItems(getItemsFromPayload(dailyTopRes)).slice(0, 15);
     const top100 = parseItems(getItemsFromPayload(top100Res)).filter(x => x.isPlaylist).slice(0, 15);
-    const workout = parseItems(getItemsFromPayload(workoutRes)).filter(x => x.isPlaylist).slice(0, 15);
-    const focus = parseItems(getItemsFromPayload(focusRes)).filter(x => x.isPlaylist).slice(0, 15);
     
     // Additional real official playlists
     const newReleases = parseItems(getItemsFromPayload(newReleasesRes)).filter(x => x.isPlaylist).slice(0, 15);
     const latin = parseItems(getItemsFromPayload(latinRes)).filter(x => x.isPlaylist).slice(0, 15);
-    const party = parseItems(getItemsFromPayload(partyRes)).filter(x => x.isPlaylist).slice(0, 15);
 
     const data = {
       trending,   
-      dailyTop,   
+      dailyTop: [],   
       top100,     
-      workout,    
-      focus,
+      workout: [],    
+      focus: [],
       trends: newReleases,
       latin,
-      party
+      party: []
     };
 
     
-    const createFb = (id: string, title: string, imgVid: string) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=${id}`, thumbnail: `https://i.ytimg.com/vi/${imgVid}/mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
-    if (data.trending.length === 0) data.trending.push(createFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo"));
-    if (data.dailyTop.length === 0) data.dailyTop.push(createFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A"));
-    if (data.top100.length === 0) data.top100.push(createFb("PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", "Top 100 Popular", "mTQ_b9kQ6ko"));
-    if (data.workout.length === 0) data.workout.push(createFb("PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", "Gym Motivation", "IZ36b3q1elI"));
-    if (data.focus.length === 0) data.focus.push(createFb("PLOzDu-MXXLliO9fBelCGIawp_EN2kO-dE", "Focus & Relax", "jGflUbPQfW8"));
-    if (data.trends.length === 0) data.trends.push(createFb("PLxA687tYuMWi8OUus77n7Ziq1j0yL0gGz", "Novedades", "ru0K8uYEZWw"));
-    if (data.latin.length === 0) data.latin.push(createFb("PLYyq1j1v4R5R20X-bepkF5V66hBWe1a-r", "Ritmos Latinos", "C7vfCJTQ-rw"));
-    if (data.party.length === 0) data.party.push(createFb("PL7NXvXjIf-gGqSsswXm7-N0BsiW61wJzB", "Party Mix", "n6N1_sxlBU8"));
     exploreCache = { data, timestamp: Date.now() } as any;
     (exploreCache as any).country = country;
     res.json(data);
   } catch (error) {
     console.error("Explore YouTube failed:", error);
-    
-    const createFb = (id: string, title: string, imgVid: string) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=${id}`, thumbnail: `https://i.ytimg.com/vi/${imgVid}/mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
     res.json({
-      trending: [createFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo")],
-      dailyTop: [createFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A")],
-      top100: [createFb("PL4fGSI1pDJn6puJdseH2Rt9sMvt9E2M4i", "Top 100 Popular", "mTQ_b9kQ6ko")],
-      workout: [createFb("PLw-VjHDlEOgs658kAHR_LAaILBXb-s6Q5", "Gym Motivation", "IZ36b3q1elI")],
-      focus: [createFb("PLOzDu-MXXLliO9fBelCGIawp_EN2kO-dE", "Focus & Relax", "jGflUbPQfW8")],
-      trends: [createFb("PLxA687tYuMWi8OUus77n7Ziq1j0yL0gGz", "Novedades", "ru0K8uYEZWw")],
-      latin: [createFb("PLYyq1j1v4R5R20X-bepkF5V66hBWe1a-r", "Ritmos Latinos", "C7vfCJTQ-rw")],
-      party: [createFb("PL7NXvXjIf-gGqSsswXm7-N0BsiW61wJzB", "Party Mix", "n6N1_sxlBU8")]
+      trending: [],
+      dailyTop: [],
+      top100: [],
+      workout: [],
+      focus: [],
+      trends: [],
+      latin: [],
+      party: []
     });
   }
 });

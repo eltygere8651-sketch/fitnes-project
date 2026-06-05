@@ -28,8 +28,7 @@ export const ExploreView: React.FC<ExploreViewProps> = ({
     { title: "Últimos Lanzamientos", data: exploreData.trends || [] },
     { title: "Canciones en Tendencia", data: exploreData.trending || [] },
     { title: "Listas Comunidad Populares", data: exploreData.latin || [] },
-    { title: "Mixes Personalizados", data: exploreData.top100 || [] },
-    { title: "Tops de Playlist", data: exploreData.top100 || [] },
+    { title: "Tops de Playlist", data: exploreData.top100 || [] }
   ];
 
   return (

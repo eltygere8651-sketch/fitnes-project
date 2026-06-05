@@ -146,7 +146,7 @@ export const AuthModal: React.FC = () => {
             <div className="flex items-center gap-2 mb-2">
               <span className="text-[20px] filter drop-shadow">⚡</span>
               <h2 className="text-lg font-black uppercase tracking-widest text-[#1ED760]">
-                FLUX PLAYER
+                FLUX MUSIC
               </h2>
             </div>
             

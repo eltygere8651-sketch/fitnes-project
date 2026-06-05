@@ -1,5 +1,5 @@
 {
-  "name": "Flux Player",
+  "name": "Flux Music",
   "description": "Una experiencia musical fluida y premium con integración de YouTube y gestión avanzada de playlists.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -20,6 +20,8 @@ export interface MusicPlaylist {
   thumbnail_url?: string;
   tracks: MusicTrack[];
   ownerId?: string;
+  path?: string;
+  isAdminContent?: boolean;
   createdAt?: any;
   updatedAt?: any;
   folder?: string | null;

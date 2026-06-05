@@ -1,6 +1,6 @@
 {
-  "name": "Flux Player",
-  "short_name": "FluxPlayer",
+  "name": "Flux Music",
+  "short_name": "FluxMusic",
   "description": "Una experiencia musical fluida y premium con integración de YouTube.",
   "start_url": "/",
   "display": "standalone",

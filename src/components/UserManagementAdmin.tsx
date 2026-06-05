@@ -119,7 +119,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
     try {
       setIsTestingTelegram(true);
-      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Player*. Las solicitudes de acceso de 7 días te llegarán aquí.";
+      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Music*. Las solicitudes de acceso de 7 días te llegarán aquí.";
       
       const response = await fetch(`https://api.telegram.org/bot${telegramToken.trim()}/sendMessage`, {
         method: "POST",

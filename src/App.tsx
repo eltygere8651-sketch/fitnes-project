@@ -117,13 +117,11 @@ function AppContent() {
                   if (window.innerWidth < 640) setIsMobileMenuOpen(!isMobileMenuOpen);
                   else setIsDesktopMenuOpen(!isDesktopMenuOpen);
                 }}
-                className="flex items-center justify-center h-8 px-2.5 rounded-lg border border-[#1ED760]/30 text-[#1ED760] bg-[#1ED760]/10 hover:bg-[#1ED760]/20 transition-all duration-200 active:scale-95 cursor-pointer gap-1.5"
+                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-auto sm:px-3 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group"
                 title="Menú"
              >
-                <Menu className="w-3.5 h-3.5" />
-                <span className="text-[10px] font-black uppercase tracking-widest mt-0.5 hidden sm:inline-block">MENÚ</span>
-                <span className="text-[10px] font-black uppercase tracking-widest mt-0.5 sm:hidden">MENÚ</span>
-                <ChevronDown className="w-3.5 h-3.5" />
+                <Menu className="w-4 h-4 group-hover:text-emerald-400 transition-colors" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden sm:inline-block">Menú</span>
              </button>
           </div>
 
@@ -138,16 +136,16 @@ function AppContent() {
                   <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20 z-40" />
                 </div>
               </div>
-              <div className="flex flex-col">
-                <span className="text-2xl font-brand font-black tracking-[-0.02em] uppercase italic leading-none select-none text-emerald-400">
+              <div className="flex flex-col items-center">
+                <span className="text-2xl font-brand font-black tracking-[-0.05em] uppercase leading-none select-none text-white transition-all duration-700 group-hover:tracking-[0.05em]">
                   FLUX
                 </span>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <div className="h-[1px] w-3 bg-emerald-500/30" />
-                  <span className="text-[7.5px] font-black tracking-[0.35em] text-emerald-400 uppercase leading-none opacity-80">
-                    PLAYER
+                <div className="flex items-center gap-1.5 mt-0.5 opacity-90">
+                  <div className="h-[1px] w-3 bg-emerald-500/40" />
+                  <span className="text-[7px] font-bold tracking-[0.3em] text-emerald-400 uppercase leading-none">
+                    MUSIC
                   </span>
-                  <div className="h-[1px] w-3 bg-emerald-500/30" />
+                  <div className="h-[1px] w-3 bg-emerald-500/40" />
                 </div>
               </div>
             </div>
@@ -281,7 +279,7 @@ function AppContent() {
         )}
       </AnimatePresence>
 
-      <main className="w-full mx-auto max-w-7xl px-1 sm:px-4 md:px-6 flex-1 min-h-0 overflow-hidden py-2 sm:py-4 flex flex-col gap-6">
+      <main className="w-full mx-auto px-0 sm:px-2 md:px-4 flex-1 min-h-0 overflow-hidden py-2 sm:py-2 flex flex-col gap-6">
         <section className="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
           <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 w-full min-h-0 relative overflow-hidden">

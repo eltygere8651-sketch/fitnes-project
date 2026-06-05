@@ -752,6 +752,7 @@ export default function GymMusicPlayer() {
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
   const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("search");
+  const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "cola">("artwork");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
   useEffect(() => {
@@ -1200,6 +1201,8 @@ export default function GymMusicPlayer() {
       .sort((a: any, b: any) => (b.isAdminContent ? 1 : 0) - (a.isAdminContent ? 1 : 0))
       .filter((pl: any, index: number, self: any[]) => {
         if (!pl.tracks || pl.tracks.length === 0) return false;
+        // Si la playlist pertenece al usuario actual, siempre la mostramos (no se filtra por duplicados de nombre)
+        if (user && pl.ownerId === user.uid) return true;
         // Due to sorting, the first occurrence of a name will be from Admin if it exists
         return self.findIndex(t => t.name === pl.name) === index;
       })
@@ -2719,9 +2722,14 @@ export default function GymMusicPlayer() {
             setPreviewPlaylist(null);
             setTrackListTab("search");
             setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
           }}
           className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
-            searchQuery === "" && trackListTab === "search" && !showLibrary
+            searchQuery === "" && trackListTab === "search" && !showLibrary && !isSidebarExpanded && (window.innerWidth >= 768 || mobileView === "player")
               ? "bg-white text-black border-white shadow-md"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
@@ -2731,6 +2739,7 @@ export default function GymMusicPlayer() {
         <button
           onClick={() => {
             if (window.innerWidth < 768) {
+              setShowLibrary(false);
               if (mobileView === "playlists") {
                 setMobileView("player");
               } else {
@@ -2738,11 +2747,12 @@ export default function GymMusicPlayer() {
                 setIsTrackListExpanded(true);
               }
             } else {
+              setShowLibrary(false);
               setIsSidebarExpanded(!isSidebarExpanded);
             }
           }}
           className={`hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start items-center gap-1.5 ${
-            isSidebarExpanded || (window.innerWidth < 768 && mobileView === "playlists")
+            isSidebarExpanded || (window.innerWidth < 768 && mobileView === "playlists" && !showLibrary)
                ? "bg-[#1ED760] text-black border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.2)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
@@ -2757,6 +2767,10 @@ export default function GymMusicPlayer() {
             } else {
               setShowLibrary(true);
               setPreviewPlaylist(null);
+              setIsSidebarExpanded(false);
+              if (window.innerWidth < 768) {
+                setMobileView("player");
+              }
             }
           }}
           className={`hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
@@ -3166,9 +3180,7 @@ export default function GymMusicPlayer() {
         <div className={`${mobileView === "player" ? "flex" : "hidden md:flex"} flex-col-reverse md:flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
-          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-6 pb-2 sm:p-8 sm:pb-4 flex flex-col justify-between overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-2xl'} border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
-            {/* Subtle neon-accent decoration */}
-            <div className={`absolute bottom-0 left-0 right-0 h-[1.5px] bg-gradient-to-r from-emerald-500/40 via-emerald-400/20 to-transparent ${!isTrackListExpanded ? 'shadow-[0_0_15px_rgba(16,185,129,0.3)]' : ''}`} />
+          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-2xl'} border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
             
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -3335,71 +3347,234 @@ export default function GymMusicPlayer() {
 
                 {/* 2. DYNAMIC FULL SCREEN LAYOUT (Shown on Mobile always when expanded, or Desktop when maximized) */}
                 {!isTrackListExpanded && (
-                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-center w-full max-w-2xl mx-auto h-full flex-1">
-                    {/* Artwork & Title centrally stacked */}
-                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-4 sm:mt-8">
-                      {/* Collapse button */}
+                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1">
+                    
+                    {/* Integrated Header: Left (Minimize - Absolute), Center (Tabs Switcher) - Perfectly centered Spotify-style layout */}
+                    <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] mx-auto flex items-center justify-center mb-2 sm:mb-3 px-1 select-none shrink-0 relative z-50 mt-1 sm:mt-2.5">
+                      {/* Left: Minimize button - Absolute positioned to stay out of the center's layout flow */}
                       <button 
                         onClick={() => {
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                             setIsTrackListExpanded(true);
                         }}
                         title="Minimizar reproductor"
-                        className="absolute left-1 sm:left-2 p-2 shrink-0 text-slate-400 hover:text-white transition-colors cursor-pointer top-0"
+                        className="absolute left-1 sm:left-2 p-1.5 sm:p-2 bg-white/[0.04] border border-white/5 hover:bg-white/10 active:scale-95 rounded-full transition-all text-slate-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0 z-10"
                       >
-                        <ChevronDown className="w-7 h-7 sm:w-8 sm:h-8" />
+                        <ChevronDown className="w-5 h-5 sm:w-6 h-6" />
                       </button>
 
-                      {/* PC dedicated exit fullscreen button */}
-                      <button
-                        onClick={() => {
-                          window.scrollTo({ top: 0, behavior: 'smooth' });
-                          setIsTrackListExpanded(true);
-                        }}
-                        title="Salir de pantalla completa"
-                        className="hidden md:flex absolute right-1 sm:right-2 p-2.5 bg-white/5 hover:bg-white/10 active:scale-95 border border-white/10 rounded-full transition-all text-slate-400 hover:text-white items-center gap-2 cursor-pointer top-0 text-[11px] font-bold uppercase tracking-wider z-50"
-                      >
-                        <Minimize2 className="w-4 h-4 text-emerald-400" />
-                        <span>Salir Pantalla Completa</span>
-                      </button>
+                      {/* Center: Tabs Switcher - Centered perfectly relative to the artwork width */}
+                      <div className="w-full max-w-[200px] sm:max-w-[290px] flex items-center bg-white/[0.04] backdrop-blur-md border border-white/5 rounded-full p-0.5 tracking-wider select-none relative">
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlayerTab("artwork");
+                          }}
+                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "artwork" ? "bg-white text-black shadow-md font-extrabold" : "text-slate-400 hover:text-white"}`}
+                        >
+                          Carátula
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlayerTab("siguiente");
+                          }}
+                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "siguiente" ? "bg-[#1ED760] text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
+                        >
+                          Siguiente
+                        </button>
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setPlayerTab("cola");
+                          }}
+                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${playerTab === "cola" ? "bg-white text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
+                        >
+                          <span>Cola</span>
+                          {trackQueue.length > 0 && (
+                            <span className={`text-[8.5px] px-1.5 py-[0.5px] rounded-full font-sans font-bold ${playerTab === "cola" ? "bg-black text-white" : "bg-[#1ED760] text-black"}`}>
+                              {trackQueue.length}
+                            </span>
+                          )}
+                        </button>
+                      </div>
+                    </div>
 
+                    {/* Artwork & Title centrally stacked */}
+                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-1 sm:mt-2">
                       <div 
                         className="flex flex-col items-center justify-center w-full flex-1 min-h-0"
                       >
-                        {/* Artwork container */}
-                        <div className="relative shrink-0 flex items-center justify-center min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-4 sm:mb-6 mx-auto">
-                          <AnimatePresence>
-                            {isPlaying && !isEcoMode && (
-                              <motion.div
-                                initial={{ scale: 0.8, opacity: 0 }}
-                                animate={{ scale: 1.1, opacity: 1 }}
-                                exit={{ scale: 0.8, opacity: 0 }}
-                                className="absolute -inset-1.5 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
+
+                        {/* Contents according to tab */}
+                        {playerTab === "artwork" && (
+                          <div className="relative shrink-0 flex items-center justify-center min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto">
+                            <AnimatePresence>
+                              {isPlaying && !isEcoMode && (
+                                <motion.div
+                                  initial={{ scale: 0.8, opacity: 0 }}
+                                  animate={{ scale: 1.1, opacity: 1 }}
+                                  exit={{ scale: 0.8, opacity: 0 }}
+                                  className="absolute -inset-1.5 bg-emerald-500/20 blur-md rounded-full pointer-events-none"
+                                />
+                              )}
+                            </AnimatePresence>
+                            <div className={`relative z-10 w-full h-full rounded-2xl overflow-hidden ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}>
+                              <img
+                                src={displayArtwork}
+                                alt="Artwork"
+                                className="w-full h-full object-cover transition-opacity duration-300"
                               />
-                            )}
-                          </AnimatePresence>
-                          <div className={`relative z-10 w-full h-full rounded-2xl overflow-hidden ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} border border-white/10 shadow-[0_20px_50px_rgba(0,0,0,0.6)]`}>
-                            <img
-                              src={displayArtwork}
-                              alt="Artwork"
-                              className="w-full h-full object-cover transition-opacity duration-300"
-                            />
-                            <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
+                              <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
+                            </div>
                           </div>
-                        </div>
+                        )}
+
+                        {playerTab === "siguiente" && (
+                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60 backdrop-blur-md rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
+                            <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase mb-2 px-1">
+                              A continuación • {playingPlaylist?.name || "Lista actual"}
+                            </span>
+                            <div className="flex flex-col gap-1 flex-1">
+                              {displayTracks.map((track, idx) => {
+                                const isActive = !overrideCurrentTrack && currentTrackIndex === idx;
+                                return (
+                                  <div
+                                    key={`player_tab_siguiente_${track.id || idx}_${idx}`}
+                                    onClick={() => {
+                                      setOverrideCurrentTrack(null);
+                                      if (isActive) {
+                                        expectedPlayingRef.current = !isPlaying;
+                                        setIsPlaying(!isPlaying);
+                                      } else {
+                                        expectedPlayingRef.current = true;
+                                        setCurrentTrackIndex(idx);
+                                        setIsPlaying(true);
+                                      }
+                                    }}
+                                    className={`group/item flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-pointer ${
+                                      isActive 
+                                        ? "bg-white/[0.08] text-white border-l-2 border-emerald-500 shadow-sm animate-pulse" 
+                                        : "hover:bg-white/[0.04] text-slate-300 hover:text-white"
+                                    }`}
+                                  >
+                                    <div className="w-5 shrink-0 flex items-center justify-center text-[10px] font-bold text-slate-500 font-mono">
+                                      {isActive && isPlaying ? (
+                                        <div className="flex gap-[2px] items-end h-[10px]">
+                                          {[...Array(3)].map((_, i) => (
+                                            <div
+                                              key={i}
+                                              className={`w-[1.5px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
+                                              style={{ height: "10px", transformOrigin: "bottom" }}
+                                            />
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        idx + 1
+                                      )}
+                                    </div>
+                                    <div className="w-7 h-7 bg-white/5 rounded-md overflow-hidden shrink-0">
+                                      <img src={getTrackImage(track) || "/placeholder.png"} className="w-full h-full object-cover" alt="" />
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <p className={`text-[11px] font-bold uppercase tracking-wide truncate ${isActive ? "text-emerald-400 font-extrabold" : "text-white"}`}>
+                                        {track.title}
+                                      </p>
+                                      <p className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-wider mt-0.5">
+                                        {track.artist || "Unknown Artist"}
+                                      </p>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {playerTab === "cola" && (
+                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60 backdrop-blur-md rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
+                            <div className="flex items-center justify-between mb-2 px-1">
+                              <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase block">
+                                Cola de Reproducción • {trackQueue.length} Canciones
+                              </span>
+                              {trackQueue.length > 0 && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setTrackQueue([]);
+                                    showNotification("Cola vaciada con éxito");
+                                  }}
+                                  className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 transition-colors bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded cursor-pointer"
+                                >
+                                  Vaciar
+                                </button>
+                              )}
+                            </div>
+                            <div className="flex flex-col gap-1 flex-1">
+                              {trackQueue.length === 0 ? (
+                                <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 h-full">
+                                  <ListMusic className="w-8 h-8 opacity-40 mb-2 text-slate-600 block" />
+                                  <p className="text-[11px] font-bold uppercase tracking-wider">No hay canciones en cola</p>
+                                  <p className="text-[9px] mt-1 tracking-wide normal-case text-slate-600">Puedes añadir canciones con el botón (+) en la biblioteca o explorador.</p>
+                                </div>
+                              ) : (
+                                trackQueue.map((track, idx) => {
+                                  return (
+                                    <div
+                                      key={`player_tab_cola_${track.id || idx}_${idx}`}
+                                      className="group/item flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-default hover:bg-white/[0.04]"
+                                    >
+                                      <div className="w-5 shrink-0 text-center text-[10px] font-bold text-slate-500 font-mono">
+                                        {idx + 1}
+                                      </div>
+                                      <div className="w-7 h-7 bg-white/5 rounded-md overflow-hidden shrink-0">
+                                        <img src={getTrackImage(track) || "/placeholder.png"} className="w-full h-full object-cover" alt="" />
+                                      </div>
+                                      <div className="flex-1 min-w-0" onClick={() => {
+                                        expectedPlayingRef.current = true;
+                                        setOverrideCurrentTrack(track);
+                                        setIsPlaying(true);
+                                        setTrackQueue(prev => prev.filter((_, i) => i !== idx));
+                                        showNotification(`Reproduciendo de la cola: ${track.title}`);
+                                      }}>
+                                        <p className="text-[11px] font-bold uppercase tracking-wide truncate text-white hover:text-emerald-400 cursor-pointer">
+                                          {track.title}
+                                        </p>
+                                        <p className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-wider mt-0.5">
+                                          {track.artist || "Unknown Artist"}
+                                        </p>
+                                      </div>
+                                      <button
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          setTrackQueue(prev => prev.filter((_, i) => i !== idx));
+                                          showNotification(`Quitada de la cola: ${track.title}`);
+                                        }}
+                                        className="p-1 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
+                                        title="Quitar"
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  );
+                                })
+                              )}
+                            </div>
+                          </div>
+                        )}
 
                         {/* Title details & Heart favorite button stacked horizontally */}
-                        <div className="flex items-center justify-between w-full max-w-md px-4 mb-4 sm:mb-6">
+                        <div className="flex items-center justify-between w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] px-1 mb-2 sm:mb-4">
                           <div className="flex flex-col min-w-0 text-left">
                             <div className="flex items-center gap-1.5 overflow-hidden">
-                              <h1 className="font-black text-white uppercase tracking-tight text-xl sm:text-2xl truncate max-w-[65vw] sm:max-w-[350px]">
+                              <h1 className="font-black text-white uppercase tracking-tight text-xl sm:text-2xl truncate max-w-[55vw] sm:max-w-[300px]">
                                 {displayTitle}
                               </h1>
                               {isLoadingTrack && (
                                 <Loader2 className="text-emerald-500 animate-spin shrink-0 w-4 h-4 ml-1.5" />
                               )}
                             </div>
-                            <p className="font-black text-[#1ED760] uppercase tracking-[0.2em] text-[10px] sm:text-xs mt-1 truncate max-w-[65vw] sm:max-w-[350px]">
+                            <p className="font-black text-[#1ED760] uppercase tracking-[0.2em] text-[10px] sm:text-xs mt-1 truncate max-w-[55vw] sm:max-w-[300px]">
                               {displayArtist}
                             </p>
                           </div>
@@ -3407,10 +3582,10 @@ export default function GymMusicPlayer() {
                           {/* Heart Icon to like instantly from full screen on mobile/desktop */}
                           <button 
                             onClick={(e) => handleToggleFavorite(currentTrack, e)} 
-                            className="p-2 sm:p-2.5 text-slate-400 hover:text-pink-500 active:scale-90 transition-all cursor-pointer rounded-full bg-white/5 ml-3 shrink-0"
+                            className="p-1.5 sm:p-2 text-slate-400 hover:text-pink-500 active:scale-90 transition-all cursor-pointer rounded-full bg-white/5 ml-3 shrink-0"
                             title="Añadir a Favoritos"
                           >
-                            <Heart className={`w-[20px] h-[20px] sm:w-[22px] sm:h-[22px] transition-colors ${
+                            <Heart className={`w-[18px] h-[18px] sm:w-[20px] sm:h-[20px] transition-colors ${
                               userPlaylists.find(p => p.ownerId === user?.uid && (p.name.toLowerCase() === 'favoritos' || p.name.toLowerCase() === 'siguiente'))
                                 ?.tracks.some(t => (currentTrack.id && t.id === currentTrack.id) || (currentTrack.url && t.url === currentTrack.url)) ? 'fill-pink-500 text-pink-500' : ''
                             }`} />
@@ -3420,7 +3595,7 @@ export default function GymMusicPlayer() {
                     </div>
 
                     {/* Timeline slider + Control knobs combined */}
-                    <div className="flex flex-col w-full px-4 sm:px-0 mx-auto max-w-md gap-4 sm:gap-6 mb-4 sm:mb-8">
+                    <div className="flex flex-col w-full px-1 sm:px-0 mx-auto max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] gap-2.5 sm:gap-4 mb-2 sm:mb-4">
                       {/* Timeline */}
                       <div className="flex flex-col w-full gap-2">
                         <div 
@@ -3446,46 +3621,46 @@ export default function GymMusicPlayer() {
                       </div>
 
                       {/* Buttons controls */}
-                      <div className="grid grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
+                      <div className="grid grid-cols-[0.8fr_auto_1.2fr] sm:grid-cols-[1fr_auto_1fr] items-center w-full px-1 gap-1">
                         
                         {/* Shuffle + Repeat */}
-                        <div className="flex justify-start items-center gap-2 sm:gap-3">
+                        <div className="flex justify-start items-center gap-1.5 sm:gap-3">
                           <button
                             onClick={() => setIsShuffle(!isShuffle)}
                             title="Aleatorio"
-                            className={`p-1.5 sm:p-2 transition-all transform active:scale-95 ${isShuffle ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
+                            className={`p-1 sm:p-2 transition-all transform active:scale-95 ${isShuffle ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
                           >
-                            <Shuffle className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
+                            <Shuffle className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                           <button
                             onClick={() => setIsRepeat(!isRepeat)}
                             title="Repetir"
-                            className={`p-1.5 sm:p-2 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
+                            className={`p-1 sm:p-2 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
                           >
-                            <Repeat className="w-4.5 h-4.5 sm:w-5 sm:h-5" />
+                            <Repeat className="w-4 h-4 sm:w-5 sm:h-5" />
                           </button>
                         </div>
 
                         {/* Prev - Play - Next */}
-                        <div className="flex items-center justify-center gap-6 sm:gap-8">
+                        <div className="flex items-center justify-center gap-4 sm:gap-8">
                           <button
                             onClick={handlePrev}
                             title="Anterior"
                             className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
                           >
-                            <SkipBack className="fill-current w-7 h-7 sm:w-8 sm:h-8" />
+                            <SkipBack className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
                           </button>
 
                           <motion.button
                             whileTap={{ scale: 0.9 }}
                             whileHover={{ scale: 1.05 }}
                             onClick={togglePlayback}
-                            className="rounded-full w-14 h-14 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl"
+                            className="rounded-full w-12 h-12 sm:w-16 sm:h-16 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-xl"
                           >
                             {isPlaying ? (
-                              <Pause className="fill-current text-black w-6 h-6 sm:w-7 sm:h-7" />
+                              <Pause className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7" />
                             ) : (
-                              <Play className="fill-current text-black w-6 h-6 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />
+                              <Play className="fill-current text-black w-5 h-5 sm:w-7 sm:h-7 ml-0.5 sm:ml-1" />
                             )}
                           </motion.button>
 
@@ -3494,14 +3669,14 @@ export default function GymMusicPlayer() {
                             title="Siguiente"
                             className="p-1 sm:p-2 text-white hover:text-emerald-400 transition-all transform active:scale-90 flex-shrink-0"
                           >
-                            <SkipForward className="fill-current w-7 h-7 sm:w-8 sm:h-8" />
+                            <SkipForward className="fill-current w-6 h-6 sm:w-8 sm:h-8" />
                           </button>
                         </div>
 
                         {/* Volume Adjuster */}
-                        <div className="flex justify-end items-center gap-3 w-full pr-1 sm:pr-2">
-                          <div className="flex items-center justify-end gap-1.5 group/vol w-[80px] sm:w-[100px]">
-                            <Volume2 className="w-4 h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
+                        <div className="flex justify-end items-center gap-1.5 sm:gap-3 w-full pr-1 sm:pr-2">
+                          <div className="flex items-center justify-end gap-1 sm:gap-1.5 group/vol w-[65px] sm:w-[100px]">
+                            <Volume2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
                             <div
                               onPointerDown={handleVolumePointerDown}
                               className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
@@ -3510,7 +3685,7 @@ export default function GymMusicPlayer() {
                                 className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
                                 style={{ width: `${volume}%` }}
                               >
-                                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
+                                <div className="absolute right-0 top-1/2 -translate-y-1/2 w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full shadow opacity-100 transition-opacity translate-x-1" />
                               </div>
                             </div>
                           </div>
@@ -3531,87 +3706,63 @@ export default function GymMusicPlayer() {
 
           {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
           {selectedPlaylist || trackListTab === "search" ? (
-            <div className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) ? 'hidden md:flex' : 'flex'}`}>
+            <div className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) ? 'hidden' : 'flex'}`}>
               <div 
-                className="w-full relative px-3 py-1 sm:px-5 sm:py-1 border-b border-white/5 flex flex-col gap-1 shrink-0 bg-[#080809]/40"
+                className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40"
               >
-                <div className="flex flex-col gap-1 sm:gap-2 w-full">
-                  {/* Premium Integrated Header & Actions */}
-                  <div className="flex items-center justify-between w-full gap-3 px-1 mt-0.5">
-                      <div className="min-w-0 flex-1">
-                        <h3 className="text-xs sm:text-[13px] font-black tracking-tight text-white truncate max-w-[150px] sm:max-w-[280px] flex items-center gap-2">
-                          <span className="text-[7.5px] font-black uppercase tracking-widest text-[#1ED760]/70 shrink-0">{trackListTab === "search" && !selectedPlaylist ? "EXPLORAR:" : "CANAL:"}</span>
-                          <span className="truncate">{selectedPlaylist?.name || "Búsqueda y Novedades"}</span>
-                        </h3>
+                <div className="flex flex-col w-full">
+                  {/* Search Bar matching Tab */}
+                  <div className="flex items-center gap-2 w-full">
+                    <div className="relative flex-1 group">
+                      <div className="absolute left-2.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
+                        <Search className={`w-3.5 h-3.5 transition-colors ${searchQuery ? 'text-emerald-500/70' : 'text-slate-500'}`} />
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {/* Copy other user playlist */}
-                        {selectedPlaylist?.id && selectedPlaylist.id !== "all" && selectedPlaylist.ownerId !== user?.uid && selectedPlaylist.name?.toLowerCase() !== 'favoritos' && (
-                          <button
-                            onClick={() => handleCopyPlaylistToProfile(selectedPlaylist)}
-                            className="flex items-center gap-1 border border-[#1ED760]/20 bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black font-black px-2.5 py-1 rounded-full transition-all text-[9.5px] uppercase tracking-wide cursor-pointer shadow-md"
-                            title="Sincronizar y guardar este canal en tu biblioteca"
-                          >
-                            <Plus className="w-3 h-3 stroke-[3px]" />
-                            <span>Guardar</span>
-                          </button>
-                        )}
-
-                        {trackListTab === "queue" && trackQueue.length > 0 && (
+                      <form onSubmit={(e) => {
+                        e.preventDefault();
+                        setTrackListTab("search");
+                        handleYoutubeSearch(e);
+                      }}>
+                        <input
+                          type="text"
+                          placeholder={
+                            trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
+                            trackListTab === "queue" ? "¿Qué hay en la cola?" :
+                            "¿Qué te apetece escuchar?..."
+                          }
+                          value={searchQuery}
+                          onChange={(e) => {
+                            setSearchQuery(e.target.value);
+                            if (!e.target.value && trackListTab === "search") {
+                              setYoutubeResults([]);
+                            }
+                          }}
+                          className="w-full bg-[#111113]/80 border border-white/5 rounded-lg py-1 pl-7.5 pr-8 text-[11px] text-white placeholder-slate-500/80 focus:outline-none focus:border-emerald-500/20 focus:bg-white/[0.04] transition-all font-medium tracking-wide"
+                        />
+                      </form>
+                      {searchQuery && (
                         <button
                           onClick={() => {
-                            setTrackQueue([]);
-                            showNotification("Cola vaciada con éxito");
+                            setSearchQuery("");
+                            if (trackListTab === "search") {
+                              setYoutubeResults([]);
+                            }
                           }}
-                          className="py-1 px-2.5 text-[9.5px] font-black uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/20 rounded-full transition-all cursor-pointer"
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1 transition-colors"
                         >
-                          Vaciar
+                          <X className="w-3 h-3" />
                         </button>
                       )}
                     </div>
-                  </div>
 
-
-
-                  {/* Search Bar matching Tab */}
-                  <div className="relative w-full group">
-                    <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center pointer-events-none">
-                      <Search className={`w-3.5 h-3.5 transition-colors ${searchQuery ? 'text-emerald-500' : 'text-slate-500 group-focus-within:text-emerald-500'}`} />
-                    </div>
-                    <form onSubmit={(e) => {
-                      e.preventDefault();
-                      setTrackListTab("search");
-                      handleYoutubeSearch(e);
-                    }}>
-                      <input
-                        type="text"
-                        placeholder={
-                          trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
-                          trackListTab === "queue" ? "¿Qué hay en la cola?" :
-                          "¿Qué te apetece escuchar?..."
-                        }
-                        value={searchQuery}
-                        onChange={(e) => {
-                          setSearchQuery(e.target.value);
-                          if (!e.target.value && trackListTab === "search") {
-                            setYoutubeResults([]);
-                          }
-                        }}
-                        className="w-full bg-[#111113] border border-white/5 rounded-full py-1 sm:py-1.5 pl-8 pr-10 text-[10px] sm:text-[11px] text-white placeholder-slate-500 focus:outline-none focus:border-emerald-500/30 focus:bg-white/[0.05] focus:ring-1 focus:ring-emerald-500/30 transition-all font-medium"
-                      />
-                    </form>
-                    {searchQuery && (
+                    {trackListTab === "queue" && trackQueue.length > 0 && (
                       <button
                         onClick={() => {
-                          setSearchQuery("");
-                          if (trackListTab === "search") {
-                            setYoutubeResults([]);
-                          }
+                          setTrackQueue([]);
+                          showNotification("Cola vaciada con éxito");
                         }}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1 transition-colors"
+                        className="shrink-0 py-1 px-2.5 text-[9.5px] font-bold uppercase text-red-400 bg-red-500/10 border border-red-500/10 hover:border-red-500/20 rounded-md transition-all cursor-pointer"
                       >
-                        <X className="w-3.5 h-3.5" />
+                        Vaciar
                       </button>
                     )}
                   </div>

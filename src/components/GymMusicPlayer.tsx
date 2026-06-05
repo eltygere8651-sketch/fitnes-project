@@ -1237,11 +1237,12 @@ export default function GymMusicPlayer() {
           if (res.ok) {
             const data = await res.json();
             setExploreData(data);
+          } else {
             throw new Error("Explore API failed");
           }
         } catch (err) {
           console.error("Explore fallback:", err);
-          const mkFb = (id, title, imgVid) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=`, thumbnail: `https://i.ytimg.com/vi//mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
+          const mkFb = (id: string, title: string, imgVid: string) => ({ id, title, artist: "YouTube Mix", duration: "Playlist", url: `https://www.youtube.com/playlist?list=${id}`, thumbnail: `https://i.ytimg.com/vi/${imgVid}/mqdefault.jpg`, isPlaylist: true, subType: "playlist" });
           setExploreData({
             trending: [mkFb("PL4fGSI1pDJn6O1LS0XSdF3RyO0Rq_LDeI", "Top Tendencias", "4Lz0_SPDoqo")],
             dailyTop: [mkFb("PLx0sYbCqOb8TBPRdmBHs5Iftvv9CB5eXf", "Lo Más Nuevo", "yebNIHKAC4A")],

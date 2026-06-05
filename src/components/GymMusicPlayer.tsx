@@ -37,6 +37,7 @@ import {
   Search,
   ListPlus,
   Compass,
+  PlusCircle,
   LayoutGrid,
   FolderPlus,
   FolderMinus,
@@ -1865,7 +1866,7 @@ export default function GymMusicPlayer() {
       if (!res.ok) throw new Error("Failed to load playlist");
       const tracks = await res.json();
       if (tracks && tracks.length > 0) {
-        setPreviewPlaylist({
+        const fullPlaylist = {
           id: item.id,
           name: item.title,
           description: item.artist || "Lista oficial",
@@ -1875,8 +1876,38 @@ export default function GymMusicPlayer() {
           ownerName: item.artist || "YouTube",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
-        });
+        };
+        setPreviewPlaylist(fullPlaylist);
         setShowLibrary(true);
+
+        // Auto-play the first track and queue the rest
+        const firstTrack = tracks[0];
+        const mappedFirst: MusicTrack = {
+          id: firstTrack.id,
+          title: firstTrack.title,
+          artist: firstTrack.artist || "YouTube",
+          url: firstTrack.url,
+          duration: firstTrack.duration || "N/A",
+          bpm: 120
+        };
+        setOverrideCurrentTrack(mappedFirst);
+        setIsPlaying(true);
+        
+        // Queue the rest
+        if (tracks.length > 1) {
+          const queue = tracks.slice(1).map((t: any) => ({
+             id: t.id,
+             title: t.title,
+             artist: t.artist || "YouTube",
+             url: t.url,
+             duration: t.duration || "N/A",
+             bpm: 120
+          }));
+          setTrackQueue(queue);
+          trackQueueRef.current = queue;
+        }
+
+        showNotification(`Reproduciendo Playlist: ${item.title}`);
       } else {
         showNotification("La playlist está vacía.");
       }
@@ -3458,15 +3489,31 @@ export default function GymMusicPlayer() {
                                 </div>
                               ) : (
                                 <div className="space-y-6">
-                                  {/* --- TAB EXPLORAR --- */}
                                   <ExploreView 
                                     exploreData={exploreData}
-                                    communityPlaylists={communityPlaylists}
                                     setOverrideCurrentTrack={setOverrideCurrentTrack}
                                     setIsPlaying={setIsPlaying}
                                     showNotification={showNotification}
                                     addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
                                     loadPlaylistAndPlay={handleLoadExplorePlaylist}
+                                    playTracksContext={(tracks, startIdx) => {
+                                      const mapped = tracks.map(t => ({
+                                        id: t.id,
+                                        title: t.title,
+                                        artist: t.artist || "Artista",
+                                        url: t.url,
+                                        duration: t.duration || "N/A",
+                                        bpm: 120
+                                      }));
+                                      setOverrideCurrentTrack(mapped[startIdx]);
+                                      setIsPlaying(true);
+                                      if (mapped.length > startIdx + 1) {
+                                        const queue = mapped.slice(startIdx + 1);
+                                        setTrackQueue(queue);
+                                        trackQueueRef.current = queue;
+                                      }
+                                      showNotification(`Reproduciendo: ${mapped[startIdx].title}`);
+                                    }}
                                     selectedCountry={selectedCountry}
                                     setSelectedCountry={(c) => {
                                       setSelectedCountry(c);
@@ -3474,184 +3521,6 @@ export default function GymMusicPlayer() {
                                       setExploreData(null);
                                     }}
                                   />
-
-                                  {/* --- LISTAS DE ÉXITOS --- */}
-                                      {/* TOP TENDENCIA */}
-                                      {exploreData?.trending && exploreData.trending.length > 0 && (
-                                        <div className="space-y-3 px-1 pt-2">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
-                                                Top Tendencias
-                                              </p>
-                                            }
-                                            className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.trending.map((song: any, idx: number) => (
-                                              <div 
-                                                key={`trend-${song.id}-${idx}`} 
-                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
-                                              >
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
-                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
-                                                  <button 
-                                                    onClick={() => {
-                                                      const mapped: MusicTrack = {
-                                                        id: song.id,
-                                                        title: song.title, artist: song.artist, url: song.url, duration: song.duration, bpm: 120
-                                                      };
-                                                      setOverrideCurrentTrack(mapped);
-                                                      setIsPlaying(true);
-                                                    }}
-                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
-                                                  >
-                                                    <Play className="w-3.5 h-3.5 fill-black pl-px" />
-                                                  </button>
-                                                </div>
-                                                <div className="min-h-[32px] px-1">
-                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
-                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-
-                                      {/* TOP DIARIO */}
-                                      {exploreData?.dailyTop && exploreData.dailyTop.length > 0 && (
-                                        <div className="space-y-3 px-1">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
-                                                Top Diario
-                                              </p>
-                                            }
-                                            className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.dailyTop.map((song: any, idx: number) => (
-                                              <div 
-                                                key={`daily-${song.id}-${idx}`} 
-                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
-                                              >
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
-                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
-                                                  <button 
-                                                    onClick={() => {
-                                                      const mapped: MusicTrack = {
-                                                        id: song.id,
-                                                        title: song.title, artist: song.artist, url: song.url, duration: song.duration, bpm: 120
-                                                      };
-                                                      setOverrideCurrentTrack(mapped);
-                                                      setIsPlaying(true);
-                                                    }}
-                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
-                                                  >
-                                                    <Play className="w-3.5 h-3.5 fill-black pl-px" />
-                                                  </button>
-                                                </div>
-                                                <div className="min-h-[32px] px-1">
-                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
-                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-
-                                      {/* TOP 100 POPULARES */}
-                                      {exploreData?.top100 && exploreData.top100.length > 0 && (
-                                        <div className="space-y-3 px-1">
-                                          <Carousel 
-                                            title={
-                                              <p className="text-[11px] font-black uppercase tracking-widest text-white flex items-center gap-2">
-                                                Las 100 canciones más populares
-                                              </p>
-                                            }
-                                            className="gap-3 pb-4 snap-x px-2">
-                                            {exploreData.top100.map((song: any, idx: number) => (
-                                              <div 
-                                                key={`popular-${song.id}-${idx}`} 
-                                                className="snap-start shrink-0 w-36 group relative flex flex-col gap-2"
-                                              >
-                                                <div className="w-full aspect-square rounded-2xl overflow-hidden bg-black border border-white/5 relative">
-                                                  <img src={song.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
-                                                  <button 
-                                                    onClick={() => {
-                                                      handleLoadExplorePlaylist(song);
-                                                    }}
-                                                    className="absolute bottom-2 right-2 w-8 h-8 rounded-full bg-white text-black flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all scale-75 group-hover:scale-100 cursor-pointer shadow-lg"
-                                                  >
-                                                    <Search className="w-3.5 h-3.5 text-black" />
-                                                  </button>
-                                                </div>
-                                                <div className="min-h-[32px] px-1">
-                                                  <p className="text-[10px] font-bold text-white truncate leading-tight">{song.title}</p>
-                                                  <p className="text-[9px] text-slate-500 truncate font-semibold">{song.artist}</p>
-                                                </div>
-                                              </div>
-                                            ))}
-                                          </Carousel>
-                                        </div>
-                                      )}
-                                  {/* --- END LISTAS DE ÉXITOS --- */}
-
-                                  {/* RECOMENDADO PARA TI (COMUNIDAD) - FIXED ALWAYS AT BOTTOM OF EXPLORE SECTIONS IF NEEDED OR IN ITS OWN TAB */}
-                                  {communityPlaylists.length > 0 && (
-                                    <div className="space-y-4 mt-6 pb-6 border-t border-white/5 pt-6">
-                                      <div className="flex items-center justify-between px-1">
-                                        <div className="flex flex-col">
-                                          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-400">
-                                            Curado de la Comunidad
-                                          </p>
-                                          <h3 className="text-xl font-black text-white mt-1">Nuestros Canales</h3>
-                                        </div>
-                                        <button 
-                                          onClick={() => setShowLibrary(true)}
-                                          className="text-[10px] font-black uppercase text-slate-400 hover:text-white transition-colors"
-                                        >
-                                          Ver Todos
-                                        </button>
-                                      </div>
-                                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 text-left">
-                                        {communityPlaylists.slice(0, 6).map((p, idx) => (
-                                          <div 
-                                            key={`rec-${p.id}-${idx}`}
-                                            onClick={() => {
-                                              setTrackListTab("search");
-                                              setSearchQuery(p.name);
-                                            }}
-                                            className="relative overflow-hidden group bg-gradient-to-br from-[#0c0c0e] to-black border border-white/5 p-3 rounded-2xl hover:border-emerald-500/30 transition-all cursor-pointer flex items-center gap-4 hover:bg-white/[0.02]"
-                                          >
-                                            <div className="w-12 h-12 rounded-xl overflow-hidden shrink-0 bg-black border border-white/5 relative z-10 shadow-lg group-hover:scale-105 transition-transform">
-                                              {p.thumbnail_url || getTrackImage(p.tracks?.[0]) ? (
-                                                <img src={p.thumbnail_url || getTrackImage(p.tracks?.[0]) || ""} alt="" className="w-full h-full object-cover" loading="lazy" />
-                                              ) : (
-                                                <div className="w-full h-full flex items-center justify-center text-lg bg-gradient-to-br from-emerald-500/20 to-teal-500/10 text-emerald-400">{p.icon || '🎧'}</div>
-                                              )}
-                                              <div className="absolute inset-0 bg-black/20 group-hover:bg-transparent transition-colors" />
-                                            </div>
-                                            <div className="min-w-0 flex-1 relative z-10">
-                                              <p className="text-[13px] text-white font-black truncate group-hover:text-emerald-400 transition-colors">{p.name}</p>
-                                              <div className="flex items-center gap-2 mt-0.5">
-                                                <p className="text-[9px] text-slate-500 font-bold uppercase tracking-wider truncate">Por {p.ownerName}</p>
-                                                <span className="w-1 h-1 rounded-full bg-slate-700 shrink-0" />
-                                                <p className="text-[9px] text-emerald-500/80 font-black uppercase">{p.tracks.length} P</p>
-                                              </div>
-                                            </div>
-                                            <div className="w-6 h-6 shrink-0 rounded-full border border-white/10 flex items-center justify-center relative z-10 group-hover:bg-emerald-500 group-hover:border-emerald-500 transition-all shadow-xl">
-                                              <Play className="w-2.5 h-2.5 text-slate-400 group-hover:text-black fill-current" />
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                      <button 
-                                        onClick={() => setShowLibrary(true)}
-                                        className="w-full py-3 bg-white/[0.03] border border-white/5 rounded-xl text-[10px] font-black uppercase text-slate-400 hover:text-white hover:bg-white/5 transition-all mt-2 tracking-widest"
-                                      >
-                                        Explorar Todas las Playlists de la Comunidad
-                                      </button>
-                                    </div>
-                                  )}
                                 </div>
                               )}
                             </div>
@@ -3700,14 +3569,56 @@ export default function GymMusicPlayer() {
                             className="flex flex-col gap-1 p-1.5 bg-white/[0.01] hover:bg-white/[0.02] rounded-2xl border border-transparent hover:border-white/5 transition-all text-left mb-2 group/yt"
                           >
                             <div className="flex items-center gap-3 p-1 relative">
-                              <div className="relative w-10 h-10 rounded-lg overflow-hidden shrink-0 bg-black/40 shadow-md">
+                              <div 
+                                className="relative w-11 h-11 rounded-lg overflow-hidden shrink-0 bg-black shadow-lg cursor-pointer group/thumb"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (ytTrack.isPlaylist) {
+                                    // Trigger the playlist play logic
+                                    const playBtn = e.currentTarget.parentElement?.querySelector('button[title="Reproducir Playlist ahora"]') as HTMLButtonElement;
+                                    if (playBtn) playBtn.click();
+                                  } else {
+                                    // Logic for continuous playback from search results
+                                    const allTracksOnly = youtubeResults
+                                      .filter(t => !t.isPlaylist)
+                                      .map(t => ({
+                                        id: `yt_temp_${t.id}`,
+                                        title: t.title,
+                                        artist: t.artist || "YouTube",
+                                        url: t.url,
+                                        duration: t.duration || "N/A",
+                                        bpm: 120
+                                      }));
+                                    
+                                    const currentIdx = allTracksOnly.findIndex(t => t.id === `yt_temp_${ytTrack.id}`);
+                                    
+                                    if (currentIdx !== -1) {
+                                      setOverrideCurrentTrack(allTracksOnly[currentIdx]);
+                                      setIsPlaying(true);
+                                      
+                                      // Queue the rest of search results
+                                      if (allTracksOnly.length > currentIdx + 1) {
+                                        const nextInSearch = allTracksOnly.slice(currentIdx + 1);
+                                        setTrackQueue(nextInSearch);
+                                        trackQueueRef.current = nextInSearch;
+                                      }
+                                      
+                                      showNotification(`Reproduciendo: ${ytTrack.title}`);
+                                    }
+                                  }
+                                }}
+                              >
                                 <img 
                                   src={ytTrack.thumbnail} 
                                   alt="" 
-                                  className="w-full h-full object-cover"
+                                  className="w-full h-full object-cover group-hover/yt:scale-110 transition-transform duration-500"
                                   referrerPolicy="no-referrer"
                                 />
-                                <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-transparent transition-colors" />
+                                <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-black/60 transition-colors flex items-center justify-center">
+                                  <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center opacity-0 group-hover/yt:opacity-100 transition-all transform scale-75 group-hover/yt:scale-100 shadow-xl">
+                                    <Play className="w-2.5 h-2.5 text-black fill-black ml-0.5" />
+                                  </div>
+                                </div>
                               </div>
                               
                               <div className="flex-1 min-w-0">
@@ -3748,78 +3659,92 @@ export default function GymMusicPlayer() {
                                       <ListPlus className="w-4 h-4" />
                                       <span className="hidden sm:inline text-[8.5px] font-black uppercase tracking-wider">Añadir Todo</span>
                                     </button>
+                                    
+                                    <button
+                                      onClick={async (e) => {
+                                        showNotification("Cargando playlist...");
+                                        try {
+                                          const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
+                                          if (res.ok) {
+                                            const tracks = await res.json();
+                                            if (tracks.length > 0) {
+                                              const mapped = tracks.map((t: any, i: number) => ({
+                                                id: `yt_temp_${t.id}_${i}`,
+                                                title: t.title,
+                                                artist: t.artist,
+                                                url: t.url,
+                                                duration: t.duration,
+                                                bpm: 120
+                                              }));
+                                              setOverrideCurrentTrack(mapped[0]);
+                                              setIsPlaying(true);
+                                              if (mapped.length > 1) {
+                                                const rest = mapped.slice(1);
+                                                setTrackQueue(rest);
+                                                trackQueueRef.current = rest;
+                                              }
+                                              showNotification(`Reproduciendo: ${ytTrack.title}`);
+                                            }
+                                          }
+                                        } catch (err) {
+                                          showNotification("Error reproduciendo playlist");
+                                        }
+                                      }}
+                                      title="Reproducir Playlist ahora"
+                                      className="w-8 h-8 rounded-full bg-emerald-500 text-black flex items-center justify-center hover:scale-105 transition-all shadow-lg active:scale-95 cursor-pointer ml-1"
+                                    >
+                                      <Play className="w-4 h-4 fill-black ml-0.5" />
+                                    </button>
                                   </div>
                                 ) : (
-                                  <button
-                                    onClick={() => addYoutubeTrackToPlaylist(ytTrack)}
-                                    title="Añadir a Playlist Activa"
-                                    className="p-1.5 bg-emerald-500/10 text-emerald-500 hover:bg-emerald-500 hover:text-black rounded-lg transition-all cursor-pointer"
-                                  >
-                                    <ListPlus className="w-4 h-4" />
-                                  </button>
-                                )}
+                                  <div className="flex items-center gap-1">
+                                    {/* Spotify Style Add to Queue */}
+                                    <button
+                                      onClick={(e) => {
+                                        const track: MusicTrack = {
+                                          id: `yt_temp_${ytTrack.id}_q`,
+                                          title: ytTrack.title,
+                                          artist: ytTrack.artist,
+                                          url: ytTrack.url,
+                                          duration: ytTrack.duration,
+                                          bpm: 120
+                                        };
+                                        handleAddToQueue(track, e);
+                                      }}
+                                      title="Añadir a la cola"
+                                      className="p-2 text-slate-400 hover:text-[#1ED760] transition-colors cursor-pointer"
+                                    >
+                                      <PlusCircle className="w-[18px] h-[18px]" />
+                                    </button>
 
-                                <button
-                                  onClick={async (e) => {
-                                    if (ytTrack.isPlaylist) {
-                                      showNotification("Cargando lista...");
-                                      try {
-                                        const res = await fetch(`/api/youtube/playlist?id=${ytTrack.id}`);
-                                        if (res.ok) {
-                                          const tracks = await res.json();
-                                          if (tracks.length > 0) {
-                                             const queueTracks = tracks.map((t: any, i: number) => ({
-                                               id: `yt_temp_${t.id}_${i}`,
-                                               title: t.title,
-                                               artist: t.artist,
-                                               url: t.url,
-                                               duration: t.duration,
-                                               bpm: 120
-                                             }));
-                                             handleAddToQueue(queueTracks[0], e);
-                                             if (queueTracks.length > 1) {
-                                               setTrackQueue(prev => [...prev, ...queueTracks.slice(1)]);
-                                             }
-                                          }
-                                        }
-                                      } catch (err) {
-                                        showNotification("Error reproduciendo lista");
-                                      }
-                                    } else {
-                                      const track: MusicTrack = {
-                                        id: `yt_temp_${ytTrack.id}`,
-                                        title: ytTrack.title,
-                                        artist: ytTrack.artist,
-                                        url: ytTrack.url,
-                                        duration: ytTrack.duration,
-                                        bpm: 120
-                                      };
-                                      handleAddToQueue(track, e);
-                                    }
-                                  }}
-                                  title={ytTrack.isPlaylist ? "Reproducir Playlist completo" : "Escuchar ahora"}
-                                  className="p-1.5 bg-white/5 text-slate-400 hover:bg-white/10 hover:text-white rounded-lg transition-all cursor-pointer"
-                                >
-                                  <Play className="w-3.5 h-3.5" />
-                                </button>
-                                {!ytTrack.isPlaylist && (
-                                  <button
-                                    onClick={(e) => {
-                                      const track: MusicTrack = {
-                                        id: `yt_temp_${ytTrack.id}`,
-                                        title: ytTrack.title,
-                                        artist: ytTrack.artist,
-                                        url: ytTrack.url,
-                                        duration: ytTrack.duration,
-                                        bpm: 120
-                                      };
-                                      handleToggleFavorite(track, e);
-                                    }}
-                                    title="Añadir a Favoritos"
-                                    className="p-1.5 bg-white/5 text-slate-400 hover:bg-pink-500/10 hover:text-pink-500 rounded-lg transition-all cursor-pointer"
-                                  >
-                                    <Heart className="w-3.5 h-3.5 transition-colors" />
-                                  </button>
+                                    {/* Add to Playlist */}
+                                    <button
+                                      onClick={() => addYoutubeTrackToPlaylist(ytTrack)}
+                                      title="Añadir a Playlist"
+                                      className="p-2 text-slate-400 hover:text-[#1ED760] transition-colors cursor-pointer"
+                                    >
+                                      <ListPlus className="w-[18px] h-[18px]" />
+                                    </button>
+
+                                    {/* Favorite */}
+                                    <button
+                                      onClick={(e) => {
+                                        const track: MusicTrack = {
+                                          id: `yt_temp_${ytTrack.id}_f`,
+                                          title: ytTrack.title,
+                                          artist: ytTrack.artist,
+                                          url: ytTrack.url,
+                                          duration: ytTrack.duration,
+                                          bpm: 120
+                                        };
+                                        handleToggleFavorite(track, e);
+                                      }}
+                                      title="Me gusta"
+                                      className="p-2 text-slate-400 hover:text-pink-500 transition-colors cursor-pointer"
+                                    >
+                                      <Heart className="w-[18px] h-[18px]" />
+                                    </button>
+                                  </div>
                                 )}
                               </div>
                             </div>
@@ -3997,12 +3922,17 @@ export default function GymMusicPlayer() {
                                   </span>
                                 </div>
 
-                                <div className="relative w-6 h-6 sm:w-7 sm:h-7 bg-white/5 rounded flex-shrink-0 overflow-hidden flex items-center justify-center shadow-md">
+                                <div className="relative w-8 h-8 sm:w-9 sm:h-9 bg-white/5 rounded-lg flex-shrink-0 overflow-hidden flex items-center justify-center shadow-lg group/thumb">
                                   {getTrackImage(track) ? (
-                                    <img src={getTrackImage(track)!} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                                    <img src={getTrackImage(track)!} alt="" className="w-full h-full object-cover group-hover/track:scale-110 transition-transform duration-500" referrerPolicy="no-referrer" />
                                   ) : (
                                     <div className="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900" />
                                   )}
+                                  <div className="absolute inset-0 bg-black/20 group-hover/track:bg-black/40 transition-colors flex items-center justify-center">
+                                    <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center opacity-0 group-hover/track:opacity-100 transition-all transform scale-75 group-hover/track:scale-100 shadow-xl">
+                                      <Play className="w-2 h-2 text-black fill-black ml-0.5" />
+                                    </div>
+                                  </div>
                                 </div>
 
                                 <div className="flex-1 min-w-0 pr-3 relative z-10 flex flex-col justify-center">

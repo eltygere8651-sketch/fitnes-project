@@ -52,7 +52,9 @@ import {
   Download,
   Users,
   Library,
+  FileText,
 } from "lucide-react";
+import { jsPDF } from "jspdf";
 import {
   collection,
   query,
@@ -442,6 +444,261 @@ export default function GymMusicPlayer() {
   const [isCheckingTrialRequest, setIsCheckingTrialRequest] = useState(false);
   const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
 
+  const handleDownloadDossier = () => {
+    try {
+      const doc = new jsPDF();
+      
+      doc.setProperties({
+        title: "Dossier Comercial FLUX Music",
+        subject: "Presentacion de la Plataforma de Streaming FLUX Music para Locales y Deporte",
+        author: "FLUX Music",
+        creator: "FLUX Music",
+        keywords: "flux, music, streaming, gimnasios, comercial, b2b"
+      });
+
+      const drawHeader = (pageNum: number) => {
+        doc.setFillColor(30, 215, 96);
+        doc.rect(0, 0, 210, 4, "F");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(100, 100, 100);
+        doc.text("FLUX MUSIC • DOSSIER COMERCIAL & PROYECTO B2B", 20, 15);
+        doc.text(`PAGINA ${pageNum}`, 190, 15, { align: "right" });
+        
+        doc.setDrawColor(230, 230, 230);
+        doc.line(20, 17, 190, 17);
+      };
+
+      doc.setFillColor(30, 215, 96);
+      doc.rect(0, 0, 210, 6, "F");
+
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(1);
+      doc.circle(105, 75, 25);
+      doc.setDrawColor(18, 18, 18);
+      doc.setLineWidth(0.5);
+      doc.circle(105, 75, 20);
+      doc.circle(105, 75, 15);
+      
+      doc.setFillColor(30, 215, 96);
+      doc.circle(95, 75, 3, "F");
+      doc.circle(115, 75, 3, "F");
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(1.5);
+      doc.line(95, 72, 95, 78);
+      doc.line(115, 72, 115, 78);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(36);
+      doc.setTextColor(18, 18, 18);
+      doc.text("FLUX MUSIC", 105, 125, { align: "center" });
+
+      doc.setFontSize(13);
+      doc.setTextColor(30, 215, 96);
+      doc.text("STREAMING AUDIO PREMIUM DE ALTO RENDIMIENTO", 105, 137, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10.5);
+      doc.setTextColor(80, 80, 80);
+      const introText = "Un ecosistema de streaming adaptado para entrenamientos de alta intensidad, deportistas, salas de fitness, tiendas, bares y locales comerciales. Conectado de forma dinamica al reproductor de YouTube Music con control total, listas sincronizadas en tiempo real y compatibilidad de reproduccion optimizada.";
+      const lines = doc.splitTextToSize(introText, 150);
+      doc.text(lines, 105, 152, { align: "center" });
+
+      doc.setFillColor(245, 247, 246);
+      doc.rect(30, 185, 150, 45, "F");
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(0.5);
+      doc.rect(30, 185, 150, 45, "D");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(18, 18, 18);
+      doc.text("VALORES FUNDAMENTALES DEL PROYECTO", 105, 195, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
+      doc.text("- Conectividad Directa con YouTube Music - Infinidad de canciones y listas.", 40, 204);
+      doc.text("- Optimizacion de Audio en Segundo Plano - Prevencion de cortes de reproduccion.", 40, 211);
+      doc.text("- Canales Tematicos Modulables - Energia, Relax, Entrenamiento y Mas.", 40, 218);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(140, 140, 140);
+      doc.text("FLUX AUDIO STUDIO LTDA * REGISTRO DE PRODUCTO 2026", 105, 275, { align: "center" });
+
+      doc.addPage();
+      drawHeader(2);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(18, 18, 18);
+      doc.text("1. ¿Por que elegir FLUX Music?", 20, 32);
+
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(1);
+      doc.line(20, 35, 75, 35);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      const whyFLUX = "La ambientacion musical es un factor critico de conversion y energia, tanto en centros deportivos donde eleva el rendimiento un 15% como en locales comerciales (hoteles, bares, tiendas) donde incrementa el tiempo de permanencia. Sin embargo, la oferta legal de la competencia es costosa y carece de dinamismo. FLUX ofrece una alternativa de alto impacto, interactiva y robusta.";
+      const whyFLUXLines = doc.splitTextToSize(whyFLUX, 170);
+      doc.text(whyFLUXLines, 20, 43);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12);
+      doc.setTextColor(18, 18, 18);
+      doc.text("CARACTERISTICAS TECNICAS DESTACADAS", 20, 75);
+
+      const features = [
+        {
+          title: "Sincronizacion en la Nube Completa (Firebase)",
+          desc: "Guarda favoritos, listas personalizadas y preferencias de forma instantanea bajo tu ID de usuario."
+        },
+        {
+          title: "Interfaz Premium 'Spoty-Vibe' Optimizada",
+          desc: "Diseno premium adaptable con controles tactiles optimizados tanto para movil como para sobremesa."
+        },
+        {
+          title: "Canales Tematicos Modulares",
+          desc: "Cambia la vibracion del entorno en 1 segundo con accesos rapidos como Energia, Relax, Entrenamiento y Explorar."
+        },
+        {
+          title: "Guardian de Fluidez de Audio",
+          desc: "Algoritmos optimizados de alerta de primer plano para evitar interrupciones de reproduccion al bloquear el movil."
+        }
+      ];
+
+      let currentY = 85;
+      features.forEach((feat) => {
+        doc.setFillColor(30, 215, 96);
+        doc.rect(20, currentY - 3, 3, 3, "F");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        doc.setTextColor(18, 18, 18);
+        doc.text(feat.title, 27, currentY);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9.5);
+        doc.setTextColor(70, 70, 70);
+        const descLines = doc.splitTextToSize(feat.desc, 160);
+        doc.text(descLines, 27, currentY + 5);
+        
+        currentY += 5 + (descLines.length * 4.5) + 3;
+      });
+
+      doc.addPage();
+      drawHeader(3);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(16);
+      doc.setTextColor(18, 18, 18);
+      doc.text("2. Modelos de Licencia y Tarifas", 20, 32);
+
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(1);
+      doc.line(20, 35, 75, 35);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(40, 40, 40);
+      const pricingIntro = "Nuestras tarifas estan estructuradas en Euros (EUR) de forma transparente y optimizada, pensada para ofrecer una alternativa legal ultra-accesible y maximizar la conversion frente a los competidores tradicionales.";
+      const pricingLines = doc.splitTextToSize(pricingIntro, 170);
+      doc.text(pricingLines, 20, 43);
+
+      const plansInfo = [
+        {
+          name: "PLAN INDIVIDUAL",
+          price: "2,99 EUR / mes",
+          focus: "Para 1 Usuario Personal",
+          features: ["Acceso completo personal", "Listas ilimitadas en la nube", "Buscador global integrado", "Sincronizacion de favoritos"]
+        },
+        {
+          name: "PLAN DUO (Premium Duo)",
+          price: "4,99 EUR / mes",
+          focus: "Para 2 Usuarios Simultaneos",
+          features: ["Ideal para parejas o compas de entreno", "Doble stream activo a la vez", "Perfiles aislados de favoritos", "Comparticion simplificada"]
+        },
+        {
+          name: "PLAN COMERCIAL / NEGOCIOS (Familiar)",
+          price: "14,99 EUR / mes",
+          focus: "Hasta 6 Cuentas o Licencia Local",
+          features: ["Licencia de hilo musical comercial habilitada", "Adecuado para Gimnasios, Bares, Hoteles y Cafes", "Buffering prioritario de alta fidelity", "Soporte manual prioritario"]
+        }
+      ];
+
+      let gridY = 65;
+      plansInfo.forEach((plan) => {
+        doc.setFillColor(248, 249, 250);
+        doc.rect(20, gridY, 170, 42, "F");
+        
+        doc.setFillColor(30, 215, 96);
+        doc.rect(20, gridY, 2.5, 42, "F");
+
+        doc.setDrawColor(230, 230, 230);
+        doc.setLineWidth(0.3);
+        doc.rect(20, gridY, 170, 42, "D");
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(18, 18, 18);
+        doc.text(plan.name, 26, gridY + 6);
+
+        doc.setFontSize(12);
+        doc.setTextColor(30, 215, 96);
+        doc.text(plan.price, 182, gridY + 7, { align: "right" });
+
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(110, 110, 110);
+        doc.text(plan.focus, 26, gridY + 11.5);
+
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(8.5);
+        doc.setTextColor(60, 60, 60);
+
+        let bulletY = gridY + 18;
+        plan.features.forEach((feat, idx) => {
+          const col = idx < 2 ? 0 : 1;
+          const colX = col === 0 ? 26 : 105;
+          const rowY = col === 0 ? bulletY + (idx * 5) : bulletY + ((idx - 2) * 5);
+          
+          doc.setFillColor(30, 215, 96);
+          doc.circle(colX + 1, rowY - 1.5, 0.7, "F");
+          doc.text(feat, colX + 4, rowY);
+        });
+
+        gridY += 42 + 6;
+      });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(18, 18, 18);
+      doc.text("¿Como solicitar la activacion o consultar integraciones?", 20, gridY + 3);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(60, 60, 60);
+      const endNote = "Para formalizar el alta de cualquiera de los planes, simplemente registrate y haz clic en probar gratis. Dado el control estricto de recursos y velocidad de stream, las activaciones de slot se gestionan de forma personalizada.";
+      const endNoteLines = doc.splitTextToSize(endNote, 170);
+      doc.text(endNoteLines, 20, gridY + 8);
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 215, 96);
+      doc.text("PROYECTO COMPLEMENTARIO DESARROLLADO BAJO ESTANDAR COMERCIAL PREMIUM FY26", 105, 275, { align: "center" });
+
+      doc.save("FLUX_Music_Dossier_Comercial.pdf");
+      showNotification("Dossier de presentación (PDF) descargado correctamente.");
+    } catch (e) {
+      console.error(e);
+      showNotification("Error al generar el PDF de la presentación.");
+    }
+  };
+
   const getBrowserFingerprint = () => {
     try {
       const canvas = document.createElement("canvas");
@@ -488,13 +745,13 @@ export default function GymMusicPlayer() {
         const reqDoc = snap.docs[0].data();
         if (reqDoc.status === "pending") {
           setTrialRequestStatus("sent");
-          setTrialRequestMsg("Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador.");
+          setTrialRequestMsg("Tu solicitud de prueba de 14 días está pendiente de aprobación por el administrador.");
         } else if (reqDoc.status === "approved" || (accessData && accessData.trialStart)) {
           setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg("Ya has disfrutado de tu prueba gratuita de 7 días.");
+          setTrialRequestMsg("Ya has disfrutado de tu prueba gratuita de 14 días.");
         } else if (reqDoc.status === "rejected") {
           setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg("Tu solicitud de prueba de 7 días fue declinada por el administrador.");
+          setTrialRequestMsg("Tu solicitud de prueba de 14 días fue declinada por el administrador.");
         }
         setIsCheckingTrialRequest(false);
         return;
@@ -504,7 +761,7 @@ export default function GymMusicPlayer() {
       const fpSnap = await getDocs(fpQuery);
       if (!fpSnap.empty) {
         setTrialRequestStatus("already_claimed");
-        setTrialRequestMsg("Acceso Denegado: Ya se ha solicitado una prueba de 7 días desde este dispositivo.");
+        setTrialRequestMsg("Acceso Denegado: Ya se ha solicitado una prueba de 14 días desde este dispositivo.");
         setIsCheckingTrialRequest(false);
         return;
       }
@@ -708,10 +965,13 @@ export default function GymMusicPlayer() {
     trending?: any[];
     dailyTop?: any[];
     top100?: any[];
+    top20Tendencias?: any[];
+    dailyTopPlaylists?: any[];
     workout?: any[];
     focus?: any[];
     trends?: any[];
     latin?: any[];
+    party?: any[];
   } | null>(null);
   const [isLoadingExplore, setIsLoadingExplore] = useState<boolean>(false);
   const [selectedCountry, setSelectedCountry] = useState<string>(() => {
@@ -1890,7 +2150,8 @@ export default function GymMusicPlayer() {
 
     setIsLoadingExplore(true);
     try {
-      const res = await fetch(`/api/youtube/playlist?id=${item.id}`);
+      const encodedTitle = encodeURIComponent(item.title);
+      const res = await fetch(`/api/youtube/playlist?id=${item.id}&title=${encodedTitle}`);
       if (!res.ok) throw new Error("Failed to load playlist");
       const tracks = await res.json();
       if (tracks && tracks.length > 0) {
@@ -1919,7 +2180,7 @@ export default function GymMusicPlayer() {
     }
   };
 
-  const handleToggleExpandPlaylist = async (playlistId: string) => {
+  const handleToggleExpandPlaylist = async (playlistId: string, playlistTitle: string = "") => {
     if (expandedPlaylistId === playlistId) {
       setExpandedPlaylistId(null);
       setExpandedPlaylistTracks([]);
@@ -1931,7 +2192,8 @@ export default function GymMusicPlayer() {
     setIsFetchingExpandedTracks(true);
 
     try {
-      const res = await fetch(`/api/youtube/playlist?id=${playlistId}`);
+      const qs = playlistTitle ? `?id=${playlistId}&title=${encodeURIComponent(playlistTitle)}` : `?id=${playlistId}`;
+      const res = await fetch(`/api/youtube/playlist${qs}`);
       if (res.ok) {
         const tracks = await res.json();
         setExpandedPlaylistTracks(tracks);
@@ -3187,160 +3449,145 @@ export default function GymMusicPlayer() {
                 
                 {/* 1. PC COMPACT / MINIMIZED LAYOUT (Shown only on Desktop when minimized) */}
                 {isTrackListExpanded && (
-                  <div className="hidden md:flex items-center justify-between w-full gap-6">
+                  <div className="hidden md:flex items-center justify-between w-full h-[86px] px-4 bg-[#000000] border-t border-white/5 relative z-50">
                     
                     {/* Left: Artwork + Title + Artist + Heart icon */}
-                    <div className="flex items-center gap-3.5 min-w-0 w-1/4">
-                      <div 
-                        onClick={() => setIsTrackListExpanded(false)}
-                        className="relative w-12 h-12 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-lg cursor-pointer hover:scale-105 active:scale-95 transition-transform"
-                        title="Expandir reproductor"
-                      >
-                        <img src={displayArtwork} className="w-full h-full object-cover" alt="" />
+                    <div className="flex items-center gap-4 min-w-[200px] w-1/4">
+                      <div className="relative shrink-0 flex items-center justify-center min-h-0 w-16 h-16">
+                        <div className={`relative z-10 w-full h-full rounded-xl overflow-hidden ${isEcoMode ? 'shadow-sm' : 'shadow-lg'} border border-white/5`}>
+                          <img
+                            src={displayArtwork}
+                            alt="Artwork"
+                            className="w-full h-full object-cover transition-opacity duration-300"
+                          />
+                        </div>
                       </div>
-                      <div className="flex flex-col min-w-0 text-left">
-                        <h4 
-                          onClick={() => setIsTrackListExpanded(false)}
-                          className="text-[13px] font-black text-white hover:text-[#1ED760] cursor-pointer truncate uppercase tracking-tight"
-                          title="Expandir reproductor"
-                        >
-                          {displayTitle}
-                        </h4>
-                        <p className="text-[9.5px] font-black uppercase text-slate-400 tracking-widest truncate mt-0.5">
+                      <div className="flex flex-col min-w-0">
+                        <div className="flex items-center gap-2 overflow-hidden">
+                          <h1 className="font-black text-white uppercase tracking-tight text-sm truncate">
+                            {displayTitle}
+                          </h1>
+                          {isLoadingTrack && (
+                            <Loader2 className="text-emerald-500 animate-spin shrink-0 w-3 h-3 ml-1" />
+                          )}
+                        </div>
+                        <p className="font-bold text-[#1ED760] uppercase tracking-wider text-[10px] mt-0.5 truncate">
                           {displayArtist}
                         </p>
                       </div>
-                      
-                      {/* Heart Button directly in the compact bar */}
-                      <button 
-                        onClick={(e) => handleToggleFavorite(currentTrack, e)} 
-                        className="p-1 px-1.5 ml-1 text-slate-400 hover:text-pink-500 rounded-md transition-colors shrink-0" 
-                        title="Añadir a Favoritos"
-                      >
-                        <Heart className={`w-[15px] h-[15px] transition-colors ${
-                          userPlaylists.find(p => p.ownerId === user?.uid && (p.name.toLowerCase() === 'favoritos' || p.name.toLowerCase() === 'siguiente'))
-                            ?.tracks.some(t => (currentTrack.id && t.id === currentTrack.id) || (currentTrack.url && t.url === currentTrack.url)) ? 'fill-pink-500 text-pink-500' : ''
-                        }`} />
-                      </button>
                     </div>
 
-                    {/* Center: Playback Controls & Progress bar */}
-                    <div className="flex flex-col items-center flex-1 max-w-xl">
-                      {/* Control buttons */}
-                      <div className="flex items-center gap-5 mb-1.5">
+                    {/* Center: Controls + Timeline combined */}
+                    <div className="flex flex-col items-center justify-center gap-2 w-1/2 max-w-[600px]">
+                      {/* Controls Row */}
+                      <div className="flex items-center justify-center gap-6">
                         <button
                           onClick={() => setIsShuffle(!isShuffle)}
                           title="Aleatorio"
-                          className={`p-1.5 transition-all text-slate-500 hover:text-white relative active:scale-95 ${isShuffle ? "text-[#1ED760]" : ""}`}
+                          className={`p-1 transition-all transform active:scale-95 ${isShuffle ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
                         >
-                          <Shuffle className="w-4 h-4" />
-                          {isShuffle && (
-                            <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1 h-1 bg-[#1ED760] rounded-full shadow-[0_0_8px_rgba(30,215,96,0.8)]" />
-                          )}
+                          <Shuffle className="w-5 h-5" />
                         </button>
-
                         <button
                           onClick={handlePrev}
-                          className="p-1 text-slate-400 hover:text-white active:scale-90 transition-all shrink-0"
                           title="Anterior"
+                          className="p-1 text-white hover:text-emerald-400 transition-all transform active:scale-90"
                         >
-                          <SkipBack className="w-4.5 h-4.5 fill-current" />
+                          <SkipBack className="fill-current w-7 h-7" />
                         </button>
 
-                        <button
+                        <motion.button
+                          whileTap={{ scale: 0.9 }}
+                          whileHover={{ scale: 1.05 }}
                           onClick={togglePlayback}
-                          className="w-10 h-10 rounded-full bg-white text-black flex items-center justify-center shadow-md hover:scale-105 active:scale-95 transition-all shrink-0"
-                          title="Reproducir/Pausar"
+                          className="rounded-full w-12 h-12 bg-white text-black flex items-center justify-center transition-all duration-350 shadow-md"
                         >
                           {isPlaying ? (
-                            <Pause className="w-4 h-4 fill-current text-black" />
+                            <Pause className="fill-current text-black w-6 h-6" />
                           ) : (
-                            <Play className="w-4 h-4 fill-current text-black ml-0.5" />
+                            <Play className="fill-current text-black w-6 h-6 ml-1" />
                           )}
-                        </button>
+                        </motion.button>
 
                         <button
                           onClick={handleNext}
-                          className="p-1 text-slate-400 hover:text-white active:scale-90 transition-all shrink-0"
                           title="Siguiente"
+                          className="p-1 text-white hover:text-emerald-400 transition-all transform active:scale-90"
                         >
-                          <SkipForward className="w-4.5 h-4.5 fill-current" />
+                          <SkipForward className="fill-current w-7 h-7" />
                         </button>
-
                         <button
                           onClick={() => setIsRepeat(!isRepeat)}
-                          className={`p-1.5 transition-all text-slate-500 hover:text-white active:scale-95 ${isRepeat ? "text-[#1ED760]" : ""}`}
                           title="Repetir"
+                          className={`p-1 transition-all transform active:scale-95 ${isRepeat ? "text-[#1ED760]" : "text-slate-500 hover:text-white"}`}
                         >
-                          <Repeat className="w-4 h-4" />
+                          <Repeat className="w-5 h-5" />
                         </button>
                       </div>
-
-                      {/* Timeline bar with seeking */}
-                      <div className="flex items-center gap-3 w-full text-[9px] font-bold text-slate-500 select-none font-mono">
-                        <span className="w-8 text-right font-mono">{formatTime(position)}</span>
-                        
+                      
+                      {/* Timeline Row */}
+                      <div className="flex items-center w-full gap-3">
+                        <span className="text-[10px] font-bold text-slate-500 font-mono w-[35px] text-right">
+                          {formatTime(position)}
+                        </span>
                         <div 
                           onPointerDown={handleTimelinePointerDown}
-                          className="flex-1 relative flex items-center h-2.5 cursor-pointer select-none touch-none group/timeline"
+                          className="flex-1 relative flex items-center h-4 cursor-pointer min-w-0 group/timeline select-none touch-none"
                         >
-                          <div className="w-full h-1 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/timeline:h-1.5 transition-all">
+                          <div className="w-full h-1.5 bg-white/10 rounded-full relative overflow-hidden pointer-events-none group-hover/timeline:h-2 transition-all">
                             <div
-                              className="h-full bg-white group-hover/timeline:bg-[#1ED760] rounded-full relative"
+                              className="h-full bg-white rounded-full relative"
                               style={{ width: `${duration > 0 ? (position / duration) * 100 : 0}%` }}
                             />
                           </div>
                           <div 
-                            className="absolute w-2.5 h-2.5 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 transition-opacity duration-150 shadow-md pointer-events-none"
-                            style={{ left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 5px)` }}
+                            className="absolute w-3.5 h-3.5 bg-white rounded-full opacity-0 group-hover/timeline:opacity-100 shadow-md pointer-events-none transition-opacity"
+                            style={{ left: `calc(${duration > 0 ? (position / duration) * 100 : 0}% - 7px)` }}
                           />
                         </div>
-
-                        <span className="w-8 text-left font-mono">{formatTime(duration)}</span>
+                        <span className="text-[10px] font-bold text-slate-500 font-mono w-[35px] text-left">
+                          {formatTime(duration)}
+                        </span>
                       </div>
                     </div>
 
-                    {/* Right: Volume & Expand trigger */}
-                    <div className="flex items-center justify-end gap-5 w-1/4">
-                      {/* Volume */}
-                      <div className="flex items-center gap-2 group/vol w-[110px]">
-                        <button 
-                          onClick={() => {
-                            if (volume > 0) {
-                              setVolume(0);
-                            } else {
-                              setVolume(50);
-                            }
-                          }}
-                          className="text-slate-400 hover:text-white transition-colors"
-                        >
-                          {volume === 0 ? (
-                            <VolumeX className="w-4 h-4" />
-                          ) : (
-                            <Volume2 className="w-4 h-4" />
-                          )}
-                        </button>
+                    {/* Right: Actions + Volume */}
+                    <div className="flex justify-end items-center gap-4 min-w-[200px] w-1/4">
+                       <button
+                         onClick={() => setIsTrackListExpanded(!isTrackListExpanded)}
+                         className="p-1.5 text-[#b3b3b3] hover:text-white transition-colors outline-none cursor-pointer"
+                         title={isTrackListExpanded ? "Pantalla Completa" : "Contraer"}
+                       >
+                         {isTrackListExpanded ? <Maximize2 className="w-4 h-4" /> : <Minimize2 className="w-4 h-4" />}
+                       </button>
+
+                      {/* Heart Icon to like instantly */}
+                      <button 
+                        onClick={(e) => handleToggleFavorite(currentTrack, e)} 
+                        className="p-2 text-slate-400 hover:text-pink-500 active:scale-90 transition-all cursor-pointer rounded-full bg-white/5"
+                        title="Añadir a Favoritos"
+                      >
+                        <Heart className={`w-[15px] h-[15px] transition-colors ${
+                          userPlaylists.find(p => p.ownerId === user?.uid && (p.name.toLowerCase() === 'favoritos' || p.name.toLowerCase() === 'siguiente'))
+                            ?.tracks.some(t => (currentTrack.id && t.id === currentTrack.id) || (currentTrack.url && t.url === currentTrack.url)) ? 'fill-[#1ED760] text-[#1ED760]' : ''
+                        }`} />
+                      </button>
+
+                      {/* Volume Adjuster */}
+                      <div className="flex items-center justify-end gap-2 group/vol w-[100px]">
+                        <Volume2 className="w-4 h-4 text-slate-400 group-hover/vol:text-white transition-colors shrink-0" />
                         <div
                           onPointerDown={handleVolumePointerDown}
-                          className="w-full h-1 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-1.5 transition-all touch-none flex items-center"
+                          className="w-full h-1.5 bg-white/20 rounded-full relative cursor-pointer group-hover/vol:h-2 transition-all touch-none flex items-center"
                         >
                           <div
-                            className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-white pointer-events-none transition-colors"
+                            className="absolute left-0 h-full rounded-full bg-slate-300 group-hover/vol:bg-[#1ED760] pointer-events-none transition-colors"
                             style={{ width: `${volume}%` }}
                           >
-                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow opacity-100 sm:opacity-0 sm:group-hover/vol:opacity-100 transition-opacity translate-x-1" />
+                            <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white rounded-full shadow opacity-0 group-hover/vol:opacity-100 transition-opacity translate-x-1" />
                           </div>
                         </div>
                       </div>
-
-                      {/* Expand Button */}
-                      <button
-                        onClick={() => setIsTrackListExpanded(false)}
-                        className="p-1.5 text-slate-400 hover:text-white rounded-lg hover:bg-white/5 transition-all cursor-pointer"
-                        title="Pantalla Completa"
-                      >
-                        <Maximize2 className="w-4.5 h-4.5" />
-                      </button>
                     </div>
                   </div>
                 )}
@@ -3987,7 +4234,7 @@ export default function GymMusicPlayer() {
                                 {ytTrack.isPlaylist ? (
                                   <div className="flex items-center gap-1">
                                     <button
-                                      onClick={() => handleToggleExpandPlaylist(ytTrack.id)}
+                                      onClick={() => handleToggleExpandPlaylist(ytTrack.id, ytTrack.title)}
                                       title={isExpanded ? "Ocultar canciones" : "Ver canciones de la playlist"}
                                       className={`p-1.5 rounded-lg border transition-all flex items-center gap-1 text-[8.5px] font-black uppercase tracking-wider cursor-pointer ${
                                         isExpanded 
@@ -5940,67 +6187,13 @@ export default function GymMusicPlayer() {
                 <p className="text-[8.5px] sm:text-[9px] font-black uppercase tracking-widest text-[#1ED760] mb-3 sm:mb-4 px-3 bg-[#1ED760]/10 py-1 rounded-full border border-[#1ED760]/20">
                   Música Premium Interminable
                 </p>
-                
-                <p className="text-slate-400 max-w-xs mx-auto mb-4 sm:mb-5 text-[10.5px] sm:text-[11px] font-semibold leading-relaxed">
-                  ¡Entra y dale al play! Crea tus playlist, explora novedades y música sin límites, y sin anuncios.
-                </p>
-
-                {/* Spotify-style premium interactive dropdown block */}
-                <div className="w-full mb-4 sm:mb-5 text-left relative z-30">
-                  <button
-                    type="button"
-                    onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
-                    className="w-full bg-[#181818] hover:bg-[#242424] border border-white/10 hover:border-[#1ED760]/30 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl flex items-center justify-between transition-all relative cursor-pointer text-left"
-                  >
-                    <div>
-                      <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Planes de Membresía ▾</span>
-                      <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wide">
-                        Ver Tarifas Premium
-                      </span>
-                    </div>
-                    <span className="text-[9px] sm:text-[10px] font-bold text-[#1ED760] bg-[#1ED760]/10 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg border border-[#1ED760]/10 font-sans">Desde $5.99/mes</span>
-                  </button>
-
-                  {/* Pricing tiers dropdown overlay container */}
-                  <AnimatePresence>
-                    {isMembershipDropdownOpen && (
-                      <motion.div
-                        initial={{ opacity: 0, y: -8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -4 }}
-                        className="absolute top-full left-0 right-0 mt-1 bg-[#1c1c1e] border border-white/10 rounded-2xl p-3 z-30 shadow-[0_20px_50px_rgba(0,0,0,0.9)] space-y-2.5"
-                      >
-                        <div className="flex justify-between items-center text-[8px] font-black text-slate-400 uppercase tracking-widest pb-1 border-b border-white/5">
-                          <span>Plan Escogido</span>
-                          <span>Tarifa Mensual</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
-                          <div>
-                            <p className="text-xs font-black text-white">1 Usuario</p>
-                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Individual</span>
-                          </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$5.99</span>
-                        </div>
-
-                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
-                          <div>
-                            <p className="text-xs font-black text-white">2 Usuarios</p>
-                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Duo</span>
-                          </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$9.99</span>
-                        </div>
-
-                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
-                          <div>
-                            <p className="text-xs font-black text-white font-sans">Familiar</p>
-                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Hasta 6 Cuentas</span>
-                          </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10 font-sans">$14.99</span>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                            {/* Spotify-style premium interactive dropdown block */}
+                <div className="w-full mb-4 sm:mb-5 text-center relative z-30">
+                  <h3 className="text-white font-bold text-lg sm:text-xl mb-2 drop-shadow-md">Bienvenido a Flux Music</h3>
+                  <p className="text-slate-200 text-xs sm:text-[13px] leading-relaxed max-w-sm mx-auto font-medium drop-shadow">
+                    Descubre una experiencia sin límites. Escucha millones de canciones, crea playlists personalizadas, 
+                    encuentra las mejores tendencias de tu país y sincroniza tu música en todos tus dispositivos en calidad óptima.
+                  </p>
                 </div>
                 
                 <button 
@@ -6032,7 +6225,7 @@ export default function GymMusicPlayer() {
                   <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
                     <div className="bg-[#181818] border border-white/5 p-2.5 sm:p-3 rounded-xl sm:rounded-2xl">
                       <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Acceso Inicial</span>
-                      <span className="text-[10px] sm:text-[11px] font-black text-[#1ED760] uppercase tracking-wide">Prueba 7 días</span>
+                      <span className="text-[10px] sm:text-[11px] font-black text-[#1ED760] uppercase tracking-wide">Prueba 14 días</span>
                     </div>
                     
                     <button
@@ -6042,7 +6235,7 @@ export default function GymMusicPlayer() {
                     >
                       <span className="block text-[7.5px] sm:text-[8px] font-bold uppercase text-slate-500 tracking-wider mb-0.5">Membresía ▾</span>
                       <span className="text-[10px] sm:text-[11px] font-black text-white uppercase tracking-wide flex items-center justify-between w-full">
-                        <span>Ver Precios</span>
+                        <span>Desde 2,99 €</span>
                       </span>
                     </button>
                   </div>
@@ -6066,7 +6259,7 @@ export default function GymMusicPlayer() {
                             <p className="text-xs font-black text-white">1 Usuario</p>
                             <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Individual</span>
                           </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$5.99</span>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">2,99 €</span>
                         </div>
 
                         <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
@@ -6074,15 +6267,15 @@ export default function GymMusicPlayer() {
                             <p className="text-xs font-black text-white">2 Usuarios</p>
                             <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Premium Duo</span>
                           </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$9.99</span>
+                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">4,99 €</span>
                         </div>
 
-                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-white/5">
+                        <div className="flex justify-between items-center bg-[#121212] hover:bg-black p-2 rounded-xl transition-colors border border-dashed border-emerald-500/10">
                           <div>
-                            <p className="text-xs font-black text-white font-sans">Familiar</p>
-                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Hasta 6 Cuentas</span>
+                            <p className="text-xs font-black text-white font-sans">Locales & B2B</p>
+                            <span className="text-[8px] font-bold uppercase text-[#1ED760] tracking-wider">Gimnasios, Bares, Cafés</span>
                           </div>
-                          <span className="text-xs font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-0.5 rounded border border-[#1ED760]/10">$14.99</span>
+                          <span className="text-[8px] font-black text-[#1ED760] bg-[#1ED760]/10 px-2 py-1 rounded border border-[#1ED760]/10 uppercase tracking-wider">Dossier PDF</span>
                         </div>
                       </motion.div>
                     )}
@@ -6100,7 +6293,7 @@ export default function GymMusicPlayer() {
                       onClick={handleRequestTrial} 
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
                     >
-                      <span>⚡ Pedir Acceso Gratis de 7 Días</span>
+                      <span>⚡ Pedir Acceso Gratis de 14 Días</span>
                     </button>
                   ) : (
                     <div className={`p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center ${

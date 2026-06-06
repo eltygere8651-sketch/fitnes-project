@@ -1,5 +1,5 @@
-import React from 'react';
-import { Play, Pause, ListPlus, Sparkles, ChevronRight, ChevronDown } from 'lucide-react';
+import React, { useState } from 'react';
+import { Play, Pause, ListPlus, Sparkles, ChevronRight, ChevronDown, X } from 'lucide-react';
 import { MusicTrack } from '../types';
 import { Carousel } from './Carousel';
 
@@ -30,6 +30,24 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
   currentTrack,
   isPlaying
 }) => {
+  const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
+
+  const COUNTRIES = [
+    { code: "GLOBAL", label: "Global", flag: "🌎" },
+    { code: "US", label: "Estados Unidos", flag: "🇺🇸" },
+    { code: "ES", label: "España", flag: "🇪🇸" },
+    { code: "MX", label: "México", flag: "🇲🇽" },
+    { code: "AR", label: "Argentina", flag: "🇦🇷" },
+    { code: "CO", label: "Colombia", flag: "🇨🇴" },
+    { code: "DO", label: "República Dominicana", flag: "🇩🇴" },
+    { code: "CL", label: "Chile", flag: "🇨🇱" },
+    { code: "PE", label: "Perú", flag: "🇵🇪" },
+    { code: "GB", label: "Reino Unido", flag: "🇬🇧" },
+    { code: "DE", label: "Alemania", flag: "🇩🇪" },
+    { code: "FR", label: "Francia", flag: "🇫🇷" },
+    { code: "IT", label: "Italia", flag: "🇮🇹" }
+  ];
+
   if (!exploreData || (exploreData.top100?.length === 0 && exploreData.trending?.length === 0)) {
     return (
       <div className="p-12 text-center space-y-4">
@@ -48,7 +66,9 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
   }
 
   const sections = [
-    { title: "Top Playlists Reales Music", data: exploreData.top100 || [] },
+    { title: "Top 100 Playlists", data: exploreData.top100 || [] },
+    { title: "Top 20 Tendencias", data: exploreData.top20Tendencias || [] },
+    { title: "Daily Top 20", data: exploreData.dailyTopPlaylists || [] },
     { title: "Nuevos Videos Musicales", data: exploreData.dailyTop || [] },
     { title: "Tendencias Globales", data: exploreData.trending || [] }
   ];
@@ -59,34 +79,39 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
       {setSelectedCountry && selectedCountry && (
         <div className="px-3">
           <div className="relative max-w-[200px]">
-            <select
-              value={selectedCountry}
-              onChange={(e) => setSelectedCountry(e.target.value)}
-              className="w-full appearance-none bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer"
+            <button
+              onClick={() => setIsCountryModalOpen(!isCountryModalOpen)}
+              className="w-full text-left bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer flex justify-between items-center"
             >
-              {[
-                { code: "GLOBAL", label: "Global", flag: "🌎" },
-                { code: "US", label: "Estados Unidos", flag: "🇺🇸" },
-                { code: "ES", label: "España", flag: "🇪🇸" },
-                { code: "MX", label: "México", flag: "🇲🇽" },
-                { code: "AR", label: "Argentina", flag: "🇦🇷" },
-                { code: "CO", label: "Colombia", flag: "🇨🇴" },
-                { code: "DO", label: "República Dominicana", flag: "🇩🇴" },
-                { code: "CL", label: "Chile", flag: "🇨🇱" },
-                { code: "PE", label: "Perú", flag: "🇵🇪" },
-                { code: "GB", label: "Reino Unido", flag: "🇬🇧" },
-                { code: "DE", label: "Alemania", flag: "🇩🇪" },
-                { code: "FR", label: "Francia", flag: "🇫🇷" },
-                { code: "IT", label: "Italia", flag: "🇮🇹" }
-              ].map((c) => (
-                <option key={c.code} value={c.code} className="bg-[#111113] text-white">
-                  {c.flag} Top Listas {c.label}
-                </option>
-              ))}
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-[#1ED760]">
-              <ChevronDown className="w-3.5 h-3.5" />
-            </div>
+              <span className="truncate">
+                {COUNTRIES.find(c => c.code === selectedCountry)?.flag} Top Listas {COUNTRIES.find(c => c.code === selectedCountry)?.label}
+              </span>
+              <ChevronDown className={`w-3.5 h-3.5 text-[#1ED760] shrink-0 transition-transform ${isCountryModalOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isCountryModalOpen && (
+              <>
+                <div className="fixed inset-0 z-[40]" onClick={() => setIsCountryModalOpen(false)}></div>
+                <div className="absolute top-full left-0 mt-2 z-[50] w-full min-w-[220px] bg-[#18181A] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                  <div className="max-h-[300px] overflow-y-auto p-1">
+                    {COUNTRIES.map((c) => (
+                      <button
+                        key={c.code}
+                        onClick={() => {
+                          setSelectedCountry(c.code);
+                          setIsCountryModalOpen(false);
+                        }}
+                        className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${selectedCountry === c.code ? 'bg-[#1ED760]/10 text-[#1ED760] font-bold' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
+                      >
+                        <span className="text-xl">{c.flag}</span>
+                        <span className="text-xs">{c.label}</span>
+                        {selectedCountry === c.code && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#1ED760]" />}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

@@ -365,13 +365,22 @@ app.get("/api/youtube/explore", async (req, res) => {
   };
 
   try {
-    const explore = await yt.music.getExplore();
+    // Load Explore Data
+    const explorePromise = yt.music.getExplore().catch(() => null);
+
+    // Explicitly grab the top playlists based on country concurrently
+    const [explore, top100Res, tendenciasRes, dailyRes] = await Promise.all([
+      explorePromise,
+      yt.search(`Top 100 Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top 20 Tendencias ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Daily Top Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({}))
+    ]);
     
     let trending: any[] = [];
     let dailyTop: any[] = [];
     let trends: any[] = [];
 
-    if (explore.sections) {
+    if (explore && explore.sections) {
       explore.sections.forEach((s: any) => {
         const headerText = (s.header?.title?.text || "").toLowerCase();
         if (!s.contents) return;
@@ -390,15 +399,21 @@ app.get("/api/youtube/explore", async (req, res) => {
       });
     }
 
-    // Explicitly grab the top playlist based on country
-    const top100Res = await yt.search(`Top 100 Playlist ${countryName} Oficial`, { type: 'playlist' });
-    const playlistsArr = top100Res.playlists || top100Res.results || [];
+    const playlistsArr = top100Res?.playlists || top100Res?.results || [];
     const top100 = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+
+    const tendenciasArr = tendenciasRes?.playlists || tendenciasRes?.results || [];
+    const top20Tendencias = tendenciasArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+
+    const dailyArr = dailyRes?.playlists || dailyRes?.results || [];
+    const dailyTopPlaylists = dailyArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
 
     const data = {
       trending,
       dailyTop,
       top100,
+      top20Tendencias,
+      dailyTopPlaylists,
       workout: [],
       focus: [],
       trends, 
@@ -422,6 +437,7 @@ const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 // YouTube Playlist Tracks Extractor Endpoint
 app.get("/api/youtube/playlist", async (req, res) => {
   const playlistId = req.query.id as string;
+  const titleFallback = req.query.title as string;
   if (!playlistId) return res.status(400).json({ error: "Missing playlist ID" });
 
   const cacheKey = playlistId;
@@ -448,30 +464,49 @@ app.get("/api/youtube/playlist", async (req, res) => {
         rawVideos = Array.isArray(playlist.contents) ? playlist.contents : [];
       }
     } else {
-      playlist = await yt.getPlaylist(playlistId);
-      if (playlist.items && playlist.items.length > 0) {
-        console.log("[API PL] items length is", playlist.items.length);
-        for (let i = 0; i < playlist.items.length; i++) {
-          if (playlist.items[i]) rawVideos.push(playlist.items[i]);
+      try {
+        playlist = await yt.getPlaylist(playlistId);
+        if (playlist.items && playlist.items.length > 0) {
+          console.log("[API PL] items length is", playlist.items.length);
+          for (let i = 0; i < playlist.items.length; i++) {
+            if (playlist.items[i]) rawVideos.push(playlist.items[i]);
+          }
+          console.log("[API PL] loop extracted length is", rawVideos.length);
+        } else if (playlist.videos) {
+          if (playlist.videos.length > 0) {
+            for (let i = 0; i < playlist.videos.length; i++) {
+              if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
+            }
+          } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
+            for (let i = 0; i < playlist.videos.entries.length; i++) {
+              if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
+            }
+          } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
+            for (let i = 0; i < playlist.videos.contents.length; i++) {
+              if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
+            }
+          }
+        } else if (playlist.contents && playlist.contents.length > 0) {
+          for (let i = 0; i < playlist.contents.length; i++) {
+            if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
+          }
         }
-        console.log("[API PL] loop extracted length is", rawVideos.length);
-      } else if (playlist.videos) {
-        if (playlist.videos.length > 0) {
-          for (let i = 0; i < playlist.videos.length; i++) {
-            if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
+      } catch (err: any) {
+        console.warn("[API PL] Error fetching via getPlaylist:", err.message);
+        // Fallback: If playlist is unviewable (like RD Mixes / broken lists) and we have a title
+        if (titleFallback) {
+          console.log("[API PL] Falling back to search for:", titleFallback);
+          const searchRes = await yt.music.search(titleFallback, { type: 'song' });
+          if (searchRes && searchRes.contents && searchRes.contents.length > 0) {
+            const firstSection = searchRes.contents[0];
+            if (firstSection && firstSection.contents) {
+              rawVideos = firstSection.contents;
+            } else if (searchRes.results) {
+              rawVideos = searchRes.results;
+            }
           }
-        } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
-          for (let i = 0; i < playlist.videos.entries.length; i++) {
-            if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
-          }
-        } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
-          for (let i = 0; i < playlist.videos.contents.length; i++) {
-            if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
-          }
-        }
-      } else if (playlist.contents && playlist.contents.length > 0) {
-        for (let i = 0; i < playlist.contents.length; i++) {
-          if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
+        } else {
+          throw err;
         }
       }
     }
@@ -480,8 +515,17 @@ app.get("/api/youtube/playlist", async (req, res) => {
 
     const tracks = rawVideos.map((v: any) => {
       try {
-        const title = v.title?.text || v.title?.toString() || "Untitled Track";
-        const artist = v.author?.name || v.author?.toString() || playlist.author?.name || "Artista de YouTube";
+        const title = v.title?.text || v.title?.toString() || v.name || "Untitled Track";
+        
+        let artist = "YouTube Music";
+        if (Array.isArray(v.artists) && v.artists.length > 0) {
+          artist = v.artists.map((a: any) => a.name).join(", ");
+        } else if (v.author?.name || typeof v.author === 'string') {
+          artist = v.author?.name || v.author?.toString();
+        } else if (playlist?.author?.name) {
+          artist = playlist.author.name;
+        }
+
         const duration = v.duration?.text || v.duration?.toString() || "N/A";
         const id = v.id || v.video_id;
         
@@ -693,7 +737,7 @@ app.post("/api/trial/request", async (req, res) => {
 
   if (botToken && chatId) {
     try {
-      const text = `🔥 *Nueva Solicitud de Acceso (7 Días Gratis)*\n\n👤 *Usuario:* ${displayName || 'Sin Nombre'}\n📧 *Email:* ${email}\n🆔 *UID:* ${uid}\n🌐 *IP:* ${ip}\n🖥️ *Huella:* \`${fingerprint || 'N/A'}\`\n\n_Puedes concederle acceso desde el panel de administrador._`;
+      const text = `🔥 *Nueva Solicitud de Acceso (14 Días Gratis)*\n\n👤 *Usuario:* ${displayName || 'Sin Nombre'}\n📧 *Email:* ${email}\n🆔 *UID:* ${uid}\n🌐 *IP:* ${ip}\n🖥️ *Huella:* \`${fingerprint || 'N/A'}\`\n\n_Puedes concederle acceso desde el panel de administrador._`;
       
       const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',

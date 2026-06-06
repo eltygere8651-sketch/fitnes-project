@@ -6,13 +6,15 @@ import {
   LogOut,
   LogIn,
   Smartphone,
-  Share2,
+  Share,
   X,
   Download,
   Headphones,
   Menu,
   Shield,
-  ChevronDown
+  ChevronDown,
+  PlusSquare,
+  ArrowDown
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
@@ -43,8 +45,8 @@ function AppContent() {
   // --- Progressive Web App (PWA) Install Logic ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
-  const [showInstallModal, setShowInstallModal] = useState(false);
-  const [installTab, setInstallTab] = useState<"ios" | "android">("ios");
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIosPrompt, setShowIosPrompt] = useState(false);
 
   useEffect(() => {
     // Check if running in mobile stand-alone app mode
@@ -57,6 +59,9 @@ function AppContent() {
 
     checkStandalone();
 
+    const isIosDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
+    setIsIOS(isIosDevice);
+
     // Listen for the Chrome/Android beforeinstallprompt event
     const handleBeforePrompt = (e: Event) => {
       e.preventDefault();
@@ -64,16 +69,19 @@ function AppContent() {
     };
 
     window.addEventListener("beforeinstallprompt", handleBeforePrompt);
-
-    // Detect general device to set default help instructions tab
-    const isIOSDevice =
-      /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-    if (!isIOSDevice) {
-      setInstallTab("android");
-    }
+    
+    const handleAppInstalled = () => {
+      setDeferredPrompt(null);
+      setIsStandalone(true);
+      setShowIosPrompt(false);
+      console.log("PWA was installed");
+    };
+    
+    window.addEventListener("appinstalled", handleAppInstalled);
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handleBeforePrompt);
+      window.removeEventListener("appinstalled", handleAppInstalled);
     };
   }, []);
 
@@ -85,8 +93,8 @@ function AppContent() {
         console.log("PWA Installation accepted by the user");
         setDeferredPrompt(null);
       }
-    } else {
-      setShowInstallModal(true);
+    } else if (isIOS && !isStandalone) {
+      setShowIosPrompt(true);
     }
   };
 
@@ -98,7 +106,9 @@ function AppContent() {
     return () => {
       window.removeEventListener("trigger-install", handleTriggerInstall);
     };
-  }, [deferredPrompt]);
+  }, [deferredPrompt, isIOS, isStandalone]);
+
+  const canShowInstallHelper = (deferredPrompt || isIOS) && !isStandalone;
 
   return (
     <div
@@ -164,14 +174,14 @@ function AppContent() {
               className="sm:hidden overflow-hidden w-full border-t border-white/5 bg-[#090b0a]"
             >
               <div className="px-3.5 py-2.5 flex items-center justify-center gap-2 bg-[#090b0a]">
-                {!isStandalone && (
+                {canShowInstallHelper && (
                   <button
                     type="button"
                     onClick={() => { setIsMobileMenuOpen(false); handleInstallPress(); }}
                     className="flex-1 h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shadow-[0_2px_8px_rgba(30,215,96,0.15)] active:scale-[0.98]"
                   >
                     <Download className="w-3 h-3 stroke-[2.5px]" />
-                    <span>Descargar</span>
+                    <span>Instalar App</span>
                   </button>
                 )}
                 <button
@@ -227,14 +237,14 @@ function AppContent() {
             className="hidden sm:block absolute top-16 left-4 bg-[#090b0a] border border-white/10 rounded-xl p-2 w-48 z-[100] shadow-2xl"
           >
             <div className="flex flex-col gap-2">
-              {!isStandalone && (
+              {canShowInstallHelper && (
                 <button
                   type="button"
                   onClick={() => { setIsDesktopMenuOpen(false); handleInstallPress(); }}
                   className="h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 shadow-lg active:scale-95"
                 >
                   <Download className="w-3.5 h-3.5 stroke-[2.5px]" />
-                  <span>Descargar</span>
+                  <span>Instalar App</span>
                 </button>
               )}
               <button
@@ -289,59 +299,77 @@ function AppContent() {
         </section>
       </main>
 
-      {/* --- PWA INSTALLATION MODAL --- */}
+      {/* --- PWA ONE-CLICK INSTALL FLOAT --- */}
       <AnimatePresence>
-        {showInstallModal && (
+        {canShowInstallHelper && (
+          <motion.div
+            initial={{ opacity: 0, y: 50 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed bottom-24 sm:bottom-8 left-1/2 -translate-x-1/2 z-[90] px-4 sm:px-0 w-full sm:w-auto flex justify-center"
+          >
+            <button
+              onClick={handleInstallPress}
+              className="w-full sm:w-auto bg-[#1ED760] hover:bg-emerald-400 text-black px-6 sm:px-10 py-3 sm:py-4 rounded-full font-black uppercase text-[11px] sm:text-[13px] tracking-widest shadow-[0_15px_40px_rgba(30,215,96,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-3 animate-bounce shadow-xl"
+            >
+              <Download className="w-5 h-5 sm:w-6 sm:h-6" />
+              <span>Instalar App 1-Click</span>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* --- IOS INSTALL INSTRUCTION (FOOLPROOF) --- */}
+      <AnimatePresence>
+        {showIosPrompt && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/85 backdrop-blur-xl"
+            className="fixed inset-0 z-[100] flex flex-col justify-end bg-black/90 backdrop-blur-xl"
+            onClick={() => setShowIosPrompt(false)}
           >
-            <motion.div
-              initial={{ scale: 0.95, y: 20 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.95, y: 20 }}
-              className="w-full max-w-lg max-h-[90vh] bg-[#0c0c0d] border border-white/10 rounded-[24px] sm:rounded-[32px] overflow-hidden shadow-[0_0_50px_rgba(16,185,129,0.15)] relative flex flex-col"
-            >
-              <div className="h-1 bg-gradient-to-r from-[#10b981]/20 via-[#10b981] to-[#10b981]/20 shrink-0" />
-              <div className="p-4 sm:p-6 pb-3 sm:pb-4 flex justify-between items-start border-b border-white/5 bg-[#0e0e10]/60 shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 sm:w-10 sm:h-10 bg-emerald-500 rounded-xl flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.2)] overflow-hidden relative">
-                    <img src="/icon-512.png" alt="App Icon" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
-                  </div>
-                  <div>
-                    <h3 className="text-sm sm:text-base font-black uppercase tracking-wider text-white">
-                      Instalar App Nativa
-                    </h3>
-                    <p className="text-[9px] sm:text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                      Optimizado para iOS y Android
-                    </p>
-                  </div>
+             <div className="flex-1 flex flex-col items-center justify-center px-6">
+                <button 
+                  onClick={() => setShowIosPrompt(false)}
+                  className="absolute top-6 right-6 p-3 bg-white/10 rounded-full text-white"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+                <div className="w-20 h-20 bg-emerald-500 rounded-[20px] sm:rounded-[24px] flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] mb-8 shrink-0 overflow-hidden">
+                  <img src="/icon-512.png" alt="Flux Music" className="w-full h-full object-cover" />
                 </div>
-                <button
-                  onClick={() => setShowInstallModal(false)}
-                  className="p-1.5 sm:p-2 bg-white/5 hover:bg-white/10 rounded-full transition text-slate-400 hover:text-white cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-              </div>
-
-              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 overflow-y-auto flex-1 text-left min-h-0 [scrollbar-width:thin] [scrollbar-color:rgba(16,185,129,0.2)_transparent]">
-                <p className="text-xs text-slate-300 leading-relaxed text-center">
-                  Instala <strong className="text-emerald-500 font-bold">Flux Player</strong> directamente en tu pantalla de inicio móvil. Disfruta de una experiencia fluida a pantalla completa.
-                </p>
-              </div>
-
-              <div className="p-5 border-t border-white/5 bg-[#0e0e10]/60 flex justify-end gap-3.5">
-                <button
-                  onClick={() => setShowInstallModal(false)}
-                  className="px-5 py-2.5 bg-white/5 rounded-xl text-xs font-black uppercase tracking-wider text-slate-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
-                >
-                  Entendido
-                </button>
-              </div>
-            </motion.div>
+                <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-4 text-center">Instalar en iOS</h2>
+                <div className="bg-[#121212] border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center gap-6 shadow-2xl">
+                   <div className="flex items-center gap-4 text-left w-full">
+                     <div className="w-10 h-10 bg-[#1e1e1e] rounded-xl flex items-center justify-center shrink-0">
+                       <Share className="w-5 h-5 text-[#3b82f6]" />
+                     </div>
+                     <p className="text-sm font-bold text-white leading-snug">
+                       <span className="text-emerald-400">Paso 1:</span> Toca el ícono de <br/><strong>Compartir</strong> en la barra inferior.
+                     </p>
+                   </div>
+                   <div className="h-px w-full bg-white/5" />
+                   <div className="flex items-center gap-4 text-left w-full">
+                     <div className="w-10 h-10 bg-[#1e1e1e] rounded-xl flex items-center justify-center shrink-0">
+                       <PlusSquare className="w-5 h-5 text-white" />
+                     </div>
+                     <p className="text-sm font-bold text-white leading-snug">
+                       <span className="text-emerald-400">Paso 2:</span> Selecciona <br/><strong>"Añadir a inicio"</strong>
+                     </p>
+                   </div>
+                </div>
+             </div>
+             
+             <motion.div 
+                initial={{ y: -10 }}
+                animate={{ y: 10 }}
+                transition={{ repeat: Infinity, duration: 1, repeatType: "reverse" }}
+                className="w-full h-32 flex flex-col items-center justify-end pb-8 gap-2 pointer-events-none"
+             >
+                <span className="text-xs font-black uppercase text-emerald-400 tracking-widest">Toca aquí abajo</span>
+                <ArrowDown className="w-10 h-10 text-emerald-400" />
+             </motion.div>
           </motion.div>
         )}
       </AnimatePresence>

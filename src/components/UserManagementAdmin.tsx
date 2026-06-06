@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
@@ -25,6 +26,87 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     fetchTelegramConfig();
     fetchSupportMessages();
   }, []);
+
+  const downloadPresentation = () => {
+    try {
+      const doc = new jsPDF();
+      
+      // Config colors & fonts for presentation matching Flux Music colors
+      doc.setFillColor(7, 7, 8); // Deep black/slate background
+      doc.rect(0, 0, 210, 297, "F");
+
+      doc.setTextColor(30, 215, 96); // Emerald Green
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(28);
+      doc.text("FLUX MUSIC PRO", 105, 40, { align: "center" });
+
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(16);
+      doc.text("La Evolución Musical para tu Negocio", 105, 50, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(12);
+      doc.setTextColor(200, 200, 200);
+
+      const margin = 20;
+      let y = 75;
+      
+      const lines = [
+        "¿QUÉ ES FLUX MUSIC?",
+        "Flux Music no es solo un reproductor, es una solución integral para ambientes",
+        "comerciales, bares, restaurantes, hoteles y gimnasios.",
+        "Integra toda la biblioteca de YouTube Music con una interfaz premium",
+        "tipo Spotify, garantizando reproducción continua y sin cortes.",
+        "",
+        "----------------------------------------------------------------",
+        "",
+        "BENEFICIOS PARA NEGOCIOS:",
+        "• Control Centralizado y Remoto: Maneja las playlists desde una PC",
+        "  en tu oficina o directamente en tu móvil.",
+        "• Estética Premium: Transmite profesionalismo si tienes pantallas",
+        "  a la vista de los clientes con el modo Player Compacto.",
+        "• Control de Dispositivos: Licencias de 1 a 6 pantallas concurrentes",
+        "  para cubrir todo el establecimiento.",
+        "• Rentabilidad y Privacidad: Música ininterrumpida sin cuentas públicas.",
+        "",
+        "----------------------------------------------------------------",
+        "",
+        "PROPUESTA COMERCIAL PARA PROMOTORES:",
+        "Ofrecemos atractivas comisiones para socios y promotores que sumen locales.",
+        "Puedes dar 14 días de prueba gratuitos al cliente para que viva",
+        "la experiencia sin compromiso. Luego ofrecemos planes hipercompetitivos.",
+        "",
+        "PRECIOS SUGERIDOS PARA PÚBLICO GENERAL:",
+        "Planes privados para no alertar al usuario normal.",
+        "• Plan 1 Pantalla/Usuario: $1.99 / mes",
+        "• Plan 2 Pantallas/Usuarios: $2.99 / mes",
+        "• Funciones Familiares pueden habilitarse si demanda múltiples dispositivos.",
+      ];
+
+      lines.forEach(line => {
+        if (line.includes("¿QUÉ ES") || line.includes("BENEFICIOS:") || line.includes("PROPUESTA") || line.includes("PRECIOS")) {
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(30, 215, 96);
+        } else if (line.includes("---")) {
+          doc.setTextColor(50, 50, 50);
+        } else {
+           doc.setFont("helvetica", "normal");
+           doc.setTextColor(215, 215, 215);
+        }
+        doc.text(line, margin, y);
+        y += 7.5;
+      });
+
+      doc.setFontSize(9);
+      doc.setTextColor(150, 150, 150);
+      doc.text("Documento Confidencial - Propiedad de Flux Music", 105, 280, { align: "center" });
+
+      doc.save("Presentacion_Comercial_Flux_Music.pdf");
+    } catch (error) {
+      console.error("Error generating PDF:", error);
+      alert("Hubo un error al generar el PDF de la presentación.");
+    }
+  };
 
   const fetchSupportMessages = async () => {
     try {
@@ -119,7 +201,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
     try {
       setIsTestingTelegram(true);
-      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Music*. Las solicitudes de acceso de 7 días te llegarán aquí.";
+      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Music*. Las solicitudes de acceso de 14 días te llegarán aquí.";
       
       const response = await fetch(`https://api.telegram.org/bot${telegramToken.trim()}/sendMessage`, {
         method: "POST",
@@ -159,7 +241,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   const handleApproveRequest = async (req: any) => {
     try {
-      if (!window.confirm(`¿Aprobar prueba de 7 días para ${req.email}?`)) return;
+      if (!window.confirm(`¿Aprobar prueba de 14 días para ${req.email}?`)) return;
       
       await updateDoc(doc(db, "users", req.uid), {
         plan: "free",
@@ -218,7 +300,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
   const grantTrial = async (userId: string) => {
     try {
-      if (!window.confirm("¿Activar prueba de 7 días para este usuario?")) return;
+      if (!window.confirm("¿Activar prueba de 14 días para este usuario?")) return;
       await updateDoc(doc(db, "users", userId), {
         plan: "free",
         trialStart: Date.now(),
@@ -279,9 +361,17 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               Gestiona el acceso y planes de los usuarios
             </p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-white/5 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer">
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={downloadPresentation}
+              className="hidden sm:flex items-center justify-center gap-2 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black uppercase text-[10px] tracking-widest px-4 py-2 rounded-full border border-[#1ED760]/20 transition-all shadow-[0_0_15px_rgba(30,215,96,0.1)] hover:shadow-[0_0_20px_rgba(30,215,96,0.2)] active:scale-95"
+            >
+              <Download className="w-4 h-4" /> Presentación Comercial
+            </button>
+            <button onClick={onClose} className="p-2 hover:bg-white/5 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Pestañas de Navegación del Panel */}
@@ -339,7 +429,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
             <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 7 Días ({requests.filter(r => r.status === "pending").length})
+              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 14 Días ({requests.filter(r => r.status === "pending").length})
             </h3>
             
             {loadingRequests ? (
@@ -432,7 +522,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               <Send className="w-4 h-4 text-[#1ED760]" /> Configurar Notificaciones en Telegram
             </h3>
             <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 7 días. Puedes aprobar el acceso directamente con un botón desde este panel.
+              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 14 días. Puedes aprobar el acceso directamente con un botón desde este panel.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -571,10 +661,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                    isActive = true;
                    statusText = `Plan ${u.plan} activo (${Math.ceil((u.subscriptionEnd - now)/msPerDay)} días)`;
                 } else if (u.plan === "free" && u.trialStart) {
-                   const trialEnd = u.trialStart + 7 * msPerDay;
+                   const trialEnd = u.trialStart + 14 * msPerDay;
                    if (trialEnd > now) {
                      isActive = true;
-                     statusText = `Prueba 7 días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
+                     statusText = `Prueba 14 días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
                    } else {
                      statusText = "Prueba finalizada";
                    }
@@ -627,7 +717,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                      {u.email !== "eltygere8651@gmail.com" && (
                        <div className="flex flex-wrap gap-2 mt-auto">
                           <button onClick={() => grantTrial(u.id)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold rounded-lg transition-colors border border-emerald-500/20 cursor-pointer text-center">
-                            Prueba 7 Días
+                            Prueba 14 Días
                           </button>
                           <button onClick={() => updateSub(u.id, "1mo", 31)} className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/30 text-purple-300 text-[10px] font-bold rounded-lg transition-colors border border-purple-500/20 cursor-pointer text-center">
                             31 Días

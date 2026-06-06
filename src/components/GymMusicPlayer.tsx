@@ -868,6 +868,12 @@ export default function GymMusicPlayer() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
+        if (youtubePlayerRef.current) {
+          try {
+            const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+            setPosition(currentSec * 1000);
+          } catch(e) {}
+        }
         if (isPlaying) {
           // Re-establish Screen Wake Lock
           requestWakeLock();
@@ -2687,15 +2693,34 @@ export default function GymMusicPlayer() {
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
                   wasUnexpectedlyPausedRef.current = true;
+                  // Immediately counter react-player pause if in background
+                  setTimeout(() => {
+                    if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                      try {
+                        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                        if (intPlayer && typeof intPlayer.playVideo === "function") {
+                          intPlayer.playVideo();
+                        } else if (intPlayer && typeof intPlayer.play === "function") {
+                          intPlayer.play();
+                        }
+                      } catch(e) {}
+                    }
+                  }, 150);
+                  // Don't update isPlaying state to false so UI doesn't visually pause
+                  return;
                }
                setIsPlaying(false);
             }}
             onEnded={() => handleNext()}
             onProgress={(state) => {
-              setPosition(state.playedSeconds * 1000);
+              if (document.visibilityState === 'visible') {
+                setPosition(state.playedSeconds * 1000);
+              }
             }}
             onDuration={(dur) => {
-              setDuration(dur * 1000);
+              if (document.visibilityState === 'visible' || duration === 0) {
+                setDuration(dur * 1000);
+              }
             }}
             config={{ 
               youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },

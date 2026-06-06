@@ -892,6 +892,19 @@ export default function GymMusicPlayer() {
             }
           }
         }
+      } else if (document.hidden) {
+        // iOS Safari aggressively pauses iframes in the background. 
+        // We try to trigger play exactly when it hides to counter the system pause.
+        if (isPlaying && youtubePlayerRef.current) {
+           try {
+              const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+              if (intPlayer && typeof intPlayer.playVideo === "function") {
+                // Staggered triggers to circumvent browser freeze state
+                setTimeout(() => intPlayer.playVideo(), 50);
+                setTimeout(() => intPlayer.playVideo(), 150);
+              }
+           } catch(e) {}
+        }
       }
     };
 
@@ -899,7 +912,7 @@ export default function GymMusicPlayer() {
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isPlaying, wakeLock]);
+  }, [isPlaying]);
 
   const [volume, setVolume] = useState(() => {
     const savedVol = localStorage.getItem("gym_music_volume");
@@ -940,7 +953,7 @@ export default function GymMusicPlayer() {
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && wasUnexpectedlyPausedRef.current) {
-        showNotification("El sistema pausó el audio en segundo plano. Para evitar cortes, no bloquees el móvil.");
+        showNotification("Si iOS pausa el audio en reposo, recuerda que puedes pulsar Play desde el centro de control o la pantalla de bloqueo.");
         wasUnexpectedlyPausedRef.current = false;
       }
     };
@@ -2588,8 +2601,32 @@ export default function GymMusicPlayer() {
     });
 
     // Define handlers that use the latest state via handlersRef to avoid stale closures
-    const playHandler = () => handlersRef.current.setIsPlaying(true);
-    const pauseHandler = () => handlersRef.current.setIsPlaying(false);
+    const playHandler = () => {
+      expectedPlayingRef.current = true;
+      handlersRef.current.setIsPlaying(true);
+      if (youtubePlayerRef.current) {
+        try {
+          const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+          if (intPlayer && typeof intPlayer.playVideo === "function") {
+            intPlayer.playVideo();
+          } else if (intPlayer && typeof intPlayer.play === "function") {
+            intPlayer.play();
+          }
+        } catch (e) {}
+      }
+    };
+    const pauseHandler = () => {
+      expectedPlayingRef.current = false;
+      handlersRef.current.setIsPlaying(false);
+      if (youtubePlayerRef.current) {
+        try {
+          const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+          if (intPlayer && typeof intPlayer.pauseVideo === "function") {
+            intPlayer.pauseVideo();
+          }
+        } catch (e) {}
+      }
+    };
     const nextHandler = () => handlersRef.current.handleNext();
     const prevHandler = () => handlersRef.current.handlePrev();
 

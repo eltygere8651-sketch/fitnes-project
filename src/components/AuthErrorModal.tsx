@@ -79,7 +79,7 @@ export const AuthErrorModal: React.FC = () => {
   }
 
   return (
-    <div id="auth-error-modal" className="fixed inset-0 z-[9999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div id="auth-error-modal" className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
       <div className="relative w-full max-w-lg bg-[#111112] border border-white/10 rounded-[28px] overflow-hidden shadow-[0_0_50px_rgba(239,68,68,0.15)] flex flex-col max-h-[90vh]">
         
         {/* Header decoration */}

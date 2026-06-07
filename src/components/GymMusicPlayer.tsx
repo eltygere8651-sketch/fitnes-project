@@ -2558,29 +2558,32 @@ export default function GymMusicPlayer() {
   const lastSyncTrackRef = useRef<number>(-1);
   const lastSyncIsPlayingRef = useRef<boolean>(false);
   const lastSessionSyncTimeRef = useRef<number>(0);
+  const lastSyncDurationRef = useRef<number>(0);
 
   useEffect(() => {
-    const now = Date.now();
     const isPlayingChanged = lastSyncIsPlayingRef.current !== isPlaying;
     const isNewTrack = lastSyncTrackRef.current !== currentTrackIndex;
-    // Throttle rate is 8 seconds on Eco mode, else 3 seconds (avoids blasting OS audio subsystem)
-    const isThrottleTimeoutPassed = now - lastSessionSyncTimeRef.current > (isEcoMode ? 8000 : 3000);
+    const isDurationChanged = lastSyncDurationRef.current !== duration;
 
-    if (isPlayingChanged || isNewTrack || isThrottleTimeoutPassed) {
+    // Only synchronize media session on explicit playback state shifts or duration loads
+    // to strictly preserve zero-CPU idling when playing in the background.
+    if (isPlayingChanged || isNewTrack || isDurationChanged) {
       if ("mediaSession" in navigator && "setPositionState" in navigator.mediaSession) {
         try {
+          // Fetch exact native time to prevent lockscreen progress jump backwards
+          const actualSeconds = youtubePlayerRef.current?.getCurrentTime() || (position / 1000);
           navigator.mediaSession.setPositionState({
             duration: (duration || 0) / 1000,
             playbackRate: 1,
-            position: (position || 0) / 1000,
+            position: actualSeconds,
           });
-          lastSessionSyncTimeRef.current = now;
+          lastSyncDurationRef.current = duration;
           lastSyncTrackRef.current = currentTrackIndex;
           lastSyncIsPlayingRef.current = isPlaying;
         } catch (e) {}
       }
     }
-  }, [position, duration, isPlaying, currentTrackIndex, isEcoMode]);
+  }, [position, duration, isPlaying, currentTrackIndex]);
 
   const registerMediaSession = useCallback(() => {
     if (!("mediaSession" in navigator)) return;
@@ -2638,13 +2641,29 @@ export default function GymMusicPlayer() {
       ["seekforward", () => {
         if (youtubePlayerRef.current) {
           const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
-          youtubePlayerRef.current.seekTo(currentSec + 10, "seconds");
+          const target = currentSec + 10;
+          youtubePlayerRef.current.seekTo(target, "seconds");
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: (duration || 0) / 1000,
+              playbackRate: 1,
+              position: target,
+            });
+          } catch(e){}
         }
       }],
       ["seekbackward", () => {
         if (youtubePlayerRef.current) {
           const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
-          youtubePlayerRef.current.seekTo(Math.max(0, currentSec - 10), "seconds");
+          const target = Math.max(0, currentSec - 10);
+          youtubePlayerRef.current.seekTo(target, "seconds");
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: (duration || 0) / 1000,
+              playbackRate: 1,
+              position: target,
+            });
+          } catch(e){}
         }
       }],
     ];
@@ -2662,6 +2681,13 @@ export default function GymMusicPlayer() {
       navigator.mediaSession.setActionHandler("seekto", (details) => {
         if (details.seekTime !== undefined && youtubePlayerRef.current) {
           youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: (duration || 0) / 1000,
+              playbackRate: 1,
+              position: details.seekTime,
+            });
+          } catch(e){}
         }
       });
     } catch (e) {}
@@ -2685,7 +2711,7 @@ export default function GymMusicPlayer() {
   // --- DERIVED UI STATES (already defined above) ---
 
   return (
-    <div className={`bg-[#080809]/90 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-3xl'} text-white ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]`}>
+    <div className={`bg-[#080809]/90  text-white ${isEcoMode ? 'shadow-lg' : 'shadow-2xl'} h-full w-full flex flex-col border border-white/5 overflow-hidden font-sans relative sm:rounded-[40px] rounded-[32px]`}>
       <AnimatePresence>
         {notification && (
           <motion.div
@@ -2700,14 +2726,14 @@ export default function GymMusicPlayer() {
         )}
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden select-none z-[-1] opacity-0 flex">
+      <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
         {currentUrl && (
           <ReactPlayer
             ref={youtubePlayerRef}
             url={currentUrl}
             playing={isPlaying}
             volume={volume / 100}
-            progressInterval={1000}
+            progressInterval={5000}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
               // Do not show an intrusive UI notification on error, as embedded videos
@@ -2901,7 +2927,7 @@ export default function GymMusicPlayer() {
         {/* SIDEBAR OVERLAY BACKGROUND (Desktop only) */}
         {isSidebarExpanded && (
            <div 
-             className="hidden md:block absolute inset-0 bg-black/60 backdrop-blur-sm z-[40]" 
+             className="hidden md:block absolute inset-0 bg-black/60  z-[40]" 
              onClick={() => setIsSidebarExpanded(false)}
            />
         )}
@@ -3045,7 +3071,7 @@ export default function GymMusicPlayer() {
                                 {/* Move Folder Action */}
                                 <button
                                   onClick={(e) => toggleMoverPlaylistACarpeta(pl, e)}
-                                  className={`p-1.5 rounded-lg transition-all shadow-xl backdrop-blur-md cursor-pointer ${
+                                  className={`p-1.5 rounded-lg transition-all shadow-xl  cursor-pointer ${
                                     isInFolder 
                                       ? 'bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-black border border-amber-500/20' 
                                       : 'bg-[#1ED760]/10 hover:bg-[#1ED760] text-[#1ED760] hover:text-black border border-[#1ED760]/20'
@@ -3066,7 +3092,7 @@ export default function GymMusicPlayer() {
                                       e.stopPropagation();
                                       startDeleting(pl.id);
                                     }}
-                                    className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all shadow-xl backdrop-blur-md border border-red-500/20 cursor-pointer"
+                                    className="p-1.5 bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white rounded-lg transition-all shadow-xl  border border-red-500/20 cursor-pointer"
                                     title="Eliminar Canal"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
@@ -3257,7 +3283,7 @@ export default function GymMusicPlayer() {
         <div className={`${mobileView === "player" ? "flex" : "hidden md:flex"} flex-col-reverse md:flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
-          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85 ${isEcoMode ? 'backdrop-blur-md' : 'backdrop-blur-2xl'} border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
+          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
             
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -3426,7 +3452,7 @@ export default function GymMusicPlayer() {
                       </button>
 
                       {/* Center: Tabs Switcher - Centered perfectly relative to the artwork width */}
-                      <div className="w-full max-w-[200px] sm:max-w-[290px] flex items-center bg-white/[0.04] backdrop-blur-md border border-white/5 rounded-full p-0.5 tracking-wider select-none relative">
+                      <div className="w-full max-w-[200px] sm:max-w-[290px] flex items-center bg-white/[0.04]  border border-white/5 rounded-full p-0.5 tracking-wider select-none relative">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -3493,7 +3519,7 @@ export default function GymMusicPlayer() {
                         )}
 
                         {playerTab === "siguiente" && (
-                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60 backdrop-blur-md rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
+                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60  rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
                             <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase mb-2 px-1">
                               A continuación • {playingPlaylist?.name || "Lista actual"}
                             </span>
@@ -3554,7 +3580,7 @@ export default function GymMusicPlayer() {
                         )}
 
                         {playerTab === "cola" && (
-                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60 backdrop-blur-md rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
+                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60  rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
                             <div className="flex items-center justify-between mb-2 px-1">
                               <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase block">
                                 Cola de Reproducción • {trackQueue.length} Canciones
@@ -4600,7 +4626,7 @@ export default function GymMusicPlayer() {
               setMobileView("player");
               setIsTrackListExpanded(false);
             }}
-            className="flex items-center gap-3 p-2 rounded-2xl bg-[#16161a]/95 backdrop-blur-2xl border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.7)] active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
+            className="flex items-center gap-3 p-2 rounded-2xl bg-[#16161a]/95  border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.7)] active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
           >
             {/* Progress Bar background */}
             <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white/[0.08]">
@@ -4651,7 +4677,7 @@ export default function GymMusicPlayer() {
       )}
 
       {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden flex h-[58px] bg-[#0c0c0d]/95 backdrop-blur-md border-t border-white/5 shrink-0 justify-around items-center px-1 pb-1 pt-1 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
+      <div className="md:hidden flex h-[58px] bg-[#0c0c0d]/95  border-t border-white/5 shrink-0 justify-around items-center px-1 pb-1 pt-1 z-[60] shadow-[0_-4px_16px_rgba(0,0,0,0.5)]">
         {/* Explorar */}
         <button 
           onClick={() => {
@@ -4739,7 +4765,7 @@ export default function GymMusicPlayer() {
       </div>
 
       {showNicknameModal && (
-        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/95 backdrop-blur-md">
+        <div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-black/95 ">
           <div className="w-full max-w-sm bg-[#0d0d0f] border border-emerald-500/30 rounded-3xl p-6 shadow-[0_0_50px_rgba(30,215,96,0.15)] text-center relative overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-emerald-500 via-[#1ED760] to-teal-500" />
             <h3 className="text-lg font-black text-white uppercase tracking-widest mb-2">Configura tu Nickname</h3>
@@ -4862,7 +4888,7 @@ export default function GymMusicPlayer() {
                                     {pl.isAdminContent && <BadgeCheck className="w-2.5 h-2.5 fill-black" />}
                                     {pl.isAdminContent ? "VERIFICADA" : "Comunidad"}
                                   </div>
-                                  <div className="px-2 py-0.5 bg-black/85 backdrop-blur-md rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-white uppercase tracking-widest border border-white/10 shadow-md">
+                                  <div className="px-2 py-0.5 bg-black/85  rounded-md text-[9px] sm:text-[10.5px] font-extrabold text-white uppercase tracking-widest border border-white/10 shadow-md">
                                     {pl.tracks.length} P • {calculatePlaylistDuration(pl.tracks)}
                                   </div>
                                 </div>
@@ -4903,7 +4929,7 @@ export default function GymMusicPlayer() {
                                     e.stopPropagation();
                                     if (!alreadySaved) saveCommunityPlaylistToLibrary(pl);
                                   }}
-                                  className={`w-7 h-7 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg border shadow-2xl transition-all ${alreadySaved ? "text-[#1ED760] border-[#1ED760]/30 cursor-default" : "text-slate-400 hover:text-[#1ED760] border-white/10 hover:border-[#1ED760]/30 cursor-pointer hover:scale-110 active:scale-95"}`}
+                                  className={`w-7 h-7 flex items-center justify-center bg-black/95  rounded-lg border shadow-2xl transition-all ${alreadySaved ? "text-[#1ED760] border-[#1ED760]/30 cursor-default" : "text-slate-400 hover:text-[#1ED760] border-white/10 hover:border-[#1ED760]/30 cursor-pointer hover:scale-110 active:scale-95"}`}
                                   title={alreadySaved ? "En tu biblioteca" : "Añadir a mi Biblioteca"}
                                 >
                                   {alreadySaved ? <Check className="w-3.5 h-3.5 stroke-[3px]" /> : <Plus className="w-3.5 h-3.5 stroke-[3px]" />}
@@ -4917,7 +4943,7 @@ export default function GymMusicPlayer() {
                                     e.stopPropagation();
                                     startEditing(pl);
                                   }}
-                                  className="w-7 h-7 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
+                                  className="w-7 h-7 flex items-center justify-center bg-black/95  rounded-lg text-slate-400 hover:text-emerald-400 border border-white/10 hover:border-emerald-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
                                   title="Editar"
                                 >
                                   <Edit2 className="w-3 h-3" />
@@ -4927,7 +4953,7 @@ export default function GymMusicPlayer() {
                                     e.stopPropagation();
                                     startDeleting(pl.id);
                                   }}
-                                  className="w-7 h-7 flex items-center justify-center bg-black/95 backdrop-blur-xl rounded-lg text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
+                                  className="w-7 h-7 flex items-center justify-center bg-black/95  rounded-lg text-slate-400 hover:text-red-400 border border-white/10 hover:border-red-500/30 shadow-2xl transition-all cursor-pointer hover:scale-110 active:scale-95"
                                   title="Eliminar"
                                 >
                                   <Trash2 className="w-3 h-3" />
@@ -5168,9 +5194,9 @@ export default function GymMusicPlayer() {
       <AnimatePresence>
         {editingId && (
           <motion.div
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
@@ -5286,9 +5312,9 @@ export default function GymMusicPlayer() {
       <AnimatePresence>
         {editingTrack && (
           <motion.div
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
             className="fixed inset-0 z-[105] flex items-center justify-center p-4 sm:p-6 bg-black/85"
           >
             <motion.div
@@ -5381,9 +5407,9 @@ export default function GymMusicPlayer() {
       <AnimatePresence>
         {trackToDeleteConfirm && (
           <motion.div
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
@@ -5445,9 +5471,9 @@ export default function GymMusicPlayer() {
       <AnimatePresence>
         {deletingId && (
           <motion.div
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(8px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
             className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6 bg-black/80"
           >
             <motion.div
@@ -5547,7 +5573,7 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 "
           >
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -5722,7 +5748,7 @@ export default function GymMusicPlayer() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 backdrop-blur-md"
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 "
           >
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
@@ -5812,9 +5838,9 @@ export default function GymMusicPlayer() {
       <AnimatePresence>
         {playlistToCopy && (
           <motion.div
-            initial={{ opacity: 0, backdropFilter: "blur(0px)" }}
-            animate={{ opacity: 1, backdropFilter: "blur(12px)" }}
-            exit={{ opacity: 0, backdropFilter: "blur(0px)" }}
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
             className="fixed inset-0 z-[101] flex items-center justify-center p-4 sm:p-6 bg-black/85"
           >
             <motion.div
@@ -5986,7 +6012,7 @@ export default function GymMusicPlayer() {
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
-        <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000] backdrop-blur-3xl flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
+        <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
           {/* Authentic Spotify premium subtle ambient green glow */}
           <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-80 h-80 rounded-full bg-[#1ED760]/10 blur-[120px] pointer-events-none animate-pulse" />
 

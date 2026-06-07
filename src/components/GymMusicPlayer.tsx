@@ -815,6 +815,7 @@ export default function GymMusicPlayer() {
 
   const requestWakeLock = async () => {
     if (!('wakeLock' in navigator)) return;
+    if (isEcoMode) return;
     try {
       const lock = await navigator.wakeLock.request('screen');
       setWakeLock(lock);
@@ -938,6 +939,7 @@ export default function GymMusicPlayer() {
   }, [isRepeat]);
 
   const youtubePlayerRef = useRef<any>(null);
+  const fallbackSilentAudioRef = useRef<HTMLAudioElement>(null);
   const expectedPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
@@ -1036,11 +1038,18 @@ export default function GymMusicPlayer() {
     const nextPlaying = !isPlaying;
     expectedPlayingRef.current = nextPlaying;
     
+    if (nextPlaying) {
+      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
+    } else {
+      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
+    }
+    
     setIsPlaying(nextPlaying);
   }, [isPlaying]);
 
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
+    if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
 
     if (trackQueueRef.current.length > 0) {
       const nextTrack = trackQueueRef.current[0];
@@ -1100,6 +1109,7 @@ export default function GymMusicPlayer() {
   const handlePrev = useCallback(() => {
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
+    if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
 
     if (isShuffle) {
       const tracksList = displayTracks;
@@ -1154,25 +1164,27 @@ export default function GymMusicPlayer() {
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       // Background auto-cleanup of Martina's playlist (keep only up to 80 tracks, removing any extras added by mistake)
-      snapshot.docs.forEach((playlistDoc) => {
-        const data = playlistDoc.data();
-        const name = data.name || "";
-        if (name.toLowerCase().includes("martina")) {
-          const tracks = data.tracks || [];
-          if (tracks.length > 80) {
-            console.log("Detected extra tracks in Martina playlist. Automatically pruning to 80...");
-            const pruned = tracks.slice(0, 80);
-            updateDoc(playlistDoc.ref, {
-              tracks: pruned,
-              updatedAt: serverTimestamp()
-            }).then(() => {
-              console.log("Successfully pruned Martina's playlist down to the first 80 tracks.");
-            }).catch(e => {
-              console.error("Failed to auto-prune Martina's playlist:", e);
-            });
+      if (isAdmin) {
+        snapshot.docs.forEach((playlistDoc) => {
+          const data = playlistDoc.data();
+          const name = data.name || "";
+          if (name.toLowerCase().includes("martina")) {
+            const tracks = data.tracks || [];
+            if (tracks.length > 80) {
+              console.log("Detected extra tracks in Martina playlist. Automatically pruning to 80...");
+              const pruned = tracks.slice(0, 80);
+              updateDoc(playlistDoc.ref, {
+                tracks: pruned,
+                updatedAt: serverTimestamp()
+              }).then(() => {
+                console.log("Successfully pruned Martina's playlist down to the first 80 tracks.");
+              }).catch(e => {
+                console.error("Failed to auto-prune Martina's playlist:", e);
+              });
+            }
           }
-        }
-      });
+        });
+      }
 
       const folders = snapshot.docs.map((doc) => {
         const data = doc.data();
@@ -2585,6 +2597,17 @@ export default function GymMusicPlayer() {
     }
   }, [position, duration, isPlaying, currentTrackIndex]);
 
+  // Ensure fallback silent audio track is in sync to preserve active audio session
+  useEffect(() => {
+    if (fallbackSilentAudioRef.current) {
+      if (isPlaying) {
+        fallbackSilentAudioRef.current.play().catch(() => {});
+      } else {
+        fallbackSilentAudioRef.current.pause();
+      }
+    }
+  }, [isPlaying]);
+
   const registerMediaSession = useCallback(() => {
     if (!("mediaSession" in navigator)) return;
 
@@ -2604,6 +2627,7 @@ export default function GymMusicPlayer() {
     const playHandler = () => {
       expectedPlayingRef.current = true;
       handlersRef.current.setIsPlaying(true);
+      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -2618,6 +2642,7 @@ export default function GymMusicPlayer() {
     const pauseHandler = () => {
       expectedPlayingRef.current = false;
       handlersRef.current.setIsPlaying(false);
+      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -2727,6 +2752,12 @@ export default function GymMusicPlayer() {
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
       <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
+        <audio
+          ref={fallbackSilentAudioRef}
+          src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+          loop
+          playsInline
+        />
         {currentUrl && (
           <ReactPlayer
             ref={youtubePlayerRef}
@@ -3155,7 +3186,7 @@ export default function GymMusicPlayer() {
                             <ListMusic className="w-5 h-5 shadow-lg" />
                             {sortedFolderList.length > 0 && (
                               <span className="absolute -bottom-0.5 -right-0.5 flex h-2 w-2">
-                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                                <span className={`${isEcoMode ? '' : 'animate-ping'} absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75`}></span>
                                 <span className="relative inline-flex rounded-full h-2 w-2 bg-[#1ED760]"></span>
                               </span>
                             )}
@@ -3542,7 +3573,7 @@ export default function GymMusicPlayer() {
                                     }}
                                     className={`group/item flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-pointer ${
                                       isActive 
-                                        ? "bg-white/[0.08] text-white border-l-2 border-emerald-500 shadow-sm animate-pulse" 
+                                        ? `bg-white/[0.08] text-white border-l-2 border-emerald-500 shadow-sm ${!isEcoMode ? "animate-pulse" : ""}` 
                                         : "hover:bg-white/[0.04] text-slate-300 hover:text-white"
                                     }`}
                                   >
@@ -4354,7 +4385,7 @@ export default function GymMusicPlayer() {
                       if (filteredQueue.length === 0) {
                         return (
                           <div className="p-12 text-center text-slate-400 text-xs font-medium space-y-3">
-                            <ListMusic className="w-8 h-8 text-slate-600 mx-auto animate-pulse" />
+                            <ListMusic className={`w-8 h-8 text-slate-600 mx-auto ${isEcoMode ? '' : 'animate-pulse'}`} />
                             <p>{searchQuery ? "No se encontraron coincidencias en la cola." : "No hay canciones en la cola de reproducción."}</p>
                             {!searchQuery && (
                               <p className="text-[10px] text-slate-500">
@@ -5097,9 +5128,9 @@ export default function GymMusicPlayer() {
                                     {isCurrentlyActiveInPlayer ? (
                                       isCurrentlyPlaying ? (
                                         <div className="flex items-end gap-0.5 h-2.5">
-                                          <div className="w-0.5 bg-[#1ED760] h-full animate-bounce" style={{ animationDelay: "0.1s", animationDuration: "0.8s" }} />
-                                          <div className="w-0.5 bg-[#1ED760] h-2/3 animate-bounce" style={{ animationDelay: "0.3s", animationDuration: "0.5s" }} />
-                                          <div className="w-0.5 bg-[#1ED760] h-1/2 animate-bounce" style={{ animationDelay: "0s", animationDuration: "0.7s" }} />
+                                          <div className={`w-0.5 bg-[#1ED760] h-full ${isEcoMode ? '' : 'animate-bounce'}`} style={{ animationDelay: "0.1s", animationDuration: "0.8s" }} />
+                                          <div className={`w-0.5 bg-[#1ED760] h-2/3 ${isEcoMode ? '' : 'animate-bounce'}`} style={{ animationDelay: "0.3s", animationDuration: "0.5s" }} />
+                                          <div className={`w-0.5 bg-[#1ED760] h-1/2 ${isEcoMode ? '' : 'animate-bounce'}`} style={{ animationDelay: "0s", animationDuration: "0.7s" }} />
                                         </div>
                                       ) : (
                                         <Play className="w-3 h-3 text-[#1ED760] fill-[#1ED760]" />

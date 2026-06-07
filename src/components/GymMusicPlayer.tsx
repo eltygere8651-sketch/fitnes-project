@@ -854,6 +854,8 @@ export default function GymMusicPlayer() {
 
   // Maintain mobile audio focus natively
   const fallbackSilentAudioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const [forceIframeFallbackId, setForceIframeFallbackId] = useState<string | null>(null);
 
   useEffect(() => {
     if (isPlaying && fallbackSilentAudioRef.current) {
@@ -902,6 +904,9 @@ export default function GymMusicPlayer() {
                 // Staggered triggers to circumvent browser freeze state
                 setTimeout(() => intPlayer.playVideo(), 50);
                 setTimeout(() => intPlayer.playVideo(), 150);
+              } else if (intPlayer && typeof intPlayer.play === "function") {
+                setTimeout(() => intPlayer.play(), 50);
+                setTimeout(() => intPlayer.play(), 150);
               }
            } catch(e) {}
         }
@@ -1035,7 +1040,19 @@ export default function GymMusicPlayer() {
   const baseCurrentTrack =
     displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
-  const currentUrl = currentTrack.url || "";
+  
+  let currentUrl = currentTrack.url || "";
+  if (currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be")) {
+    const match = currentUrl.match(/[?&]v=([^&]+)/) || currentUrl.match(/youtu\.be\/([^?]+)/);
+    if (match && match[1]) {
+      const vidId = match[1];
+      if (vidId !== forceIframeFallbackId) {
+        // Use the direct native audio extraction stream endpoint instead of the YouTube iframe
+        // This reduces battery consumption massively and prevents background cutoff.
+        currentUrl = `/api/youtube/stream/${vidId}.mp3`;
+      }
+    }
+  }
 
   const togglePlayback = useCallback(() => {
     expectedPlayingRef.current = !isPlaying;
@@ -2623,6 +2640,8 @@ export default function GymMusicPlayer() {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
           if (intPlayer && typeof intPlayer.pauseVideo === "function") {
             intPlayer.pauseVideo();
+          } else if (intPlayer && typeof intPlayer.pause === "function") {
+            intPlayer.pause();
           }
         } catch (e) {}
       }
@@ -2709,6 +2728,17 @@ export default function GymMusicPlayer() {
             playing={isPlaying}
             volume={volume / 100}
             progressInterval={1000}
+            onError={(e) => {
+              console.warn("ReactPlayer Error:", e);
+              if (currentUrl.includes("/api/youtube/stream/")) {
+                const match = currentUrl.match(/\/api\/youtube\/stream\/(.+)\.mp3/);
+                if (match && match[1]) {
+                  console.warn("Falling back to standard YouTube streaming for:", match[1]);
+                  setForceIframeFallbackId(match[1]);
+                  showNotification("Modo optimizado no disponible. Usando reproductor estándar.");
+                }
+              }
+            }}
             onReady={(player) => {
               if (initialLoadRef.current) {
                 const savedPos = localStorage.getItem("gym_music_saved_position");

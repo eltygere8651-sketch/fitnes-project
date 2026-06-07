@@ -369,7 +369,7 @@ app.get("/api/youtube/explore", async (req, res) => {
     const explorePromise = yt.music.getExplore().catch(() => null);
 
     // Explicitly grab the top playlists based on country concurrently
-    const [explore, top100Res, tendenciasRes, dailyRes] = await Promise.all([
+    const [explore, top100Res, tendenciasRes, dailyRes] = await Promise.all<any>([
       explorePromise,
       yt.search(`Top 100 Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
       yt.search(`Top 20 Tendencias ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
@@ -501,8 +501,8 @@ app.get("/api/youtube/playlist", async (req, res) => {
             const firstSection = searchRes.contents[0];
             if (firstSection && firstSection.contents) {
               rawVideos = firstSection.contents;
-            } else if (searchRes.results) {
-              rawVideos = searchRes.results;
+            } else if ((searchRes as any).results) {
+              rawVideos = (searchRes as any).results;
             }
           }
         } else {
@@ -939,6 +939,79 @@ app.post("/api/support/telegram", async (req, res) => {
   } catch (err) {
     console.error("Telegram support API error:", err);
     return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// Audio Stream proxy endpoint to bypass iframe
+app.get("/api/youtube/stream/:id.mp3", async (req, res) => {
+  const videoId = req.params.id as string;
+  if (!videoId) return res.status(400).send("Missing ID");
+  
+  if (!yt) {
+    try {
+      yt = await Innertube.create();
+    } catch (e) {
+      return res.status(503).json({ error: "YouTube service unavailable" });
+    }
+  }
+
+  let info: any = null;
+  let finalClient: any = null;
+  const clientsToTry: any[] = ['WEB', 'ANDROID', 'YTMUSIC', 'YTMUSIC_ANDROID', 'TV_EMBEDDED'];
+
+  for (const client of clientsToTry) {
+    try {
+      info = await yt.getBasicInfo(videoId, { client });
+      if (info.playability_status?.status === 'OK' || info.playability_status?.status === 'UNPLAYABLE') {
+        finalClient = client;
+        break; // we found a working client
+      }
+    } catch (e) {
+      // try next client
+    }
+  }
+
+  if (!info || !finalClient) {
+    try {
+      info = await yt.getBasicInfo(videoId); 
+      finalClient = 'WEB';
+    } catch (e) {
+      if (!res.headersSent) return res.status(500).send("Extraction error");
+      return;
+    }
+  }
+
+  try {
+    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
+    
+    if (!format) {
+      return res.status(404).send("No audio format found");
+    }
+
+    res.setHeader("Content-Type", format.mime_type || "audio/webm");
+    res.setHeader("Transfer-Encoding", "chunked");
+    
+    const stream = await yt.download(videoId, { type: 'audio', quality: 'best', client: finalClient });
+    
+    // Convert ReadableStream to Node stream
+    const reader = stream.getReader();
+    const push = async () => {
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(value);
+        }
+        res.end();
+      } catch (err) {
+        console.error("Stream pipe error:", err);
+        res.end();
+      }
+    };
+    push();
+  } catch (err: any) {
+    console.warn("Streaming extraction fallback triggered:", err.message);
+    if (!res.headersSent) res.status(500).send("Extraction error");
   }
 });
 

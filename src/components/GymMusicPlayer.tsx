@@ -853,18 +853,6 @@ export default function GymMusicPlayer() {
 
 
   // Maintain mobile audio focus natively
-  const fallbackSilentAudioRef = useRef<HTMLAudioElement | null>(null);
-  
-  const [forceIframeFallbackId, setForceIframeFallbackId] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isPlaying && fallbackSilentAudioRef.current) {
-      // Intentionally ignore promise rejection to avoid console spam / loops
-      fallbackSilentAudioRef.current.play().catch(() => {});
-    } else if (!isPlaying && fallbackSilentAudioRef.current) {
-      fallbackSilentAudioRef.current.pause();
-    }
-  }, [isPlaying]);
 
   // Document Visibility & Screen Unlock Event handling to synchronize playback
   useEffect(() => {
@@ -1041,28 +1029,12 @@ export default function GymMusicPlayer() {
     displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
   
-  let currentUrl = currentTrack.url || "";
-  if (currentUrl.includes("youtube.com") || currentUrl.includes("youtu.be")) {
-    const match = currentUrl.match(/[?&]v=([^&]+)/) || currentUrl.match(/youtu\.be\/([^?]+)/);
-    if (match && match[1]) {
-      const vidId = match[1];
-      if (vidId !== forceIframeFallbackId) {
-        // Use the direct native audio extraction stream endpoint instead of the YouTube iframe
-        // This reduces battery consumption massively and prevents background cutoff.
-        currentUrl = `/api/youtube/stream/${vidId}.mp3`;
-      }
-    }
-  }
+  const currentUrl = currentTrack.url || "";
+  const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
   const togglePlayback = useCallback(() => {
     const nextPlaying = !isPlaying;
     expectedPlayingRef.current = nextPlaying;
-    
-    if (nextPlaying && fallbackSilentAudioRef.current) {
-      fallbackSilentAudioRef.current.play().catch(() => {});
-    } else if (!nextPlaying && fallbackSilentAudioRef.current) {
-      fallbackSilentAudioRef.current.pause();
-    }
     
     setIsPlaying(nextPlaying);
   }, [isPlaying]);
@@ -2629,9 +2601,6 @@ export default function GymMusicPlayer() {
     const playHandler = () => {
       expectedPlayingRef.current = true;
       handlersRef.current.setIsPlaying(true);
-      if (fallbackSilentAudioRef.current) {
-         fallbackSilentAudioRef.current.play().catch(() => {});
-      }
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -2646,9 +2615,6 @@ export default function GymMusicPlayer() {
     const pauseHandler = () => {
       expectedPlayingRef.current = false;
       handlersRef.current.setIsPlaying(false);
-      if (fallbackSilentAudioRef.current) {
-         fallbackSilentAudioRef.current.pause();
-      }
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -2742,16 +2708,11 @@ export default function GymMusicPlayer() {
             playing={isPlaying}
             volume={volume / 100}
             progressInterval={1000}
-            onError={(e) => {
+            onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
-              if (currentUrl.includes("/api/youtube/stream/")) {
-                const match = currentUrl.match(/\/api\/youtube\/stream\/(.+)\.mp3/);
-                if (match && match[1]) {
-                  console.warn("Falling back to standard YouTube streaming for:", match[1]);
-                  setForceIframeFallbackId(match[1]);
-                  showNotification("Modo optimizado no disponible. Usando reproductor estándar.");
-                }
-              }
+              // Do not show an intrusive UI notification on error, as embedded videos
+              // might fail to load (e.g., deleted or embedding disabled).
+              // Rely on visual state or allow user to skip manually.
             }}
             onReady={(player) => {
               if (initialLoadRef.current) {
@@ -2804,7 +2765,19 @@ export default function GymMusicPlayer() {
               }
             }}
             config={{ 
-              youtube: { playerVars: { origin: window.location.origin, playsinline: 1 } },
+              youtube: { 
+                playerVars: { 
+                  origin: window.location.origin, 
+                  playsinline: 1,
+                  controls: 0,
+                  disablekb: 1,
+                  fs: 0,
+                  modestbranding: 1,
+                  rel: 0,
+                  iv_load_policy: 3,
+                  hl: 'en'
+                } 
+              },
               file: { 
                 forceAudio: true, 
                 attributes: { playsInline: true, id: 'native-audio' }
@@ -2815,14 +2788,6 @@ export default function GymMusicPlayer() {
             playsinline={true}
           />
         )}
-        <audio
-          ref={fallbackSilentAudioRef}
-          loop
-          playsInline
-          preload="auto"
-          src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEARKwAAIhYAQACABAAZGF0YQAAAAA="
-          className="hidden"
-        />
       </div>
 
       {/* GLOBAL TABS / PILLS HEADER */}

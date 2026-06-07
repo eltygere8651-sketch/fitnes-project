@@ -1,4 +1,5 @@
 import express from "express";
+import youtubedl from 'youtube-dl-exec';
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
@@ -36,7 +37,7 @@ let yt: Innertube | null = null;
 
 async function initYoutube() {
   try {
-    yt = await Innertube.create();
+    yt = await Innertube.create({ generate_session_locally: true });
     console.log("YouTube InnerTube initialized");
   } catch (err) {
     console.error("YouTube InnerTube Error:", err);
@@ -77,7 +78,7 @@ app.get("/api/youtube/search", async (req, res) => {
 
   if (!yt) {
     try {
-      yt = await Innertube.create();
+      yt = await Innertube.create({ generate_session_locally: true });
     } catch (e) {
       return res.status(503).json({ error: "YouTube service unavailable" });
     }
@@ -942,86 +943,8 @@ app.post("/api/support/telegram", async (req, res) => {
   }
 });
 
-// Audio Stream proxy endpoint to bypass iframe
-app.get("/api/youtube/stream/:id.mp3", async (req, res) => {
-  const videoId = req.params.id as string;
-  if (!videoId) return res.status(400).send("Missing ID");
-  
-  if (!yt) {
-    try {
-      yt = await Innertube.create();
-    } catch (e) {
-      return res.status(503).json({ error: "YouTube service unavailable" });
-    }
-  }
+// Fallback to fetch metadata or check
 
-  let info: any = null;
-  let finalClient: any = null;
-  const clientsToTry: any[] = ['WEB', 'ANDROID', 'YTMUSIC', 'YTMUSIC_ANDROID', 'TV_EMBEDDED'];
-
-  for (const client of clientsToTry) {
-    try {
-      info = await yt.getBasicInfo(videoId, { client });
-      if (info.playability_status?.status === 'OK' || info.playability_status?.status === 'UNPLAYABLE') {
-        finalClient = client;
-        break; // we found a working client
-      }
-    } catch (e) {
-      // try next client
-    }
-  }
-
-  if (!info || !finalClient) {
-    try {
-      info = await yt.getBasicInfo(videoId); 
-      finalClient = 'WEB';
-    } catch (e) {
-      console.warn("YouTube Innertube failed, falling back to Piped instance...");
-      try {
-        const pipedRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
-        const pipedData = await pipedRes.json();
-        if (pipedData && pipedData.audioStreams && pipedData.audioStreams.length > 0) {
-           const bestAudio = pipedData.audioStreams.find((s: any) => s.bitrate === Math.max(...pipedData.audioStreams.map((s: any) => s.bitrate)));
-           if (bestAudio && bestAudio.url) {
-             return res.redirect(bestAudio.url);
-           }
-        }
-      } catch (err) {
-        console.error("Piped fallback failed:", err);
-      }
-
-      // Final fallback to Invidious if piped fails
-      try {
-         const invRes = await fetch(`https://vid.puffyan.us/api/v1/videos/${videoId}`);
-         const invData = await invRes.json();
-         if (invData && invData.formatStreams) {
-            const hq = invData.formatStreams.find((s:any) => s.resolution === '720p' || !s.resolution);
-            if (hq && hq.url) return res.redirect(hq.url);
-         }
-      } catch(err) {
-         console.error("Invidious fallback failed:", err);
-      }
-
-      if (!res.headersSent) return res.status(500).send("Extraction error");
-      return;
-    }
-  }
-
-  try {
-    const format = info.chooseFormat({ type: 'audio', quality: 'best' });
-    
-    if (!format) {
-      return res.status(404).send("No audio format found");
-    }
-
-    // Redirect directly so iOS Safari can handle Range headers natively
-    const streamUrl = await format.decipher(yt.session.player);
-    res.redirect(streamUrl);
-  } catch (err: any) {
-    console.warn("Streaming extraction fallback triggered:", err.message);
-    if (!res.headersSent) res.status(500).send("Extraction error");
-  }
-});
 
 // Output raw audio stream removed due to bot blocks
 async function startServer() {

@@ -1055,8 +1055,16 @@ export default function GymMusicPlayer() {
   }
 
   const togglePlayback = useCallback(() => {
-    expectedPlayingRef.current = !isPlaying;
-    setIsPlaying(!isPlaying);
+    const nextPlaying = !isPlaying;
+    expectedPlayingRef.current = nextPlaying;
+    
+    if (nextPlaying && fallbackSilentAudioRef.current) {
+      fallbackSilentAudioRef.current.play().catch(() => {});
+    } else if (!nextPlaying && fallbackSilentAudioRef.current) {
+      fallbackSilentAudioRef.current.pause();
+    }
+    
+    setIsPlaying(nextPlaying);
   }, [isPlaying]);
 
   const handleNext = useCallback(() => {
@@ -2621,6 +2629,9 @@ export default function GymMusicPlayer() {
     const playHandler = () => {
       expectedPlayingRef.current = true;
       handlersRef.current.setIsPlaying(true);
+      if (fallbackSilentAudioRef.current) {
+         fallbackSilentAudioRef.current.play().catch(() => {});
+      }
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -2635,6 +2646,9 @@ export default function GymMusicPlayer() {
     const pauseHandler = () => {
       expectedPlayingRef.current = false;
       handlersRef.current.setIsPlaying(false);
+      if (fallbackSilentAudioRef.current) {
+         fallbackSilentAudioRef.current.pause();
+      }
       if (youtubePlayerRef.current) {
         try {
           const intPlayer = youtubePlayerRef.current.getInternalPlayer();

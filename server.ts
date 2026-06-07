@@ -976,6 +976,32 @@ app.get("/api/youtube/stream/:id.mp3", async (req, res) => {
       info = await yt.getBasicInfo(videoId); 
       finalClient = 'WEB';
     } catch (e) {
+      console.warn("YouTube Innertube failed, falling back to Piped instance...");
+      try {
+        const pipedRes = await fetch(`https://pipedapi.kavin.rocks/streams/${videoId}`);
+        const pipedData = await pipedRes.json();
+        if (pipedData && pipedData.audioStreams && pipedData.audioStreams.length > 0) {
+           const bestAudio = pipedData.audioStreams.find((s: any) => s.bitrate === Math.max(...pipedData.audioStreams.map((s: any) => s.bitrate)));
+           if (bestAudio && bestAudio.url) {
+             return res.redirect(bestAudio.url);
+           }
+        }
+      } catch (err) {
+        console.error("Piped fallback failed:", err);
+      }
+
+      // Final fallback to Invidious if piped fails
+      try {
+         const invRes = await fetch(`https://vid.puffyan.us/api/v1/videos/${videoId}`);
+         const invData = await invRes.json();
+         if (invData && invData.formatStreams) {
+            const hq = invData.formatStreams.find((s:any) => s.resolution === '720p' || !s.resolution);
+            if (hq && hq.url) return res.redirect(hq.url);
+         }
+      } catch(err) {
+         console.error("Invidious fallback failed:", err);
+      }
+
       if (!res.headersSent) return res.status(500).send("Extraction error");
       return;
     }
@@ -988,27 +1014,9 @@ app.get("/api/youtube/stream/:id.mp3", async (req, res) => {
       return res.status(404).send("No audio format found");
     }
 
-    res.setHeader("Content-Type", format.mime_type || "audio/webm");
-    res.setHeader("Transfer-Encoding", "chunked");
-    
-    const stream = await yt.download(videoId, { type: 'audio', quality: 'best', client: finalClient });
-    
-    // Convert ReadableStream to Node stream
-    const reader = stream.getReader();
-    const push = async () => {
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(value);
-        }
-        res.end();
-      } catch (err) {
-        console.error("Stream pipe error:", err);
-        res.end();
-      }
-    };
-    push();
+    // Redirect directly so iOS Safari can handle Range headers natively
+    const streamUrl = await format.decipher(yt.session.player);
+    res.redirect(streamUrl);
   } catch (err: any) {
     console.warn("Streaming extraction fallback triggered:", err.message);
     if (!res.headersSent) res.status(500).send("Extraction error");

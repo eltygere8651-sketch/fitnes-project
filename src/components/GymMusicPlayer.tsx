@@ -51,6 +51,7 @@ import {
   Trophy,
   Download,
   Users,
+  User,
   Library,
   FileText,
 } from "lucide-react";
@@ -75,6 +76,7 @@ import { useFirebase } from "./FirebaseProvider";
 import { MusicPlaylist, MusicTrack } from "../types";
 import { UserManagementAdmin } from "./UserManagementAdmin";
 import { ExploreView } from "./ExploreView";
+import { UserProfileModal } from "./UserProfileModal";
 
 const COVER_THEMES = [
   {
@@ -489,13 +491,13 @@ export default function GymMusicPlayer() {
         const reqDoc = snap.docs[0].data();
         if (reqDoc.status === "pending") {
           setTrialRequestStatus("sent");
-          setTrialRequestMsg("Tu solicitud de prueba de 14 días está pendiente de aprobación por el administrador.");
+          setTrialRequestMsg("Tu solicitud de prueba de 7 días está pendiente de aprobación por el administrador.");
         } else if (reqDoc.status === "approved" || (accessData && accessData.trialStart)) {
           setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg("Ya has disfrutado de tu prueba gratuita de 14 días.");
+          setTrialRequestMsg("Ya has disfrutado de tu prueba gratuita de 7 días.");
         } else if (reqDoc.status === "rejected") {
           setTrialRequestStatus("already_claimed");
-          setTrialRequestMsg("Tu solicitud de prueba de 14 días fue declinada por el administrador.");
+          setTrialRequestMsg("Tu solicitud de prueba de 7 días fue declinada por el administrador.");
         }
         setIsCheckingTrialRequest(false);
         return;
@@ -505,7 +507,7 @@ export default function GymMusicPlayer() {
       const fpSnap = await getDocs(fpQuery);
       if (!fpSnap.empty) {
         setTrialRequestStatus("already_claimed");
-        setTrialRequestMsg("Acceso Denegado: Ya se ha solicitado una prueba de 14 días desde este dispositivo.");
+        setTrialRequestMsg("Acceso Denegado: Ya se ha solicitado una prueba de 7 días desde este dispositivo.");
         setIsCheckingTrialRequest(false);
         return;
       }
@@ -628,6 +630,7 @@ export default function GymMusicPlayer() {
   const [isTracklistOpen, setIsTracklistOpen] = useState(true);
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] = useState(false);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   
@@ -3267,44 +3270,114 @@ export default function GymMusicPlayer() {
                 </button>
               </div>
             ) : (
-              <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-black/20 flex flex-col items-stretch gap-2 shrink-0">
-                {/* Desktop Version */}
-                <div className="hidden md:flex items-center justify-between shrink-0">
-                  <div className="text-left shrink-0">
-                    <p className="text-[8px] font-black uppercase tracking-wider text-slate-300">
-                      Suscripción Activa
-                    </p>
-                    <p className="text-[9px] text-emerald-400 font-bold mt-0.5">
-                      {accessData?.daysRemaining || 0} Días restantes
-                    </p>
-                  </div>
-                  
-                  <button
-                    onClick={() => logout()}
-                    className="hidden p-1.5 px-2 md:py-1 md:px-2 rounded-lg border border-transparent text-slate-400 hover:text-red-400 hover:border-red-500/20 hover:bg-red-500/10 transition-all cursor-pointer items-center justify-center shadow-lg shadow-black/50"
-                    title="Cerrar Sesión"
-                  >
-                    <LogOut className="w-3.5 h-3.5 mr-1.5 md:w-3 md:h-3" />
-                    <span className="font-bold uppercase tracking-widest text-[8px]">Salir</span>
-                  </button>
-                </div>
+              <div className="p-2 md:p-3 md:mt-auto border-t border-white/5 bg-black/20 flex flex-col items-stretch gap-2 shrink-0 relative">
+                
+                {/* Floating Dropdown Menú Estilo Spotify */}
+                <AnimatePresence>
+                  {isMembershipDropdownOpen && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                      exit={{ opacity: 0, y: 10, scale: 0.95 }}
+                      transition={{ duration: 0.15, ease: "easeOut" }}
+                      className="absolute bottom-full left-2 right-2 mb-2 bg-[#121214] border border-white/10 rounded-2xl shadow-[0_15px_35px_rgba(0,0,0,0.8)] p-1.5 z-[100] flex flex-col backdrop-blur-md"
+                    >
+                      {/* Dropdown Header Info */}
+                      <div className="px-3 py-2 border-b border-white/5 mb-1 text-left">
+                        <p className="text-[8px] font-black uppercase tracking-wider text-slate-500">
+                          Suscripción Premium
+                        </p>
+                        <p className="text-[10px] text-[#1ED760] font-extrabold mt-0.5 truncate max-w-full">
+                          {accessData?.daysRemaining || 0} Días restantes
+                        </p>
+                      </div>
 
-                {/* Mobile Version - Beautifully Optimized Green Stack - Cleaned for minimalism */}
-                <div className="block md:hidden space-y-3 p-1">
-                  <div className="flex items-center justify-between bg-white/[0.02] border border-white/5 p-3 rounded-2xl">
-                    <div className="text-left">
-                      <p className="text-[9px] font-black uppercase tracking-wider text-slate-400">
-                        Suscripción Activa
+                      {/* Dropdown Items */}
+                      <button
+                        onClick={() => {
+                          setIsProfileModalOpen(true);
+                          setIsMembershipDropdownOpen(false);
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer text-[11px] font-bold"
+                      >
+                        <User className="w-4 h-4 text-[#1ED760]" />
+                        <span>Mi Perfil (Editar Datos)</span>
+                      </button>
+
+                      <button
+                        onClick={() => {
+                          setIsSupportModalOpen(true);
+                          setIsMembershipDropdownOpen(false);
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer text-[11px] font-bold"
+                      >
+                        <MessageSquare className="w-4 h-4 text-emerald-400" />
+                        <span>Soporte Técnico</span>
+                      </button>
+
+                      {isAdmin && (
+                        <button
+                          onClick={() => {
+                            setIsAdminPanelOpen(true);
+                            setIsMembershipDropdownOpen(false);
+                          }}
+                          className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-[#1ED760] hover:text-emerald-300 hover:bg-[#1ED760]/10 transition-colors cursor-pointer text-[11px] font-black"
+                        >
+                          <Shield className="w-4 h-4 text-[#1ED760]" />
+                          <span>Panel de Admin</span>
+                        </button>
+                      )}
+
+                      <div className="border-t border-white/5 my-1" />
+
+                      <button
+                        onClick={() => {
+                          logout();
+                          setIsMembershipDropdownOpen(false);
+                        }}
+                        className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors cursor-pointer text-[11px] font-bold"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        <span>Cerrar Sesión</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+
+                {/* Spotify-style User Pill Button */}
+                <button
+                  onClick={() => setIsMembershipDropdownOpen(!isMembershipDropdownOpen)}
+                  className={`flex items-center justify-between gap-2.5 p-2 bg-white/[0.03] hover:bg-white/[0.08] active:scale-[0.98] border rounded-full cursor-pointer transition-all w-full select-none text-left z-20 ${
+                    isMembershipDropdownOpen ? "border-[#1ED760]/40 bg-white/[0.06] shadow-[0_0_15px_rgba(30,215,96,0.15)]" : "border-white/5"
+                  }`}
+                >
+                  <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                    {/* Circle Avatar with Initials */}
+                    <div className="w-7 h-7 bg-gradient-to-tr from-emerald-500 to-[#1ED760] rounded-full flex items-center justify-center text-black font-black text-[11px] shrink-0 shadow-md">
+                      <span>
+                        {user.displayName ? user.displayName.substring(0, 2).toUpperCase() : "SP"}
+                      </span>
+                    </div>
+
+                    <div className="text-left min-w-0">
+                      <p className="text-[10px] text-white font-extrabold truncate uppercase tracking-wide leading-tight">
+                        {user.displayName || "Socio Premium"}
                       </p>
-                      <p className="text-[11px] text-[#1ED760] font-black mt-0.5">
-                        {accessData?.daysRemaining || 0} Días restantes
+                      <p className="text-[8px] text-[#1ED760] font-black uppercase tracking-wider leading-none mt-0.5">
+                        {user.email === "eltygere8651@gmail.com" ? "Administrador" : `Premium • ${accessData?.daysRemaining || 0}d`}
                       </p>
                     </div>
-                    <span className="px-2.5 py-1 text-[8px] font-black uppercase tracking-widest bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 rounded-full">
-                      MÚSICA PREMIUM
-                    </span>
                   </div>
-                </div>
+
+                  <div className="shrink-0 text-slate-400 pr-0.5">
+                    {isMembershipDropdownOpen ? (
+                      <ChevronDown className="w-4 h-4 text-[#1ED760] transition-transform duration-200" />
+                    ) : (
+                      <ChevronUp className="w-4 h-4 text-slate-400 hover:text-white transition-all" />
+                    )}
+                  </div>
+                </button>
+
               </div>
             )}
 
@@ -6041,6 +6114,7 @@ export default function GymMusicPlayer() {
       </AnimatePresence>
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
+      {isProfileModalOpen && <UserProfileModal onClose={() => setIsProfileModalOpen(false)} />}
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
         <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">
@@ -6103,7 +6177,7 @@ export default function GymMusicPlayer() {
                       onClick={handleRequestTrial} 
                       className="w-full bg-gradient-to-r from-emerald-500 to-[#1ED760] hover:from-emerald-400 hover:to-[#1fdf64] text-black py-2.5 sm:py-3 px-3 sm:px-4 rounded-full font-black uppercase text-[10px] sm:text-[10.5px] tracking-wider shadow-[0_10px_30px_rgba(16,185,129,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 border border-emerald-400/20 animate-pulse hover:animate-none"
                     >
-                      <span>⚡ Pedir Acceso Gratis de 14 Días</span>
+                      <span>⚡ Pedir Acceso Gratis de 7 Días</span>
                     </button>
                   ) : (
                     <div className={`p-3 rounded-2xl border text-[10px] sm:text-[11px] font-semibold leading-relaxed text-center ${

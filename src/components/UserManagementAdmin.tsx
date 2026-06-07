@@ -25,6 +25,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     fetchRequests();
     fetchTelegramConfig();
     fetchSupportMessages();
+    adjustYesterdayTrials();
   }, []);
 
   const downloadPresentation = () => {
@@ -201,7 +202,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
     try {
       setIsTestingTelegram(true);
-      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Music*. Las solicitudes de acceso de 14 días te llegarán aquí.";
+      const testText = "🔔 *¡Conexión Exitosa!*\nEste es un mensaje de prueba desde tu aplicación *Flux Music*. Las solicitudes de acceso de 7 días te llegarán aquí.";
       
       const response = await fetch(`https://api.telegram.org/bot${telegramToken.trim()}/sendMessage`, {
         method: "POST",
@@ -239,13 +240,45 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
+  const adjustYesterdayTrials = async () => {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      const usersList = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+      const msPerDay = 1000 * 60 * 60 * 24;
+      const now = Date.now();
+      let count = 0;
+
+      for (const u of usersList) {
+        if (u.plan === "free" && u.trialStart && u.email !== "eltygere8651@gmail.com") {
+          const currentDuration = u.trialDuration || 14; 
+          const isRecent = (now - u.trialStart) < (3 * msPerDay);
+          
+          if (currentDuration === 14 && isRecent) {
+            await updateDoc(doc(db, "users", u.id), {
+              trialDuration: 7,
+              trialStart: now - 1 * msPerDay
+            });
+            count++;
+          }
+        }
+      }
+      if (count > 0) {
+        alert(`Se han detectado y corregido ${count} usuario(s) de prueba de ayer a 7 días de prueba (con 6 días restantes hoy).`);
+        fetchUsers();
+      }
+    } catch (err) {
+      console.error("Error adjusting yesterday trials:", err);
+    }
+  };
+
   const handleApproveRequest = async (req: any) => {
     try {
-      if (!window.confirm(`¿Aprobar prueba de 14 días para ${req.email}?`)) return;
+      if (!window.confirm(`¿Aprobar prueba de 7 días para ${req.email}?`)) return;
       
       await updateDoc(doc(db, "users", req.uid), {
         plan: "free",
         trialStart: Date.now(),
+        trialDuration: 7,
         subscriptionEnd: null
       });
 
@@ -253,7 +286,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         status: "approved"
       });
 
-      alert("Acceso de prueba activado y solicitud aprobada con éxito!");
+      alert("Acceso de prueba de 7 días activado y solicitud aprobada con éxito!");
       fetchUsers();
       fetchRequests();
     } catch (err) {
@@ -298,15 +331,16 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
-  const grantTrial = async (userId: string) => {
+  const grantTrial = async (userId: string, durationDays: number = 7) => {
     try {
-      if (!window.confirm("¿Activar prueba de 14 días para este usuario?")) return;
+      if (!window.confirm(`¿Activar prueba de ${durationDays} días para este usuario?`)) return;
       await updateDoc(doc(db, "users", userId), {
         plan: "free",
         trialStart: Date.now(),
+        trialDuration: durationDays,
         subscriptionEnd: null
       });
-      alert("Prueba activada!");
+      alert(`¡Prueba de ${durationDays} días activada con éxito!`);
       fetchUsers();
     } catch (e) {
       console.error(e);
@@ -429,7 +463,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               {/* SECCIÓN 1: SOLICITUDES DE PRUEBA PENDIENTES */}
           <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
             <h3 className="text-xs font-black uppercase text-emerald-400 tracking-wider flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 14 Días ({requests.filter(r => r.status === "pending").length})
+              <CheckCircle className="w-4 h-4 text-emerald-400" /> Solicitudes de Prueba de 7 Días ({requests.filter(r => r.status === "pending").length})
             </h3>
             
             {loadingRequests ? (
@@ -522,7 +556,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               <Send className="w-4 h-4 text-[#1ED760]" /> Configurar Notificaciones en Telegram
             </h3>
             <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 14 días. Puedes aprobar el acceso directamente con un botón desde este panel.
+              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 7 días. Puedes aprobar el acceso directamente con un botón desde este panel.
             </p>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -661,10 +695,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                    isActive = true;
                    statusText = `Plan ${u.plan} activo (${Math.ceil((u.subscriptionEnd - now)/msPerDay)} días)`;
                 } else if (u.plan === "free" && u.trialStart) {
-                   const trialEnd = u.trialStart + 14 * msPerDay;
+                   const trialDuration = u.trialDuration || 7;
+                   const trialEnd = u.trialStart + trialDuration * msPerDay;
                    if (trialEnd > now) {
                      isActive = true;
-                     statusText = `Prueba 14 días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
+                     statusText = `Prueba ${trialDuration} días (${Math.ceil((trialEnd - now)/msPerDay)} días)`;
                    } else {
                      statusText = "Prueba finalizada";
                    }
@@ -716,7 +751,10 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
 
                      {u.email !== "eltygere8651@gmail.com" && (
                        <div className="flex flex-wrap gap-2 mt-auto">
-                          <button onClick={() => grantTrial(u.id)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold rounded-lg transition-colors border border-emerald-500/20 cursor-pointer text-center">
+                          <button onClick={() => grantTrial(u.id, 7)} className="px-3 py-1.5 bg-emerald-500/10 hover:bg-emerald-500/30 text-emerald-300 text-[10px] font-bold rounded-lg transition-colors border border-emerald-500/20 cursor-pointer text-center">
+                            Prueba 7 Días
+                          </button>
+                          <button onClick={() => grantTrial(u.id, 14)} className="px-3 py-1.5 bg-teal-500/10 hover:bg-teal-500/30 text-teal-300 text-[10px] font-bold rounded-lg transition-colors border border-teal-500/20 cursor-pointer text-center">
                             Prueba 14 Días
                           </button>
                           <button onClick={() => updateSub(u.id, "1mo", 31)} className="px-3 py-1.5 bg-purple-500/10 hover:bg-purple-500/30 text-purple-300 text-[10px] font-bold rounded-lg transition-colors border border-purple-500/20 cursor-pointer text-center">

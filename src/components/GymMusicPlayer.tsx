@@ -1047,6 +1047,17 @@ export default function GymMusicPlayer() {
     return saved === "true";
   });
   const isShuffleRef = useRef(isShuffle);
+
+  // Refs for snapshot syncing to avoid React closure stale state
+  const playingPlaylistRef = useRef<MusicPlaylist | null>(null);
+  const selectedPlaylistRef = useRef<MusicPlaylist | null>(null);
+  const currentTrackIndexRef = useRef<number>(0);
+
+  useEffect(() => {
+    playingPlaylistRef.current = playingPlaylist;
+    selectedPlaylistRef.current = selectedPlaylist;
+    currentTrackIndexRef.current = currentTrackIndex;
+  }, [playingPlaylist, selectedPlaylist, currentTrackIndex]);
   useEffect(() => { 
     isShuffleRef.current = isShuffle; 
     localStorage.setItem("gym_music_is_shuffle", isShuffle.toString());
@@ -1415,30 +1426,59 @@ export default function GymMusicPlayer() {
         }
         playlistsLoadedInitiallyRef.current = true;
       } else {
-        // En actualizaciones de snapshot posteriores, solo actualizamos las referencias
-        // si cambiaron, pero sin reiniciar la pestaña seleccionada ni detener la reproducción
-        if (selectedPlaylist) {
-          const updatedSelected = folders.find((f) => f.id === selectedPlaylist.id);
+        // En actualizaciones de snapshot posteriores, utilizamos los refs para acceder al 
+        // estado exacto actual (evitando usar closures sucias/state old) y prevenir saltos.
+        const currentSelected = selectedPlaylistRef.current;
+        const currentPlaying = playingPlaylistRef.current;
+        const currentTrackIdx = currentTrackIndexRef.current;
+
+        if (currentSelected) {
+          const updatedSelected = folders.find((f) => f.id === currentSelected.id);
           if (updatedSelected) {
-            setSelectedPlaylist(updatedSelected);
+            const tracksSame = currentSelected.tracks?.length === updatedSelected.tracks?.length && 
+                               currentSelected.tracks?.every((t:any, i:number) => (t.id && t.id === updatedSelected.tracks[i]?.id) || (t.url && t.url === updatedSelected.tracks[i]?.url));
+            const metadataSame = currentSelected.name === updatedSelected.name && currentSelected.thumbnail_url === updatedSelected.thumbnail_url;
+            if (!tracksSame || !metadataSame) {
+              setSelectedPlaylist(updatedSelected);
+            }
           }
         }
-        if (playingPlaylist) {
-          const updatedPlaying = folders.find((f) => f.id === playingPlaylist.id);
+
+        if (currentPlaying) {
+          const updatedPlaying = folders.find((f) => f.id === currentPlaying.id);
           if (updatedPlaying) {
-            const currentTracksList = playingPlaylist.tracks || [];
-            const playingTrack = currentTracksList[currentTrackIndex];
+            const tracksSame = currentPlaying.tracks?.length === updatedPlaying.tracks?.length && 
+                               currentPlaying.tracks?.every((t:any, i:number) => (t.id && t.id === updatedPlaying.tracks[i]?.id) || (t.url && t.url === updatedPlaying.tracks[i]?.url));
+            const metadataSame = currentPlaying.name === updatedPlaying.name && currentPlaying.thumbnail_url === updatedPlaying.thumbnail_url;
             
-            setPlayingPlaylist(updatedPlaying);
-            
-            if (playingTrack && updatedPlaying.tracks && updatedPlaying.tracks.length > 0) {
-              const newIdx = updatedPlaying.tracks.findIndex((t: any) => 
-                (playingTrack.id && t.id === playingTrack.id) || 
-                (playingTrack.url && t.url === playingTrack.url)
-              );
-              if (newIdx !== -1 && newIdx !== currentTrackIndex) {
-                console.log(`[Snapshot Sync] Adjusting currentTrackIndex from ${currentTrackIndex} to ${newIdx} to keep playing "${playingTrack.title}"`);
-                setCurrentTrackIndex(newIdx);
+            if (!tracksSame || !metadataSame) {
+              const currentTracksList = currentPlaying.tracks || [];
+              const playingTrack = currentTracksList[currentTrackIdx];
+              
+              setPlayingPlaylist(updatedPlaying);
+              
+              if (playingTrack && updatedPlaying.tracks && updatedPlaying.tracks.length > 0) {
+                 const trackAtCurrentIdx = updatedPlaying.tracks[currentTrackIdx];
+                 let isSameAtCurrent = false;
+                 if (trackAtCurrentIdx) {
+                    isSameAtCurrent = (playingTrack.id && trackAtCurrentIdx.id === playingTrack.id) || (playingTrack.url && trackAtCurrentIdx.url === playingTrack.url);
+                 }
+                 
+                 if (!isSameAtCurrent) {
+                    const newIdx = updatedPlaying.tracks.findIndex((t: any) => 
+                      (playingTrack.id && t.id === playingTrack.id) || 
+                      (playingTrack.url && t.url === playingTrack.url)
+                    );
+                    
+                    if (newIdx !== -1) {
+                      console.log(`[Snapshot Sync] Adjusting currentTrackIndex from ${currentTrackIdx} to ${newIdx} to keep playing "${playingTrack.title}"`);
+                      setCurrentTrackIndex(newIdx);
+                    } else {
+                      // It was deleted from the currently playing playlist. Override so it keeps playing seamlessly.
+                      console.log(`[Snapshot Sync] Track "${playingTrack.title}" removed from playlist. Kept playing via override.`);
+                      setOverrideCurrentTrack(playingTrack);
+                    }
+                 }
               }
             }
           }

@@ -35,27 +35,20 @@ interface UserProfileModalProps {
   onClose: () => void;
 }
 
-// Preset cartoon seeds for premium avatar select
+// Elite Colección de Avatares Premium Rediseñados con Glow y Gradientes de Lujo
 const PRESET_AVATARS = [
-  { name: "Guerrero", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Jack" },
-  { name: "Estrella", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Luna" },
-  { name: "Fuerte", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Racer" },
-  { name: "Escucha", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Milo" },
-  { name: "Cósmico", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Nova" },
-  { name: "Ciborg", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Ciborg" },
-  { name: "Melómano", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Spike" },
-  { name: "Fénix", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix" },
-];
-
-const ADMIN_AVATARS = [
-  { name: "Líder Supremo", url: "https://api.dicebear.com/7.x/bottts-neutral/svg?seed=Supremo&eyes=glowing&mouth=smile" },
-  { name: "Cerebro Flux", url: "https://api.dicebear.com/7.x/bottts/svg?seed=FluxBrain&eyes=scared&mouth=bite" },
-  { name: "Comandante", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=Commander" },
-  { name: "Guardiana", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=Guardian" },
-  { name: "Arquitecto", url: "https://api.dicebear.com/7.x/shapes/svg?seed=Architect" },
-  { name: "Soberano Oro", url: "https://api.dicebear.com/7.x/bottts/svg?seed=GoldRoyal&backgroundType=solid&backgroundColor=f59e0b" },
-  { name: "Ciber Neon", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=NeonViper&backgroundType=solid&backgroundColor=10b981" },
-  { name: "Deidad Flux", url: "https://api.dicebear.com/7.x/identicon/svg?seed=FluxDeity&backgroundType=solid&backgroundColor=6366f1" }
+  { name: "Diva del Pop 🎤", url: "https://api.dicebear.com/7.x/lorelei/svg?seed=Bella&backgroundType=gradientLinear&backgroundRotation=135&backgroundColor=ec4899,8b5cf6", rarity: "Leyenda", border: "border-pink-500 shadow-[0_0_15px_rgba(236,72,153,0.35)]" },
+  { name: "Melómana Golden ✨", url: "https://api.dicebear.com/7.x/lorelei/svg?seed=Sophia&backgroundType=gradientLinear&backgroundRotation=45&backgroundColor=b45309,f59e0b", rarity: "Soberano", border: "border-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.35)]" },
+  { name: "Rey del Ritmo 🎧", url: "https://api.dicebear.com/7.x/micah/svg?seed=Jordan&backgroundType=gradientLinear&backgroundRotation=225&backgroundColor=311042,701a75", rarity: "Místico", border: "border-fuchsia-500 shadow-[0_0_15px_rgba(162,28,175,0.35)]" },
+  { name: "Cyber Punk Jade 🟢", url: "https://api.dicebear.com/7.x/lorelei/svg?seed=NeoJade&backgroundType=gradientLinear&backgroundRotation=90&backgroundColor=064e3b,10b981", rarity: "Leyenda", border: "border-emerald-500 shadow-[0_0_15px_rgba(16,185,129,0.35)]" },
+  { name: "Atleta Élite ⚡", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Leo&backgroundType=gradientLinear&backgroundRotation=45&backgroundColor=0284c7,0ea5e9", rarity: "Élite", border: "border-sky-500 shadow-[0_0_15px_rgba(14,165,233,0.35)]" },
+  { name: "Estrella de Neón 🌟", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Stella&backgroundType=gradientLinear&backgroundRotation=270&backgroundColor=db2777,fda4af", rarity: "Místico", border: "border-rose-400 shadow-[0_0_15px_rgba(244,63,94,0.35)]" },
+  { name: "Urban Golden Classic 🕶️", url: "https://api.dicebear.com/7.x/micah/svg?seed=Ray&backgroundType=gradientLinear&backgroundRotation=145&backgroundColor=eab308,ca8a04", rarity: "Soberano", border: "border-yellow-400 shadow-[0_0_15px_rgba(234,179,8,0.35)]" },
+  { name: "Guerrero Neón ⚔️", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Viper&backgroundType=gradientLinear&backgroundRotation=120&backgroundColor=1e1b4b,4f46e5", rarity: "Élite", border: "border-indigo-500 shadow-[0_0_15px_rgba(79,70,229,0.35)]" },
+  { name: "Cyber Diva 🔮", url: "https://api.dicebear.com/7.x/lorelei/svg?seed=Evelyn&backgroundType=gradientLinear&backgroundRotation=180&backgroundColor=4c0519,db2777", rarity: "Leyenda", border: "border-pink-500 shadow-[0_0_15px_rgba(219,39,119,0.35)]" },
+  { name: "Mago del Sonido 🎵", url: "https://api.dicebear.com/7.x/micah/svg?seed=Prestige&backgroundType=gradientLinear&backgroundRotation=0&backgroundColor=022c22,059669", rarity: "Místico", border: "border-teal-500 shadow-[0_0_15px_rgba(20,184,166,0.35)]" },
+  { name: "Hechicera de Hielo ❄️", url: "https://api.dicebear.com/7.x/lorelei/svg?seed=Yuki&backgroundType=gradientLinear&backgroundRotation=60&backgroundColor=0f172a,2563eb", rarity: "Soberano", border: "border-blue-500 shadow-[0_0_15px_rgba(37,99,235,0.35)]" },
+  { name: "Aventurero Flux 🗺️", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Atlas&backgroundType=gradientLinear&backgroundRotation=300&backgroundColor=1f2937,4b5563", rarity: "Élite", border: "border-slate-400 shadow-[0_0_15px_rgba(156,163,175,0.35)]" }
 ];
 
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) => {
@@ -363,15 +356,17 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                         }}
                         referrerPolicy="no-referrer"
                       />
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center text-white gap-1 cursor-pointer"
-                        title="Subir nueva foto"
-                      >
-                        <Camera className="w-5 h-5 text-[#1ED760]" />
-                        <span className="text-[7.5px] uppercase font-black tracking-widest text-[#1ED760]">Subir</span>
-                      </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center text-white gap-1 cursor-pointer animate-fade-in"
+                          title="Subir nueva foto"
+                        >
+                          <Camera className="w-5 h-5 text-[#1ED760]" />
+                          <span className="text-[7.5px] uppercase font-black tracking-widest text-[#1ED760]">Subir</span>
+                        </button>
+                      )}
                     </div>
                     <span className="absolute bottom-0.5 right-0.5 w-6 h-6 bg-black border border-white/10 rounded-full flex items-center justify-center shadow-md shadow-black/40">
                       <Sparkles className="w-3.5 h-3.5 text-[#1ED760]" />
@@ -410,70 +405,63 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                         initial={{ opacity: 0, height: 0 }}
                         animate={{ opacity: 1, height: "auto" }}
                         exit={{ opacity: 0, height: 0 }}
-                        className="w-full bg-[#121214] border border-white/5 rounded-2xl p-3.5 space-y-3.5 overflow-hidden text-left"
+                        className="w-full bg-[#121214] border border-white/5 rounded-2xl p-4 space-y-4 overflow-hidden text-left shadow-2xl relative"
                       >
                         <div>
-                          {isAdmin && (
-                            <div className="mb-4 bg-emerald-500/5 border border-emerald-500/25 p-3 rounded-2xl">
-                              <div className="flex items-center gap-1.5 mb-2.5 px-0.5">
-                                <span className="text-[8px] bg-[#1ED760] text-black px-2 py-0.5 rounded-full font-black uppercase tracking-wider ring-4 ring-[#1ED760]/10 shrink-0">EXCLUSIVO ADMIN</span>
-                                <p className="text-[9px] font-black uppercase text-emerald-400 tracking-widest font-sans">Avatares del Administrador Supremo:</p>
-                              </div>
-                              <div className="grid grid-cols-4 gap-2">
-                                {ADMIN_AVATARS.map((av) => {
-                                  const isSelected = photoURL === av.url;
-                                  return (
-                                    <button
-                                      key={av.name}
-                                      type="button"
-                                      onClick={() => {
-                                        setPhotoURL(av.url);
-                                        setSuccessMsg(`¡Avatar Supremo seleccionado: "${av.name}"! Guarda los cambios.`);
-                                      }}
-                                      className={`relative aspect-square rounded-xl overflow-hidden border bg-black/40 hover:scale-105 active:scale-95 transition-all cursor-pointer p-0.5 ${isSelected ? 'border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'border-emerald-500/20 hover:border-emerald-500/50'}`}
-                                      title={av.name}
-                                    >
-                                      <img 
-                                        src={av.url} 
-                                        alt={av.name} 
-                                        className="w-full h-full object-cover rounded-lg" 
-                                        referrerPolicy="no-referrer"
-                                      />
-                                      {isSelected && (
-                                        <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-emerald-400 rounded-full flex items-center justify-center shadow-sm z-10 animate-pulse">
-                                          <Check className="w-2.5 h-2.5 text-black stroke-[4px]" />
-                                        </span>
-                                      )}
-                                    </button>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          )}
+                          <div className="flex items-center justify-between mb-2.5 px-0.5">
+                            <p className="text-[10px] font-black uppercase text-[#1ED760] tracking-widest font-sans flex items-center gap-1.5">
+                              <span>⚜️ Colección de Avatares Élite</span>
+                              <span className="text-[7.5px] bg-[#1ED760]/10 text-[#1ED760] border border-[#1ED760]/20 px-1.5 py-0.5 rounded font-bold animate-pulse">PREMIUM</span>
+                            </p>
+                          </div>
+                          
+                          <p className="text-[8px] text-slate-400 font-semibold mb-3 tracking-wide leading-normal">
+                            Diseños exclusivos con fondos y efectos ultrallamativos de alta calidad. ¡Presume de perfil estelar en la comunidad!
+                          </p>
 
-                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 px-0.5 font-sans">Elige un avatar caricaturesco:</p>
-                          <div className="grid grid-cols-4 gap-2">
+                          <div className="grid grid-cols-4 gap-2.5 max-h-[220px] overflow-y-auto pr-1 premium-scrollbar">
                             {PRESET_AVATARS.map((av) => {
                               const isSelected = photoURL === av.url;
+                              
+                              // Subtle background tag classes based on rarity
+                              let rarityBadgeColor = "bg-white/10 text-white";
+                              if (av.rarity === "Soberano") rarityBadgeColor = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                              if (av.rarity === "Leyenda") rarityBadgeColor = "bg-pink-500/10 text-pink-400 border border-pink-500/20";
+                              if (av.rarity === "Místico") rarityBadgeColor = "bg-blue-500/10 text-blue-400 border border-blue-500/20";
+                              if (av.rarity === "Élite") rarityBadgeColor = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                              if (av.rarity === "Administrador Supremo") rarityBadgeColor = "bg-amber-500/10 text-amber-400 border border-amber-500/20";
+
                               return (
                                 <button
                                   key={av.name}
                                   type="button"
                                   onClick={() => {
                                     setPhotoURL(av.url);
-                                    setSuccessMsg(`Seleccionado avatar: "${av.name}". Pulsa guardar para confirmar.`);
+                                    setSuccessMsg(`Avatar seleccionado: "${av.name}". Recuerda hacer clic en Guardar.`);
                                   }}
-                                  className={`relative aspect-square rounded-xl overflow-hidden border bg-black/20 hover:scale-105 active:scale-95 transition-all cursor-pointer p-0.5 ${isSelected ? 'border-[#1ED760] shadow-[0_0_10px_rgba(30,215,96,0.25)]' : 'border-white/5 hover:border-white/20'}`}
+                                  className={`relative aspect-square rounded-xl overflow-hidden border bg-black/40 hover:scale-[1.08] active:scale-95 transition-all duration-300 cursor-pointer p-0.5 group flex flex-col justify-between ${isSelected ? `${av.border} scale-[1.02]` : 'border-white/5 hover:border-white/20'}`}
+                                  title={`${av.name} (${av.rarity})`}
                                 >
                                   <img 
                                     src={av.url} 
                                     alt={av.name} 
-                                    className="w-full h-full object-cover rounded-lg" 
+                                    className="w-full h-full object-cover rounded-lg group-hover:rotate-1 transition-transform duration-300" 
                                     referrerPolicy="no-referrer"
                                   />
+                                  
+                                  {/* Rarity label on hover */}
+                                  <span className="absolute bottom-1 inset-x-1 text-[6.5px] font-black text-center truncate uppercase tracking-tight py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity bg-black/80 text-white select-none">
+                                    {av.name.split(" ")[0]}
+                                  </span>
+
+                                  {/* Level pill on card */}
+                                  <span className={`absolute top-1 left-1 px-1 py-[1px] text-[4.5px] uppercase font-black tracking-widest rounded ${rarityBadgeColor} scale-[0.8] origin-top-left select-none`}>
+                                    {av.rarity.split(" ")[0]}
+                                  </span>
+
                                   {isSelected && (
-                                    <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#1ED760] rounded-full flex items-center justify-center shadow-sm">
-                                      <Check className="w-2.5 h-2.5 text-black stroke-[4px]" />
+                                    <span className="absolute top-1 right-1 w-4 h-4 bg-[#1ED760] rounded-full flex items-center justify-center shadow-lg z-10 animate-fade-in">
+                                      <Check className="w-2.5 h-2.5 text-black stroke-[4px]" strokeWidth={4} />
                                     </span>
                                   )}
                                 </button>
@@ -482,30 +470,39 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                           </div>
                         </div>
 
-                        <div className="border-t border-white/[0.04] pt-3 flex flex-col sm:flex-row gap-2">
-                          <button
-                            type="button"
-                            onClick={() => fileInputRef.current?.click()}
-                            className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-white font-black text-[9px] uppercase tracking-widest rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
-                          >
-                            <Upload className="w-3.5 h-3.5 text-emerald-400" />
-                            <span>Subir de tu Galería</span>
-                          </button>
-                          
-                          {isGoogleProvider && (
+                        {/* Show custom image uploads only if the user is Admin */}
+                        {isAdmin ? (
+                          <div className="border-t border-white/[0.04] pt-3 flex flex-col sm:flex-row gap-2">
                             <button
                               type="button"
-                              onClick={() => {
-                                const googlePhoto = user.providerData.find(p => p.providerId === "google.com")?.photoURL || "";
-                                setPhotoURL(googlePhoto);
-                                setSuccessMsg("Imagen Google cargada. Haz click en Guardar para confirmar.");
-                              }}
-                              className="flex-1 py-1.5 bg-black hover:bg-white/[0.02] text-slate-400 hover:text-white font-black text-[9.5px] uppercase tracking-widest rounded-lg border border-white/5 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                              onClick={() => fileInputRef.current?.click()}
+                              className="flex-1 py-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black text-[9px] uppercase tracking-widest rounded-lg border border-[#1ED760]/20 transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
                             >
-                              <span>Restablecer Google</span>
+                              <Upload className="w-3.5 h-3.5" />
+                              <span>Subir de tu Galería (Solo Admin)</span>
                             </button>
-                          )}
-                        </div>
+                            
+                            {isGoogleProvider && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const googlePhoto = user.providerData.find(p => p.providerId === "google.com")?.photoURL || "";
+                                  setPhotoURL(googlePhoto);
+                                  setSuccessMsg("Imagen Google cargada. Haz click en Guardar para confirmar.");
+                                }}
+                                className="flex-1 py-1.5 bg-black hover:bg-white/[0.02] text-slate-400 hover:text-white font-black text-[9.5px] uppercase tracking-widest rounded-lg border border-white/5 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                              >
+                                <span>Restablecer Google</span>
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="border-t border-white/[0.04] pt-2.5 text-center px-1">
+                            <p className="text-[8px] text-slate-500 font-bold uppercase tracking-widest flex items-center justify-center gap-1">
+                              <span>✨ Galería de Selección Exclusiva de Socios Premium</span>
+                            </p>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
@@ -660,11 +657,11 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                     type="button"
                     onClick={() => {
                       onClose();
-                      window.dispatchEvent(new Event("open-changelog"));
+                      window.dispatchEvent(new Event("open-notifications"));
                     }}
                     className="text-[9px] uppercase font-black tracking-widest text-[#1ED760]/65 hover:text-[#1ED760] transition-colors cursor-pointer font-bold"
                   >
-                    🚀 Ver Notas de la Actualización (Changelog)
+                    🚀 Ver Historial de Actualizaciones (Novedades)
                   </button>
                 </div>
               </form>

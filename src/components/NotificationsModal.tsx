@@ -16,7 +16,17 @@ import { collection, getDocs, query, orderBy, limit, doc, deleteDoc } from "fire
 import { db } from "../lib/firebase";
 
 // Static premium fallback notices to show instantly (zero database strain + beautiful populating)
+const CURRENT_APP_VERSION = "1.3.1";
+
 const STATIC_SYSTEM_NOTICES = [
+  {
+    id: "system-update-131",
+    title: "⚡ Actualización Flux v1.3.1",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T01:15:00Z"),
+    content: "¡Hemos integrado de forma unificada el Centro de Notificaciones y Avisos Directos! Se han eliminado las ventanas emergentes (popups) molestas en medio de la pantalla. Ahora puedes ver todo el diario de mejoras y cambios en tiempo real desde este botón en la cabecera.",
+    isStatic: true
+  },
   {
     id: "system-update-130",
     title: "⚡ Actualización Flux v1.3.0",
@@ -95,13 +105,14 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
       setAnnouncements(combined);
 
-      // Once opened and announcements loaded, mark the latest one as read!
+      // Once opened and announcements loaded, mark both the latest DB notice and current version as read!
       if (combined.length > 0) {
         const newestId = combined[0].id;
         localStorage.setItem("flux_last_viewed_announcement_id", newestId);
-        // Dispatch event so the header bell badge knows to turn grey immediately!
-        window.dispatchEvent(new Event("notifications-read"));
       }
+      localStorage.setItem("flux_last_viewed_version", CURRENT_APP_VERSION);
+      // Dispatch event so the header bell badge knows to turn grey immediately!
+      window.dispatchEvent(new Event("notifications-read"));
     } catch (err) {
       console.error("Error cargando comunicados:", err);
       // On error, populate with at least our gorgeous static data

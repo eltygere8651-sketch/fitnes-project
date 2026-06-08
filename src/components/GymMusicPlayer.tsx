@@ -77,7 +77,6 @@ import { MusicPlaylist, MusicTrack } from "../types";
 import { UserManagementAdmin } from "./UserManagementAdmin";
 import { ExploreView } from "./ExploreView";
 import { UserProfileModal } from "./UserProfileModal";
-import { ChangelogModal } from "./ChangelogModal";
 
 const COVER_THEMES = [
   {
@@ -632,8 +631,6 @@ export default function GymMusicPlayer() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
-  const [isManualChangelog, setIsManualChangelog] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   
@@ -666,8 +663,7 @@ export default function GymMusicPlayer() {
 
   useEffect(() => {
     const handleOpenChangelog = () => {
-      setIsManualChangelog(true);
-      setIsChangelogModalOpen(true);
+      window.dispatchEvent(new Event('open-notifications'));
     };
     window.addEventListener('open-changelog', handleOpenChangelog);
     return () => window.removeEventListener('open-changelog', handleOpenChangelog);
@@ -6265,16 +6261,6 @@ export default function GymMusicPlayer() {
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
       {isProfileModalOpen && <UserProfileModal onClose={() => setIsProfileModalOpen(false)} />}
-      {isChangelogModalOpen && (
-        <ChangelogModal 
-          isOpen={isChangelogModalOpen} 
-          onClose={() => {
-            setIsChangelogModalOpen(false);
-            setIsManualChangelog(false);
-          }} 
-          isManual={isManualChangelog}
-        />
-      )}
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
         <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">

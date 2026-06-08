@@ -37,30 +37,143 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const pl = await yt.getPlaylist(id);
-    const tracks = pl.items?.map((v: any) => {
-       try {
-         const title = v.title?.text || v.title?.toString() || "Untitled";
-         const author = v.author?.name || v.author?.toString() || "Unknown Artist";
-         const duration = v.duration?.text || v.duration?.toString() || "";
-         const videoId = v.id || v.video_id;
-         const thumbnail = v.thumbnails?.[0]?.url || "";
+    let playlist: any;
+    let rawVideos: any[] = [];
+    
+    if (id.startsWith("MPRE")) {
+      playlist = await yt.music.getAlbum(id);
+      if (playlist.contents) {
+        rawVideos = Array.isArray(playlist.contents) ? playlist.contents : [];
+      }
+    } else {
+      try {
+        console.log(`[API PL] Fetching via standard getPlaylist for: ${id}`);
+        playlist = await yt.getPlaylist(id);
+        
+        // Extract any videos/items
+        if (playlist.items && Array.isArray(playlist.items)) {
+          rawVideos.push(...playlist.items);
+        }
+        if (playlist.videos) {
+          if (Array.isArray(playlist.videos)) {
+            rawVideos.push(...playlist.videos);
+          } else {
+            const innerContents = playlist.videos.contents || playlist.videos.entries || [];
+            if (Array.isArray(innerContents)) {
+              rawVideos.push(...innerContents);
+            }
+          }
+        }
+        if (playlist.contents && Array.isArray(playlist.contents)) {
+          playlist.contents.forEach((item: any) => {
+            if (item && !rawVideos.includes(item)) rawVideos.push(item);
+          });
+        }
+      } catch (err: any) {
+        console.warn("[API PL] Standard getPlaylist failed:", err.message);
+      }
 
-         if (videoId && title && title !== 'Deleted video' && title !== 'Private video') {
-           return {
-             id: videoId,
-             title,
-             artist: author,
-             duration,
-             url: `https://www.youtube.com/watch?v=${videoId}`,
-             thumbnail
-           };
+      // Fallback 1: Try YouTube Music Playlist
+      if (rawVideos.length === 0) {
+        try {
+          console.log(`[API PL] Standard playlist empty or failed. Trying music.getPlaylist for: ${id}`);
+          const musicPlaylist = await yt.music.getPlaylist(id);
+          if (musicPlaylist) {
+            playlist = musicPlaylist;
+            if (musicPlaylist.items && Array.isArray(musicPlaylist.items)) {
+              rawVideos.push(...musicPlaylist.items);
+            }
+            if (musicPlaylist.contents && Array.isArray(musicPlaylist.contents)) {
+              musicPlaylist.contents.forEach((item: any) => {
+                if (item && !rawVideos.includes(item)) rawVideos.push(item);
+              });
+            }
+            if ((musicPlaylist as any).content) {
+              const pitems = (musicPlaylist as any).content.items || (musicPlaylist as any).content.contents || [];
+              if (Array.isArray(pitems)) {
+                pitems.forEach((item: any) => {
+                  if (item && !rawVideos.includes(item)) rawVideos.push(item);
+                });
+              }
+            }
+          }
+        } catch (err: any) {
+          console.warn("[API PL] music.getPlaylist also failed:", err.message);
+        }
+      }
+
+      // Fallback 2: Try YouTube Music Album in case it was labeled as a playlist
+      if (rawVideos.length === 0) {
+        try {
+          console.log(`[API PL] Standard & Music playlist empty. Trying music.getAlbum for: ${id}`);
+          const album = await yt.music.getAlbum(id);
+          if (album && album.contents && Array.isArray(album.contents)) {
+            playlist = album;
+            rawVideos.push(...album.contents);
+          }
+        } catch (err: any) {
+          console.warn("[API PL] music.getAlbum failed too:", err.message);
+        }
+      }
+
+      // Fallback 3: Search fallback by title
+      const titleFallback = req.query.title as string;
+      if (rawVideos.length === 0 && titleFallback) {
+         console.log("[API PL] All fetch approaches empty. Falling back to search for:", titleFallback);
+         const searchRes = await yt.music.search(titleFallback, { type: 'song' });
+         if (searchRes && searchRes.contents && searchRes.contents.length > 0) {
+           const firstSection = searchRes.contents[0];
+           if (firstSection && firstSection.contents) {
+             rawVideos = firstSection.contents;
+           } else if ((searchRes as any).results) {
+             rawVideos = (searchRes as any).results;
+           }
          }
-       } catch (e) {
-         return null;
-       }
-       return null;
-    }).filter(Boolean) || [];
+      }
+    }
+    
+    console.log(`[API PL] rawVideos length: ${rawVideos.length}`);
+
+    const tracks = rawVideos.map((v: any) => {
+      try {
+        const title = v.title?.text || v.title?.toString() || v.name || "Untitled Track";
+        
+        let artist = "YouTube Music";
+        if (Array.isArray(v.artists) && v.artists.length > 0) {
+          artist = v.artists.map((a: any) => a.name).join(", ");
+        } else if (v.author?.name || typeof v.author === 'string') {
+          artist = v.author?.name || v.author?.toString();
+        } else if (playlist?.author?.name) {
+          artist = playlist.author.name;
+        }
+
+        const duration = v.duration?.text || v.duration?.toString() || v.length?.text || v.length_text?.text || "N/A";
+        const id = v.id || v.video_id || v.videoId || v.content_id || (v.endpoint?.payload?.videoId) || "";
+        
+        let thumbnail = "";
+        if (v.thumbnails && Array.isArray(v.thumbnails) && v.thumbnails.length > 0) {
+          thumbnail = v.thumbnails[0].url || "";
+        } else if (v.thumbnail && v.thumbnail.thumbnails && Array.isArray(v.thumbnail.thumbnails) && v.thumbnail.thumbnails.length > 0) {
+          thumbnail = v.thumbnail.thumbnails[0].url || "";
+        } else if (v.thumbnail_url) {
+          thumbnail = v.thumbnail_url;
+        }
+        
+        if (id && title) {
+          return {
+            id,
+            title,
+            artist,
+            duration,
+            url: `https://www.youtube.com/watch?v=${id}`,
+            thumbnail: thumbnail || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
+          };
+        }
+      } catch (err) {
+        return null;
+      }
+      return null;
+    }).filter(Boolean);
     
     if (tracks.length > 0) {
       playlistCache.set(id, { data: tracks, timestamp: Date.now() });

@@ -466,49 +466,87 @@ app.get("/api/youtube/playlist", async (req, res) => {
       }
     } else {
       try {
+        console.log(`[API PL] Fetching via standard getPlaylist for: ${playlistId}`);
         playlist = await yt.getPlaylist(playlistId);
-        if (playlist.items && playlist.items.length > 0) {
-          console.log("[API PL] items length is", playlist.items.length);
-          for (let i = 0; i < playlist.items.length; i++) {
-            if (playlist.items[i]) rawVideos.push(playlist.items[i]);
-          }
-          console.log("[API PL] loop extracted length is", rawVideos.length);
-        } else if (playlist.videos) {
-          if (playlist.videos.length > 0) {
-            for (let i = 0; i < playlist.videos.length; i++) {
-              if (playlist.videos[i]) rawVideos.push(playlist.videos[i]);
-            }
-          } else if (playlist.videos.entries && playlist.videos.entries.length > 0) {
-            for (let i = 0; i < playlist.videos.entries.length; i++) {
-              if (playlist.videos.entries[i]) rawVideos.push(playlist.videos.entries[i]);
-            }
-          } else if (playlist.videos.contents && playlist.videos.contents.length > 0) {
-            for (let i = 0; i < playlist.videos.contents.length; i++) {
-              if (playlist.videos.contents[i]) rawVideos.push(playlist.videos.contents[i]);
+        
+        // Extract any videos/items
+        if (playlist.items && Array.isArray(playlist.items)) {
+          rawVideos.push(...playlist.items);
+        }
+        if (playlist.videos) {
+          if (Array.isArray(playlist.videos)) {
+            rawVideos.push(...playlist.videos);
+          } else {
+            const innerContents = playlist.videos.contents || playlist.videos.entries || [];
+            if (Array.isArray(innerContents)) {
+              rawVideos.push(...innerContents);
             }
           }
-        } else if (playlist.contents && playlist.contents.length > 0) {
-          for (let i = 0; i < playlist.contents.length; i++) {
-            if (playlist.contents[i]) rawVideos.push(playlist.contents[i]);
-          }
+        }
+        if (playlist.contents && Array.isArray(playlist.contents)) {
+          playlist.contents.forEach((item: any) => {
+            if (item && !rawVideos.includes(item)) rawVideos.push(item);
+          });
         }
       } catch (err: any) {
-        console.warn("[API PL] Error fetching via getPlaylist:", err.message);
-        // Fallback: If playlist is unviewable (like RD Mixes / broken lists) and we have a title
-        if (titleFallback) {
-          console.log("[API PL] Falling back to search for:", titleFallback);
-          const searchRes = await yt.music.search(titleFallback, { type: 'song' });
-          if (searchRes && searchRes.contents && searchRes.contents.length > 0) {
-            const firstSection = searchRes.contents[0];
-            if (firstSection && firstSection.contents) {
-              rawVideos = firstSection.contents;
-            } else if ((searchRes as any).results) {
-              rawVideos = (searchRes as any).results;
+        console.warn("[API PL] Standard getPlaylist failed:", err.message);
+      }
+
+      // Fallback 1: Try YouTube Music Playlist
+      if (rawVideos.length === 0) {
+        try {
+          console.log(`[API PL] Standard playlist empty or failed. Trying music.getPlaylist for: ${playlistId}`);
+          const musicPlaylist = await yt.music.getPlaylist(playlistId);
+          if (musicPlaylist) {
+            playlist = musicPlaylist;
+            if (musicPlaylist.items && Array.isArray(musicPlaylist.items)) {
+              rawVideos.push(...musicPlaylist.items);
+            }
+            if (musicPlaylist.contents && Array.isArray(musicPlaylist.contents)) {
+              musicPlaylist.contents.forEach((item: any) => {
+                if (item && !rawVideos.includes(item)) rawVideos.push(item);
+              });
+            }
+            if ((musicPlaylist as any).content) {
+              const pitems = (musicPlaylist as any).content.items || (musicPlaylist as any).content.contents || [];
+              if (Array.isArray(pitems)) {
+                pitems.forEach((item: any) => {
+                  if (item && !rawVideos.includes(item)) rawVideos.push(item);
+                });
+              }
             }
           }
-        } else {
-          throw err;
+        } catch (err: any) {
+          console.warn("[API PL] music.getPlaylist also failed:", err.message);
         }
+      }
+
+      // Fallback 2: Try YouTube Music Album in case it was labeled as a playlist
+      if (rawVideos.length === 0) {
+        try {
+          console.log(`[API PL] Standard & Music playlist empty. Trying music.getAlbum for: ${playlistId}`);
+          const album = await yt.music.getAlbum(playlistId);
+          if (album && album.contents && Array.isArray(album.contents)) {
+            playlist = album;
+            rawVideos.push(...album.contents);
+          }
+        } catch (err: any) {
+          console.warn("[API PL] music.getAlbum failed too:", err.message);
+        }
+      }
+
+      // Fallback 3: Search fallback by title
+      if (rawVideos.length === 0 && titleFallback) {
+         console.log("[API PL] All fetch approaches empty. Falling back to search for:", titleFallback);
+         const searchRes = await yt.music.search(titleFallback, { type: 'song' });
+         if (searchRes && searchRes.contents && searchRes.contents.length > 0) {
+           const firstSection = searchRes.contents[0];
+           if (firstSection && firstSection.contents) {
+             rawVideos = firstSection.contents;
+           } else if ((searchRes as any).results) {
+             rawVideos = (searchRes as any).results;
+           }
+         }
       }
     }
     
@@ -527,14 +565,16 @@ app.get("/api/youtube/playlist", async (req, res) => {
           artist = playlist.author.name;
         }
 
-        const duration = v.duration?.text || v.duration?.toString() || "N/A";
-        const id = v.id || v.video_id;
+        const duration = v.duration?.text || v.duration?.toString() || v.length?.text || v.length_text?.text || "N/A";
+        const id = v.id || v.video_id || v.videoId || v.content_id || (v.endpoint?.payload?.videoId) || "";
         
         let thumbnail = "";
         if (v.thumbnails && Array.isArray(v.thumbnails) && v.thumbnails.length > 0) {
           thumbnail = v.thumbnails[0].url || "";
         } else if (v.thumbnail && v.thumbnail.thumbnails && Array.isArray(v.thumbnail.thumbnails) && v.thumbnail.thumbnails.length > 0) {
           thumbnail = v.thumbnail.thumbnails[0].url || "";
+        } else if (v.thumbnail_url) {
+          thumbnail = v.thumbnail_url;
         }
         
         if (id && title) {

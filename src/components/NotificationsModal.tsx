@@ -18,6 +18,34 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.4.6",
+    title: "✨ Actualización Flux v1.4.6 - Últimos Ajustes del Sistema",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T23:45:00Z"),
+    content: "• Ajustados finalmente los indicadores de alerta en la campana de notificaciones. Ya se marcan y sincronizan todas las actualizaciones directamente con tu sesión sin problemas.\n• Revisión global para garantizar el Historial Completo de actualizaciones para todos los usuarios."
+  },
+  {
+    id: "update-v1.4.5",
+    title: "✨ Actualización Flux v1.4.5 - Notificaciones e Historial",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T23:35:00Z"),
+    content: "• Reparado el indicador de alertas de Notificaciones (Campanita) para que detecte correctamente las actualizaciones sin leer, integrando todo el sistema global.\n• El historial ahora muestra la totalidad de las actualizaciones de forma continua."
+  },
+  {
+    id: "update-v1.4.4",
+    title: "✨ Actualización Flux v1.4.4 - Motor y Favoritos",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T22:15:00Z"),
+    content: "• Solución contundente al fallo de los Me Gusta (Favoritos) sin afectar visuales.\n• Corregidos los errores que causaban que la pista saltara temporalmente de estado al guardar un track en listas, manteniendo el flujo sin problemas.\n• Optimización de estado interno y estabilización de variables críticas (playingPlaylist, userPlaylists)."
+  },
+  {
+    id: "update-v1.4.3",
+    title: "⚡ Actualización Flux v1.4.3 - Estabilidad",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T19:45:00Z"),
+    content: "• Pulido del Ecosistema de control y re-renderizado React.\n• Evita el refresco no deseado de playlists enteras durante interacciones aisladas en la app."
+  },
+  {
     id: "update-v1.4.2",
     title: "✨ Actualización Flux v1.4.2",
     category: "actualizacion",
@@ -43,7 +71,42 @@ export const COMPILED_UPDATES: Announcement[] = [
     title: "⚡ Actualización Flux v1.3.1",
     category: "actualizacion",
     createdAt: new Date("2026-06-08T01:15:00Z"),
-    content: "¡Hemos integrado de forma unificada el Centro de Notificaciones y Avisos Directos! Se han eliminado las ventanas emergentes (popups) molestas. Ahora el historial es continuo en tiempo real en español.",
+    content: "• ¡Hemos integrado de forma unificada el Centro de Notificaciones y Avisos Directos! Se han eliminado las ventanas emergentes (popups) molestas. Ahora el historial es continuo en tiempo real en español.",
+  },
+  {
+    id: "update-v1.3.0",
+    title: "✨ Actualización Flux v1.3.0 - Modo Eco y Lock Screen",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-07T18:00:00Z"),
+    content: "• Implementación del Sistema de Media Session: Ahora puedes controlar la música desde la pantalla de bloqueo (Lock Screen) de tu dispositivo móvil y auriculares.\n• Nuevo 'Modo Eco': Optimización extrema del perfil de rendimiento. Reduce el consumo de batería y datos ocultando visualizaciones complejas cuando buscas ahorro de energía.\n• Prevención de saltos de estado y sincronización mejorada del reproductor.",
+  },
+  {
+    id: "update-v1.2.5",
+    title: "✨ Actualización Flux v1.2.5 - Playlists del Ecosistema",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-06T15:30:00Z"),
+    content: "• Integración de Playlists Públicas de la Comunidad: Ahora puedes compartir tus playlists con todo el mundo y explorar las creaciones de otros usuarios.\n• Funcionalidad de 'Añadir a mi Biblioteca' para copiar canales públicos a tu colección personal.\n• Nuevo contador de listados (veces listado) en las playlists de la comunidad.",
+  },
+  {
+    id: "update-v1.2.0",
+    title: "✨ Actualización Flux v1.2.0 - Autenticación y Cuentas",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-05T12:00:00Z"),
+    content: "• Perfiles Integrados: Se añadió soporte completo de inicio de sesión de perfiles para sincronizar tu progreso y música guardada en la nube.\n• Playlist inteligente 'Favoritos' anclada en la parte superior para fácil acceso y guardado rápido (Corazón activo).\n• Gestión de cuentas de Administrador centralizada y validación estricta de códigos de seguridad.",
+  },
+  {
+    id: "update-v1.1.0",
+    title: "⚡ Actualización Flux v1.1.0 - El Nuevo Reproductor",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-03T10:00:00Z"),
+    content: "• Nuevo motor de reproducción ReactPlayer enlazado de forma oculta para lograr reproducción continua sin interrupciones.\n• Transiciones de desvanecimiento automáticas. Eliminación del iframe nativo en favor de un sistema de audio directo.\n• Panel lateral desplegable, búsqueda inteligente por canal, artistas o tracks de Base de Datos Base.",
+  },
+  {
+    id: "update-v1.0.0",
+    title: "🚀 Lanzamiento Oficial Flux Music v1.0",
+    category: "noticia",
+    createdAt: new Date("2026-06-01T08:00:00Z"),
+    content: "• ¡Bienvenido a Flux Music! La plataforma definitiva de streaming musical y fitness centrada en diseño elitista, colores cósmicos e inmersión absoluta sin cortes.\n• Base de datos original musical añadida. Que disfrutes de esta nueva dimensión de sonido ininterrumpido.",
   }
 ];
 

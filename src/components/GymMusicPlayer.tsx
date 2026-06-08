@@ -1426,7 +1426,21 @@ export default function GymMusicPlayer() {
         if (playingPlaylist) {
           const updatedPlaying = folders.find((f) => f.id === playingPlaylist.id);
           if (updatedPlaying) {
+            const currentTracksList = playingPlaylist.tracks || [];
+            const playingTrack = currentTracksList[currentTrackIndex];
+            
             setPlayingPlaylist(updatedPlaying);
+            
+            if (playingTrack && updatedPlaying.tracks && updatedPlaying.tracks.length > 0) {
+              const newIdx = updatedPlaying.tracks.findIndex((t: any) => 
+                (playingTrack.id && t.id === playingTrack.id) || 
+                (playingTrack.url && t.url === playingTrack.url)
+              );
+              if (newIdx !== -1 && newIdx !== currentTrackIndex) {
+                console.log(`[Snapshot Sync] Adjusting currentTrackIndex from ${currentTrackIndex} to ${newIdx} to keep playing "${playingTrack.title}"`);
+                setCurrentTrackIndex(newIdx);
+              }
+            }
           }
         }
       }

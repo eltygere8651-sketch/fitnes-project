@@ -215,13 +215,9 @@ const generateSVGDataURI = (title: string, themeIndex: number) => {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 };
 
-const sanitizeOwnerName = (nameOrEmail?: string, isAdminContent?: boolean) => {
-  if (isAdminContent) return "#fluxmusicoficial";
+const sanitizeOwnerName = (nameOrEmail?: string) => {
   if (!nameOrEmail) return "Socio Premium";
   const str = String(nameOrEmail).trim();
-  if (!isAdminContent && (str.toLowerCase().includes("flux") || str.toLowerCase().includes("oficial") || str.toLowerCase() === "administrador")) {
-    return "Socio Premium";
-  }
   if (str.includes("@")) {
     return str.split("@")[0];
   }
@@ -5103,7 +5099,7 @@ export default function GymMusicPlayer() {
                               {pl.ownerName && (
                                 <p className="text-[9px] text-[#1ED760] font-black uppercase tracking-widest truncate mt-0.5">
                                   Por: <span className={pl.isAdminContent ? "text-[#1ED760] font-black flex items-center gap-1" : "flex items-center gap-1"}>
-                                    {sanitizeOwnerName(pl.ownerName, pl.isAdminContent)}
+                                    {pl.isAdminContent ? "#fluxmusicoficial" : ((pl.ownerName || "").toLowerCase().includes("flux") || (pl.ownerName || "").toLowerCase().includes("oficial") || (pl.ownerName || "").toLowerCase() === "administrador" ? "Socio Premium" : sanitizeOwnerName(pl.ownerName))}
                                     {pl.isAdminContent && <BadgeCheck className="w-2.5 h-2.5 fill-current" />}
                                   </span>
                                 </p>
@@ -5212,7 +5208,7 @@ export default function GymMusicPlayer() {
                         <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-3 mt-2 text-[10px] font-bold text-slate-500">
                           {previewPlaylist.ownerName && (
                             <span className="text-[#1ED760] font-black uppercase tracking-wider">
-                              Por {sanitizeOwnerName(previewPlaylist.ownerName, previewPlaylist.isAdminContent)}
+                              Por {previewPlaylist.isAdminContent ? "#fluxmusicoficial" : ((previewPlaylist.ownerName || "").toLowerCase().includes("flux") || (previewPlaylist.ownerName || "").toLowerCase().includes("oficial") || (previewPlaylist.ownerName || "").toLowerCase() === "administrador" ? "Socio Premium" : sanitizeOwnerName(previewPlaylist.ownerName))}
                             </span>
                           )}
                           {previewPlaylist.ownerName && <span className="text-white/10">•</span>}

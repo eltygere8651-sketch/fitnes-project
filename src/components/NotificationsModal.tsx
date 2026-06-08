@@ -12,46 +12,8 @@ import {
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, getDocs, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
+import { collection, onSnapshot, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-
-// Static premium fallback notices to show instantly (zero database strain + beautiful populating)
-const CURRENT_APP_VERSION = "1.3.1";
-
-const STATIC_SYSTEM_NOTICES = [
-  {
-    id: "system-update-131",
-    title: "⚡ Actualización Flux v1.3.1",
-    category: "actualizacion",
-    createdAt: new Date("2026-06-08T01:15:00Z"),
-    content: "¡Hemos integrado de forma unificada el Centro de Notificaciones y Avisos Directos! Se han eliminado las ventanas emergentes (popups) molestas en medio de la pantalla. Ahora puedes ver todo el diario de mejoras y cambios en tiempo real desde este botón en la cabecera.",
-    isStatic: true
-  },
-  {
-    id: "system-update-130",
-    title: "⚡ Actualización Flux v1.3.0",
-    category: "actualizacion",
-    createdAt: new Date("2026-06-07T12:00:00Z"),
-    content: "Hemos lanzado avatares premium y solucionado errores en bucles del reproductor. Ahora la reproducción es fluida, continua y de la mejor calidad premium.",
-    isStatic: true
-  },
-  {
-    id: "system-server-status",
-    title: "🟢 Servidores en Línea (CDN Optimizado)",
-    category: "noticia",
-    createdAt: new Date("2026-06-06T18:00:00Z"),
-    content: "La infraestructura global está en perfecto estado. Se ha activado la compresión ecológica de imágenes que reduce el consumo de batería y datos un 40% en móviles.",
-    isStatic: true
-  },
-  {
-    id: "system-install-tip",
-    title: "💡 Instalación Premium (PWA)",
-    category: "noticia",
-    createdAt: new Date("2026-06-05T09:00:00Z"),
-    content: "Para una experiencia sin barras de navegación, pulsa 'Instalar App' e instálala en tu pantalla de inicio como una aplicación nativa de pantalla completa.",
-    isStatic: true
-  }
-];
 
 export interface Announcement {
   id: string;
@@ -60,7 +22,6 @@ export interface Announcement {
   category: "mantenimiento" | "noticia" | "actualizacion" | "urgente";
   createdAt: any;
   active?: boolean;
-  isStatic?: boolean;
 }
 
 interface NotificationsModalProps {
@@ -74,58 +35,39 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
   const [loading, setLoading] = useState(false);
   const [selectedNoticeId, setSelectedNoticeId] = useState<string | null>(null);
 
-  // Load announcements from Firestore & blend them with static premium defaults
-  const fetchAnnouncements = async () => {
-    try {
-      setLoading(true);
-      const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(12));
-      const querySnap = await getDocs(q);
-      
+  useEffect(() => {
+    setLoading(true);
+    const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(20));
+    
+    const unsubscribe = onSnapshot(q, (querySnap) => {
       const firebaseList: Announcement[] = [];
       querySnap.forEach((docSnap) => {
         const data = docSnap.data();
         firebaseList.push({
           id: docSnap.id,
-          title: data.title || "Aviso sin título",
+          title: data.title || "Aviso",
           content: data.content || "",
           category: data.category || "noticia",
           createdAt: data.createdAt?.toDate() || new Date()
         });
       });
 
-      // Combine dynamic admin announcements with our static ones
-      const combined = [...firebaseList, ...STATIC_SYSTEM_NOTICES];
+      setAnnouncements(firebaseList);
       
-      // Sort combined by date descending
-      combined.sort((a, b) => {
-        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
-        return dateB - dateA;
-      });
-
-      setAnnouncements(combined);
-
-      // Once opened and announcements loaded, mark both the latest DB notice and current version as read!
-      if (combined.length > 0) {
-        const newestId = combined[0].id;
-        localStorage.setItem("flux_last_viewed_announcement_id", newestId);
+      if (firebaseList.length > 0) {
+        localStorage.setItem("flux_last_viewed_announcement_id", firebaseList[0].id);
       }
-      localStorage.setItem("flux_last_viewed_version", CURRENT_APP_VERSION);
-      // Dispatch event so the header bell badge knows to turn grey immediately!
-      window.dispatchEvent(new Event("notifications-read"));
-    } catch (err) {
-      console.error("Error cargando comunicados:", err);
-      // On error, populate with at least our gorgeous static data
-      setAnnouncements(STATIC_SYSTEM_NOTICES);
-    } finally {
+      
+      if (isOpen) {
+        window.dispatchEvent(new Event("notifications-read"));
+      }
       setLoading(false);
-    }
-  };
+    }, (err) => {
+      console.error("Error al cargar comunicados:", err);
+      setLoading(false);
+    });
 
-  useEffect(() => {
-    if (isOpen) {
-      fetchAnnouncements();
-    }
+    return () => unsubscribe();
   }, [isOpen]);
 
   const handleDeleteAnnouncement = async (id: string, e: React.MouseEvent) => {
@@ -133,7 +75,6 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
     if (!window.confirm("¿Seguro que deseas eliminar este anuncio permanentemente?")) return;
     try {
       await deleteDoc(doc(db, "announcements", id));
-      setAnnouncements(prev => prev.filter(item => item.id !== id));
       window.dispatchEvent(new Event("notifications-read"));
     } catch (err) {
       alert("No se pudo eliminar el anuncio: " + err);
@@ -156,13 +97,13 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
   const getCategoryIcon = (category: string) => {
     switch (category) {
       case "urgente":
-        return <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />;
+        return <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" />;
       case "mantenimiento":
-        return <Server className="w-4 h-4 text-amber-400 shrink-0" />;
+        return <Server className="w-3.5 h-3.5 text-amber-400 shrink-0" />;
       case "actualizacion":
-        return <Sparkles className="w-4 h-4 text-[#1ED760] shrink-0" />;
+        return <Sparkles className="w-3.5 h-3.5 text-[#1ED760] shrink-0" />;
       default:
-        return <Info className="w-4 h-4 text-cyan-400 shrink-0" />;
+        return <Info className="w-3.5 h-3.5 text-cyan-400 shrink-0" />;
     }
   };
 
@@ -174,90 +115,77 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/90 backdrop-blur-md"
+        className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
       >
-        {/* Background Click dismiss */}
         <div className="absolute inset-0 z-0" onClick={onClose} />
 
         <motion.div
           initial={{ scale: 0.95, y: 15 }}
           animate={{ scale: 1, y: 0 }}
           exit={{ scale: 0.95, y: 15 }}
-          className="relative w-full max-w-md bg-[#0a0a0c] border border-white/10 rounded-3xl overflow-hidden shadow-[0_0_50px_rgba(30,215,96,0.1)] flex flex-col z-10 max-h-[85vh]"
+          className="relative w-full max-w-sm bg-[#0a0a0c] border border-white/10 rounded-2xl overflow-hidden shadow-2xl flex flex-col z-10 max-h-[85vh]"
         >
-          {/* Neon Top Line Accent */}
-          <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-[#1ED760] via-emerald-500 to-amber-500" />
+          <div className="absolute top-0 inset-x-0 h-[2px] bg-[#1ED760]" />
 
-          {/* Close Header Button */}
           <button
             onClick={onClose}
-            className="absolute top-4 right-4 p-2 hover:bg-white/5 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer z-20"
+            className="absolute top-3 right-3 p-1.5 hover:bg-white/10 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer z-20"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
 
-          {/* Modal Title */}
-          <div className="p-5 pb-3 border-b border-white/5 bg-gradient-to-b from-[#1ED760]/5 to-transparent text-left">
-            <h2 className="text-white text-lg font-black tracking-tight flex items-center gap-2">
-              <Bell className="w-5 h-5 text-[#1ED760] animate-swing" />
-              <span>Centro de Avisos y Comunicados</span>
+          <div className="p-4 border-b border-white/5 bg-gradient-to-b from-[#1ED760]/5 to-transparent text-left">
+            <h2 className="text-white text-[15px] font-black tracking-tight flex items-center gap-2">
+              <Bell className="w-4 h-4 text-[#1ED760]" />
+              <span>Historial y Novedades</span>
             </h2>
-            <p className="text-slate-400 text-[10px] uppercase font-black tracking-widest mt-1">
-              Optimizado para carga rápida y bajo consumo movil
+            <p className="text-slate-500 text-[9px] uppercase font-bold tracking-widest mt-1">
+              Actualizaciones Generales de Flux
             </p>
           </div>
 
-          {/* Body List of items */}
-          <div className="p-5 overflow-y-auto premium-scrollbar flex-1 space-y-3.5 max-h-[50vh] text-left">
+          <div className="p-3 overflow-y-auto premium-scrollbar flex-1 space-y-2.5 max-h-[50vh] text-left">
             {loading ? (
-              <div className="py-12 text-center text-xs text-slate-500 font-semibold animate-pulse flex flex-col items-center justify-center gap-2">
-                <div className="w-5 h-5 rounded-full border-2 border-emerald-500/20 border-t-emerald-500 animate-spin" />
-                <span>Sincronizando avisos...</span>
+              <div className="py-8 text-center text-xs text-slate-500 font-semibold animate-pulse">
+                Sincronizando Firebase...
               </div>
             ) : announcements.length === 0 ? (
-              <div className="py-12 text-center text-xs text-slate-500 font-semibold">
-                No hay comunicados del administrador activos.
+              <div className="py-8 text-center text-xs text-slate-500 font-semibold">
+                Sin novedades recientes.
               </div>
             ) : (
               announcements.map((item) => {
                 const isSelected = selectedNoticeId === item.id;
                 const formattedTime = item.createdAt instanceof Date 
                   ? item.createdAt.toLocaleDateString("es-ES", { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) 
-                  : "Reciente";
+                  : "";
 
                 return (
                   <div
                     key={item.id}
                     onClick={() => setSelectedNoticeId(isSelected ? null : item.id)}
-                    className={`p-3.5 rounded-2xl border transition-all cursor-pointer relative group flex flex-col ${
+                    className={`p-2.5 rounded-xl border transition-all cursor-pointer relative group flex flex-col ${
                       isSelected 
-                        ? "bg-[#111114] border-white/10 shadow-lg" 
-                        : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5"
+                        ? "bg-[#111114] border-[#1ED760]/30 shadow-lg" 
+                        : "bg-white/[0.02] hover:bg-white/[0.05] border-white/5"
                     }`}
                   >
-                    {/* Badge y categoría */}
-                    <div className="flex items-center justify-between gap-2 mb-2 pb-1.5 border-b border-white/5">
-                      <div className="flex items-center gap-1.5">
-                        <span className={`text-[8px] font-black uppercase tracking-[0.15em] px-2 py-0.5 rounded-md border ${getCategoryColor(item.category)}`}>
+                    <div className="flex items-center justify-between mb-1.5">
+                      <div className="flex items-center gap-1.5 overflow-hidden">
+                        {getCategoryIcon(item.category)}
+                        <span className={`text-[8.5px] font-black uppercase tracking-[0.1em] px-1.5 py-0.5 rounded border ${getCategoryColor(item.category)}`}>
                           {item.category}
                         </span>
-                        {item.isStatic && (
-                          <span className="text-[7px] font-bold text-slate-500 uppercase tracking-widest">
-                            Sistema
-                          </span>
-                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        <span className="text-[8px] text-slate-500 font-bold flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5 text-slate-600" />
+                        <span className="text-[8.5px] text-slate-500 font-bold whitespace-nowrap">
                           {formattedTime}
                         </span>
-                        {isAdmin && !item.isStatic && (
+                        {isAdmin && (
                           <button
                             onClick={(e) => handleDeleteAnnouncement(item.id, e)}
-                            className="p-1 text-slate-500 hover:text-red-400 rounded-md hover:bg-red-500/10 cursor-pointer transition-colors"
-                            title="Eliminar comunicado"
+                            className="text-slate-500 hover:text-red-400 transition-colors"
                           >
                             <Trash2 className="w-3 h-3" />
                           </button>
@@ -265,27 +193,13 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
                       </div>
                     </div>
 
-                    {/* Title */}
-                    <div className="flex items-start gap-2">
-                      <span className="mt-0.5">{getCategoryIcon(item.category)}</span>
-                      <h4 className="text-white text-xs font-black tracking-tight leading-snug group-hover:text-[#1ED760] transition-colors flex-1">
-                        {item.title}
-                      </h4>
-                    </div>
+                    <h4 className="text-white text-[11px] font-bold tracking-tight leading-snug group-hover:text-[#1ED760] transition-colors line-clamp-1 pr-6">
+                      {item.title}
+                    </h4>
 
-                    {/* Expandable/Compact Content view */}
-                    <div 
-                      className={`text-[11px] leading-relaxed text-slate-400 font-semibold mt-1.5 transition-all duration-300 overflow-hidden ${
-                        isSelected ? "max-h-[300px] opacity-100 mt-2.5 pt-2 border-t border-white/[0.03]" : "max-h-12 opacity-80"
-                      }`}
-                    >
-                      {item.content}
-                    </div>
-
-                    {/* Indicator line */}
-                    {!isSelected && (
-                      <div className="text-[8px] text-[#1ED760]/70 font-black uppercase tracking-widest text-right mt-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        Ver Detalles con 1-Click +
+                    {isSelected && (
+                      <div className="text-[10px] leading-relaxed text-slate-300 font-medium mt-2 pt-2 border-t border-white/5 whitespace-pre-wrap">
+                        {item.content}
                       </div>
                     )}
                   </div>
@@ -293,22 +207,9 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
               })
             )}
           </div>
-
-          {/* Footer view action */}
-          <div className="p-4 border-t border-white/5 bg-[#0d0d10] flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-black uppercase tracking-widest">
-              <Megaphone className="w-3.5 h-3.5 text-slate-600 shrink-0" />
-              <span>Flux Music Comunicados</span>
-            </div>
-            <button
-              onClick={onClose}
-              className="px-5 py-2 bg-white/5 hover:bg-white/10 text-white font-black uppercase text-[10px] tracking-wider rounded-xl transition-all cursor-pointer"
-            >
-              Cerrar
-            </button>
-          </div>
         </motion.div>
       </motion.div>
     </AnimatePresence>
   );
 };
+

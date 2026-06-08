@@ -133,14 +133,14 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       doc.setTextColor(15, 23, 42);
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10.5);
-      doc.text("VALORES FUNDAMENTALES DEL PROYECTO", 105, 194, { align: "center" });
+      doc.text("VALORES FUNDAMENTALES DEL ECOSISTEMA FLUX", 105, 194, { align: "center" });
 
       doc.setFont("helvetica", "normal");
       doc.setFontSize(9.5);
       doc.setTextColor(51, 65, 85);
-      doc.text("- Distribucion de Contenido de Alta Fidelidad - Infinidad de canciones y listas.", 32, 203);
-      doc.text("- Optimizacion de Audio en Segundo Plano - Prevencion de cortes de reproduccion.", 32, 211);
-      doc.text("- Canales Tematicos Modulables - Energia, Relax, Exitos y Mas.", 32, 219);
+      doc.text("• Catálogo Ilimitado y Vivo: Millones de canciones y miles de playlists 100% optimizadas.", 30, 203);
+      doc.text("• Dominio Global de Tendencias: Tops por países actualizados diariamente sin margen de error.", 30, 211);
+      doc.text("• Motor de Búsqueda Supremo: Encuentra tracks, artistas, álbumes y remixes en milisegundos.", 30, 219);
 
       // 6. PIE DE PORTADA
       doc.setFont("helvetica", "bold");
@@ -199,20 +199,20 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       // Array de características destacadas
       const techSpecs = [
         {
-          title: "Sincronizacion en la Nube Completa (Firebase)",
-          desc: "Guarda favoritos, listas personalizadas y preferencias de forma instantanea bajo tu ID de usuario."
+          title: "Sincronización Privada Inmediata",
+          desc: "Tus favoritos y listas se respaldan en tiempo real en nuestra infraestructura global segura, garantizando privacidad y disponibilidad inmediata sin dependencias públicas visibles."
         },
         {
-          title: "Interfaz Premium 'Spoty-Vibe' Optimizada",
-          desc: "Diseno premium adaptable con controles tactiles optimizados tanto para movil como para sobremesa."
+          title: "Colección de Avatares Élite Integrada",
+          desc: "Ofrece a los usuarios personalización premium con nuevos diseños exclusivos HD, gradientes dinámicos y sellos de rareza que incrementan el valor percibido y el engagement."
         },
         {
-          title: "Canales Tematicos Modulares",
-          desc: "Cambia la vibracion del entorno en 1 segundo con accesos rapidos como Energia, Relax, Exitos y Explorar."
+          title: "Centro de Notificaciones en Tiempo Real",
+          desc: "Comunícate con tu audiencia de manera fluida y profesional desde la cabecera. Un historial de novedades unificado y directo al consumidor, sin interrupciones ni ventanas emergentes."
         },
         {
-          title: "Guardian de Fluidez de Audio",
-          desc: "Algoritmos optimizados de alerta de primer plano para evitar interrupciones de reproduccion al bloquear el movil."
+          title: "Modo Inmersivo Perpetuo y Bajo Consumo",
+          desc: "Diseñada como un ecosistema ininterrumpido. Flux neutraliza orgánicamente el bloqueo del dispositivo activando motores de muy bajo consumo. La música brilla y la pantalla se mantiene viva eternamente."
         }
       ];
 
@@ -232,9 +232,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9.5);
         doc.setTextColor(71, 85, 105);
-        doc.text(spec.desc, 26, featY + 8);
+        
+        const splitDesc = doc.splitTextToSize(spec.desc, 160);
+        doc.text(splitDesc, 26, featY + 8);
 
-        featY += 18;
+        featY += 10 + (splitDesc.length * 4.5);
       });
 
 
@@ -316,7 +318,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
       doc.setFontSize(8.5);
       doc.setTextColor(51, 65, 85);
       doc.text("• Acceso completo personal", p1X + 6, p1Y + 18);
-      doc.text("• Listas ilimitadas en la nube", p1X + 6, p1Y + 24);
+      doc.text("• Listas personalizadas ilimitadas", p1X + 6, p1Y + 24);
       doc.text("• Buscador global integrado", p1X + 85, p1Y + 18);
       doc.text("• Sincronizacion de favoritos", p1X + 85, p1Y + 24);
 

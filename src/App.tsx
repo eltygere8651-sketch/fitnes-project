@@ -45,15 +45,10 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const CURRENT_VERSION = "1.3.1";
-
     // Real-time unread check to guarantee 100% instant notification indicator illumination
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
     const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
       try {
-        const lastViewedVersion = localStorage.getItem("flux_last_viewed_version");
-        const hasUnreadVersion = lastViewedVersion !== CURRENT_VERSION;
-
         const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
         let hasUnreadDb = false;
 
@@ -62,21 +57,14 @@ function AppContent() {
           if (newestDoc.id !== lastViewed) {
             hasUnreadDb = true;
           }
-        } else if (!lastViewed) {
-          // If there's no DB announcements, don't force DB unread, let version check control
-          hasUnreadDb = false;
         }
 
-        setHasUnread(hasUnreadVersion || hasUnreadDb);
+        setHasUnread(hasUnreadDb);
       } catch (err) {
         console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
-        const lastViewedVersion = localStorage.getItem("flux_last_viewed_version");
-        setHasUnread(lastViewedVersion !== CURRENT_VERSION);
       }
     }, (error) => {
       console.warn("Error en el snapshot de anuncios:", error);
-      const lastViewedVersion = localStorage.getItem("flux_last_viewed_version");
-      setHasUnread(lastViewedVersion !== CURRENT_VERSION);
     });
 
     const handleRead = () => {

@@ -3,7 +3,12 @@ const ASSETS_TO_CACHE = [
   "/",
   "/index.html",
   "/manifest.json",
-  "/icon-512.svg"
+  "/icon-512.svg",
+  "/icon-180.png",
+  "/icon-192.png",
+  "/icon-512.png",
+  "/apple-touch-icon.png",
+  "/apple-touch-icon-precomposed.png"
 ];
 
 self.addEventListener("install", (event) => {

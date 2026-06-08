@@ -18,6 +18,20 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.4.2",
+    title: "✨ Actualización Flux v1.4.2",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T13:25:00Z"),
+    content: "• Ajustes de visibilidad de perfil personal: Hemos arreglado un comportamiento donde los administradores y ciertos perfiles no mostraban su nombre de perfil correctamente al crear playlists personalizadas. A partir de ahora el tag exclusivo #fluxmusicoficial sólo aplicará cuando se especifique así."
+  },
+  {
+    id: "update-v1.4.1",
+    title: "✨ Actualización Flux v1.4.1",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T13:16:00Z"),
+    content: "• Solución óptima aplicada al funcionamiento de Playlists: Restaurada y optimizada la visibilidad de tu biblioteca y canciones guardadas.\n• Corrección de autoría en canales de contenido: Etiquetas de 'Socio Premium' y validación especial '#fluxmusicoficial' para contenido curado por administradores.\n• Notificaciones en tiempo real integradas optimizadas sin afectar módulos dependientes."
+  },
+  {
     id: "update-v1.4.0",
     title: "✨ Actualización Flux v1.4.0",
     category: "actualizacion",
@@ -80,11 +94,8 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
 
       setAnnouncements(combined);
       
-      if (combined.length > 0) {
+      if (isOpen && combined.length > 0) {
         localStorage.setItem("flux_last_viewed_announcement_id", combined[0].id);
-      }
-      
-      if (isOpen) {
         window.dispatchEvent(new Event("notifications-read"));
       }
       setLoading(false);

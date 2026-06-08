@@ -103,5 +103,11 @@ service cloud.firestore {
       // Crear solicitud de prueba para su propia cuenta
       allow create: if isSignedIn() && (request.auth.uid == requestId) && (incoming().uid == request.auth.uid);
     }
+
+    // 5. Public Announcements
+    match /announcements/{announcementId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

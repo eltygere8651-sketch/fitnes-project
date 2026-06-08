@@ -67,9 +67,11 @@ export const loginWithEmail = async (email: string, pass: string) => {
 export const signupWithEmail = async (email: string, pass: string, nickname?: string) => {
   try {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    if (nickname) {
-      await updateProfile(cred.user, { displayName: nickname });
-    }
+    const defaultAvatar = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(nickname || email || cred.user.uid)}`;
+    await updateProfile(cred.user, { 
+      displayName: nickname || "Usuario", 
+      photoURL: defaultAvatar 
+    });
     return cred.user;
   } catch (error: any) {
     console.error("Email registration failed:", error);

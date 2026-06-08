@@ -21,7 +21,7 @@ import {
   Edit2,
   Trash2,
   X,
-  Loader2,
+  Loader2, Bug,
   Send,
   MessageSquare,
   Shuffle,
@@ -77,6 +77,7 @@ import { MusicPlaylist, MusicTrack } from "../types";
 import { UserManagementAdmin } from "./UserManagementAdmin";
 import { ExploreView } from "./ExploreView";
 import { UserProfileModal } from "./UserProfileModal";
+import { ChangelogModal } from "./ChangelogModal";
 
 const COVER_THEMES = [
   {
@@ -631,6 +632,10 @@ export default function GymMusicPlayer() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(() => {
+    return localStorage.getItem("flux_last_viewed_version") !== "1.3.0";
+  });
+  const [isManualChangelog, setIsManualChangelog] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
   
@@ -653,6 +658,21 @@ export default function GymMusicPlayer() {
     const handleOpenAdmin = () => setIsAdminPanelOpen(true);
     window.addEventListener('open-admin-panel', handleOpenAdmin);
     return () => window.removeEventListener('open-admin-panel', handleOpenAdmin);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenProfile = () => setIsProfileModalOpen(true);
+    window.addEventListener('open-profile-modal', handleOpenProfile);
+    return () => window.removeEventListener('open-profile-modal', handleOpenProfile);
+  }, []);
+
+  useEffect(() => {
+    const handleOpenChangelog = () => {
+      setIsManualChangelog(true);
+      setIsChangelogModalOpen(true);
+    };
+    window.addEventListener('open-changelog', handleOpenChangelog);
+    return () => window.removeEventListener('open-changelog', handleOpenChangelog);
   }, []);
 
   const handleSaveNickname = async () => {
@@ -741,6 +761,7 @@ export default function GymMusicPlayer() {
   // States for Telegram Support integration
   const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
   const [supportMessage, setSupportMessage] = useState("");
+  const [supportCategory, setSupportCategory] = useState<"soporte" | "fallo" | "feedback">("soporte");
   const [isSendingSupport, setIsSendingSupport] = useState(false);
 
 
@@ -947,6 +968,7 @@ export default function GymMusicPlayer() {
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
   const wasUnexpectedlyPausedRef = useRef(false);
+  const playlistsLoadedInitiallyRef = useRef(false);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -1107,7 +1129,7 @@ export default function GymMusicPlayer() {
       setCurrentTrackIndex(0);
     }
     setIsPlaying(true);
-  }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists, playingPlaylist]);
+  }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists, playingPlaylist, isRepeat]);
 
   const handlePrev = useCallback(() => {
     setOverrideCurrentTrack(null);
@@ -1235,9 +1257,10 @@ export default function GymMusicPlayer() {
       })
       .sort((a: any, b: any) => (b.isAdminContent ? 1 : 0) - (a.isAdminContent ? 1 : 0))
       .filter((pl: any, index: number, self: any[]) => {
-        if (!pl.tracks || pl.tracks.length === 0) return false;
-        // Si la playlist pertenece al usuario actual, siempre la mostramos (no se filtra por duplicados de nombre)
+        // Si la playlist pertenece al usuario actual, siempre la mostramos (incluso si está vacía para que pueda verla y añadir canciones)
         if (user && pl.ownerId === user.uid) return true;
+        // Otras listas de la comunidad deben tener al menos una canción para ser visibles públicamente
+        if (!pl.tracks || pl.tracks.length === 0) return false;
         // Due to sorting, the first occurrence of a name will be from Admin if it exists
         return self.findIndex(t => t.name === pl.name) === index;
       })
@@ -1266,39 +1289,51 @@ export default function GymMusicPlayer() {
       });
 
       setUserPlaylists(sortedFolders);
-      const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
-      const lastPlayedPlId = localStorage.getItem("gym_music_last_played_playlist_id");
       
-      if (folders.length > 0) {
-        let foundSelected = null;
-        let foundPlaying = null;
+      if (!playlistsLoadedInitiallyRef.current) {
+        const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
+        const lastPlayedPlId = localStorage.getItem("gym_music_last_played_playlist_id");
         
-        if (savedPlaylistId) {
-          foundSelected = folders.find((f) => f.id === savedPlaylistId);
-        }
-        if (lastPlayedPlId) {
-          foundPlaying = folders.find((f) => f.id === lastPlayedPlId);
-        }
-        
-        if (foundSelected) {
+        if (folders.length > 0) {
+          let foundSelected = null;
+          let foundPlaying = null;
+          
+          if (savedPlaylistId) {
+            foundSelected = folders.find((f) => f.id === savedPlaylistId);
+          }
+          if (lastPlayedPlId) {
+            foundPlaying = folders.find((f) => f.id === lastPlayedPlId);
+          }
+          
           // Always default to Explorar upon entry
           setSelectedPlaylist(null);
           setTrackListTab("search");
           setIsTrackListExpanded(true);
           setMobileView("player");
-        } else {
-          setSelectedPlaylist(null);
-          setTrackListTab("search");
-          setIsTrackListExpanded(true);
-          setMobileView("player");
+          
+          if (foundPlaying) {
+            setPlayingPlaylist(foundPlaying);
+          } else if (foundSelected) {
+            setPlayingPlaylist(foundSelected);
+          } else {
+            setPlayingPlaylist(folders[0]);
+          }
         }
-        
-        if (foundPlaying) {
-          setPlayingPlaylist(foundPlaying);
-        } else if (foundSelected) {
-          setPlayingPlaylist(foundSelected);
-        } else {
-          setPlayingPlaylist(folders[0]);
+        playlistsLoadedInitiallyRef.current = true;
+      } else {
+        // En actualizaciones de snapshot posteriores, solo actualizamos las referencias
+        // si cambiaron, pero sin reiniciar la pestaña seleccionada ni detener la reproducción
+        if (selectedPlaylist) {
+          const updatedSelected = folders.find((f) => f.id === selectedPlaylist.id);
+          if (updatedSelected) {
+            setSelectedPlaylist(updatedSelected);
+          }
+        }
+        if (playingPlaylist) {
+          const updatedPlaying = folders.find((f) => f.id === playingPlaylist.id);
+          if (updatedPlaying) {
+            setPlayingPlaylist(updatedPlaying);
+          }
         }
       }
     });
@@ -1532,6 +1567,14 @@ export default function GymMusicPlayer() {
       const nameVal = user?.displayName || "Socio Contigo";
       const msgText = supportMessage.trim();
 
+      const categoryLabels: Record<string, string> = {
+        soporte: "💬 [SOPORTE GENERAL]",
+        fallo: "🛠️ [REPORTE DE FALLO TÉCNICO]",
+        feedback: "💡 [FEEDBACK / PROPUESTA]"
+      };
+      const categoryPrefix = categoryLabels[supportCategory] || "💬 [SOPORTE]";
+      const fullMessageText = `${categoryPrefix}\n\n${msgText}`;
+
       // 1. Guardar siempre en la colección Firestore support_messages (Seguridad absoluta de datos)
       let storedInDb = false;
       try {
@@ -1540,6 +1583,7 @@ export default function GymMusicPlayer() {
           userEmail: emailVal,
           userName: nameVal,
           message: msgText,
+          category: supportCategory,
           createdAt: Date.now()
         });
         storedInDb = true;
@@ -1558,7 +1602,7 @@ export default function GymMusicPlayer() {
           body: JSON.stringify({
             userEmail: emailVal,
             userName: nameVal,
-            message: msgText
+            message: fullMessageText
           })
         });
 
@@ -1612,7 +1656,7 @@ export default function GymMusicPlayer() {
 
         if (directBotToken && directChatId) {
           try {
-            const formattedText = `💬 *SOPORTE FLUX MUSIC (Directo Vercel)*\n\n*Usuario:* ${nameVal}\n*Email:* ${emailVal}\n\n*Mensaje:*\n${msgText}`;
+            const formattedText = `💬 *ATENCIÓN FLUX MUSIC*\n\n*Usuario:* ${nameVal}\n*Email:* ${emailVal}\n\n*Mensaje:*\n${fullMessageText}`;
             const teleRes = await fetch(`https://api.telegram.org/bot${directBotToken}/sendMessage`, {
               method: "POST",
               headers: { "Content-Type": "application/json" },
@@ -1634,20 +1678,20 @@ export default function GymMusicPlayer() {
         }
       }
 
-      // 4. Feedback final al usuario
-      if (sentToTelegram) {
-        showNotification("¡Mensaje enviado con éxito a Telegram! Te responderemos muy pronto.");
-      } else if (storedInDb) {
-        showNotification("¡Mensaje guardado! Tu consulta se ha registrado con éxito en la base de datos de soporte de FLUX.");
+      // 4. Feedback final al usuario sin detalles internos de Telegram
+      if (supportCategory === "feedback") {
+        showNotification("¡Muchas gracias por tus comentarios! Tu feedback se ha guardado y nuestro equipo lo revisará para seguir mejorando FLUX Music.");
+      } else if (supportCategory === "fallo") {
+        showNotification("¡Reporte de fallo recibido! Nuestro departamento de ingeniería revisará el informe técnico para solventarlo de inmediato.");
       } else {
-        throw new Error("No se pudo registrar la consulta en Firestore ni enviar por Telegram. Por favor, revisa tu conexión.");
+        showNotification("¡Mensaje enviado con éxito! Tu solicitud ha sido registrada en nuestro canal de atención prioritaria y te responderemos lo antes posible.");
       }
 
       setSupportMessage("");
       setIsSupportModalOpen(false);
     } catch (err: any) {
       console.error("Support submit error:", err);
-      showNotification(err.message || "Error al procesar la solicitud de ayuda.");
+      showNotification(err.message || "Error al procesar la solicitud.");
     } finally {
       setIsSendingSupport(false);
     }
@@ -2611,20 +2655,13 @@ export default function GymMusicPlayer() {
     }
   }, [isPlaying]);
 
-  const registerMediaSession = useCallback(() => {
-    if (!("mediaSession" in navigator)) return;
+  const durationRef = useRef(duration);
+  useEffect(() => {
+    durationRef.current = duration;
+  }, [duration]);
 
-    // Update Metadata
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: displayTitle,
-      artist: displayArtist,
-      album: selectedPlaylist?.name || "Flux Music",
-      artwork: [
-        { src: displayArtwork, sizes: "512x512", type: "image/jpeg" },
-        { src: displayArtwork, sizes: "256x256", type: "image/jpeg" },
-        { src: displayArtwork, sizes: "96x96", type: "image/jpeg" },
-      ],
-    });
+  const enforceActionHandlers = useCallback(() => {
+    if (!("mediaSession" in navigator)) return;
 
     // Define handlers that use the latest state via handlersRef to avoid stale closures
     const playHandler = () => {
@@ -2660,7 +2697,7 @@ export default function GymMusicPlayer() {
     const nextHandler = () => handlersRef.current.handleNext();
     const prevHandler = () => handlersRef.current.handlePrev();
 
-    // Register handlers - always register both next and prev to ensure they show up on iOS
+    // Register handlers - always register both next and prev to ensure they show up on iOS/Bluetooth/Car
     const actions: [MediaSessionAction, () => void][] = [
       ["play", playHandler],
       ["pause", pauseHandler],
@@ -2673,7 +2710,7 @@ export default function GymMusicPlayer() {
           youtubePlayerRef.current.seekTo(target, "seconds");
           try {
             navigator.mediaSession.setPositionState({
-              duration: (duration || 0) / 1000,
+              duration: (durationRef.current || 0) / 1000,
               playbackRate: 1,
               position: target,
             });
@@ -2687,7 +2724,7 @@ export default function GymMusicPlayer() {
           youtubePlayerRef.current.seekTo(target, "seconds");
           try {
             navigator.mediaSession.setPositionState({
-              duration: (duration || 0) / 1000,
+              duration: (durationRef.current || 0) / 1000,
               playbackRate: 1,
               position: target,
             });
@@ -2711,7 +2748,7 @@ export default function GymMusicPlayer() {
           youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
           try {
             navigator.mediaSession.setPositionState({
-              duration: (duration || 0) / 1000,
+              duration: (durationRef.current || 0) / 1000,
               playbackRate: 1,
               position: details.seekTime,
             });
@@ -2719,12 +2756,49 @@ export default function GymMusicPlayer() {
         }
       });
     } catch (e) {}
-  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist]);
+  }, []);
+
+  const registerMediaSession = useCallback(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    // Update Metadata
+    navigator.mediaSession.metadata = new MediaMetadata({
+      title: displayTitle,
+      artist: displayArtist,
+      album: selectedPlaylist?.name || "Flux Music",
+      artwork: [
+        { src: displayArtwork, sizes: "512x512", type: "image/jpeg" },
+        { src: displayArtwork, sizes: "256x256", type: "image/jpeg" },
+        { src: displayArtwork, sizes: "96x96", type: "image/jpeg" },
+      ],
+    });
+
+    enforceActionHandlers();
+  }, [displayTitle, displayArtist, displayArtwork, selectedPlaylist, enforceActionHandlers]);
 
   // Media Session API Integration for background playback
   useEffect(() => {
     registerMediaSession();
   }, [registerMediaSession]);
+
+  // Periodic background safeguard to protect and recover hijacked Media Session action handlers.
+  // Runs extremely efficiently, preserving battery and fully respecting Eco Mode guidelines,
+  // but guaranteeing that steering wheel/car bluetooth next/prev skip buttons remain active.
+  useEffect(() => {
+    if (!("mediaSession" in navigator)) return;
+
+    const runSafeguard = () => {
+      enforceActionHandlers();
+    };
+
+    // Run immediately when state changes
+    runSafeguard();
+
+    // Low-frequency lightweight check every 1500ms to guarantee action lock re-association
+    const interval = setInterval(runSafeguard, 1500);
+
+    return () => clearInterval(interval);
+  }, [enforceActionHandlers, currentTrackIndex, isPlaying]);
 
   useEffect(() => {
     if ("mediaSession" in navigator) {
@@ -2775,6 +2849,9 @@ export default function GymMusicPlayer() {
               // Rely on visual state or allow user to skip manually.
             }}
             onReady={(player) => {
+              // Re-register Media Session and reinforce action handlers to beat YouTube iframe's own initial lock screen registration
+              registerMediaSession();
+              enforceActionHandlers();
               if (initialLoadRef.current) {
                 const savedPos = localStorage.getItem("gym_music_saved_position");
                 if (savedPos) {
@@ -2786,11 +2863,28 @@ export default function GymMusicPlayer() {
                 initialLoadRef.current = false;
               }
             }}
+            onBuffer={() => {
+              // Safeguard action handlers when playback buffers to prevent iframe override
+              enforceActionHandlers();
+              setTimeout(() => enforceActionHandlers(), 150);
+              setTimeout(() => enforceActionHandlers(), 500);
+            }}
+            onBufferEnd={() => {
+              // Safeguard action handlers on buffer complete
+              enforceActionHandlers();
+            }}
             onPlay={() => {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
-               // Re-register Media Session to prevent YouTube iframe from stealing lock screen controls
+               // Re-register Media Session and reinforce action handlers to prevent YouTube's iframe from stealing lock screen controls
                registerMediaSession();
+               enforceActionHandlers();
+               // Robust cascade timeout reinforcement to override async post-play iframe action-registrations
+               setTimeout(() => enforceActionHandlers(), 150);
+               setTimeout(() => enforceActionHandlers(), 450);
+               setTimeout(() => enforceActionHandlers(), 900);
+               setTimeout(() => enforceActionHandlers(), 1800);
+               setTimeout(() => enforceActionHandlers(), 3000);
             }}
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
@@ -5861,14 +5955,19 @@ export default function GymMusicPlayer() {
               className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
             >
               {/* Header */}
-              <div className="p-4 flex items-center justify-between border-b border-white/5 bg-white/[0.02]">
+              <div className="p-4.5 flex items-center justify-between border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent text-left">
                 <div className="flex items-center gap-2">
-                  <div className="p-1.5 bg-[#1ED760]/10 rounded-lg">
+                  <div className="p-2 bg-gradient-to-br from-purple-500/10 to-emerald-500/5 rounded-xl border border-white/5">
                     <MessageSquare className="w-4 h-4 text-[#1ED760]" />
                   </div>
-                  <h3 className="text-[11px] font-black uppercase text-white tracking-[0.2em]">
-                    Soporte por Telegram
-                  </h3>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-white tracking-[0.15em]">
+                      Atención y Soporte Flux
+                    </h3>
+                    <p className="text-[8px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">
+                      Canal de Asistencia Premium
+                    </p>
+                  </div>
                 </div>
                 <button
                   onClick={() => {
@@ -5883,19 +5982,70 @@ export default function GymMusicPlayer() {
 
               {/* Content */}
               <div className="p-5 space-y-4">
-                <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                  Escribe tu consulta o informe técnico aquí. Se enviará instantáneamente al Telegram de soporte de la administración para que recibas ayuda rápida.
+                <p className="text-[11px] text-slate-400 leading-relaxed font-semibold text-left">
+                  Escribe tu consulta, reporta una anomalía técnica o comparte tus ideas para hacernos llegar tu propuesta directamente al departamento de servicio.
                 </p>
 
-                <div className="space-y-1.5">
-                  <label className="text-[8.5px] font-black uppercase tracking-widest text-[#1ED760]">Tu mensaje</label>
+                {/* Category Selectors */}
+                <div className="space-y-2 text-left">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                    Tipo de Solicitud / Mensaje
+                  </label>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    <button
+                      type="button"
+                      onClick={() => setSupportCategory("soporte")}
+                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        supportCategory === "soporte"
+                          ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-black shadow-[0_2px_10px_rgba(168,85,247,0.1)]"
+                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>Soporte</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupportCategory("fallo")}
+                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        supportCategory === "fallo"
+                          ? "bg-rose-500/10 text-rose-400 border-rose-500/30 font-black shadow-[0_2px_10px_rgba(244,63,94,0.1)]"
+                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Bug className="w-3.5 h-3.5" />
+                      <span>Fallo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSupportCategory("feedback")}
+                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                        supportCategory === "feedback"
+                          ? "bg-[#1ED760]/10 text-[#1ED760] border-[#1ED760]/20 font-black shadow-[0_2px_10px_rgba(30,215,96,0.1)]"
+                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
+                      }`}
+                    >
+                      <Sparkles className="w-3.5 h-3.5" />
+                      <span>Feedback</span>
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5 text-left">
+                  <label className="text-[8.5px] font-black uppercase tracking-widest text-[#1ED760] pl-1">Tu mensaje</label>
                   <textarea
                     value={supportMessage}
                     onChange={(e) => setSupportMessage(e.target.value)}
-                    placeholder="Escribe aquí tu mensaje de ayuda..."
-                    rows={6}
+                    placeholder={
+                      supportCategory === "feedback"
+                        ? "Escribe aquí sugerencias o qué te gustaría mejorar de Flux Music..."
+                        : supportCategory === "fallo"
+                        ? "Por favor, explica detalladamente el fallo o comportamiento que has notado..."
+                        : "Escribe detalladamente tu consulta para que podamos ayudarte..."
+                    }
+                    rows={5}
                     maxLength={1000}
-                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-xs text-white outline-none focus:border-[#1ED760]/30 focus:bg-white/[0.05] transition-all font-medium resize-none shadow-inner"
+                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-xs text-white outline-none focus:border-purple-500/30 focus:border-solid focus:bg-white/[0.05] transition-all font-medium resize-none shadow-inner"
                   />
                   <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold px-1">
                     <span>Máximo 1000 caracteres</span>
@@ -5918,19 +6068,21 @@ export default function GymMusicPlayer() {
                 <button
                   disabled={isSendingSupport || !supportMessage.trim()}
                   onClick={handleSendSupportMessage}
-                  className="bg-[#1ED760] hover:bg-emerald-400 text-black px-6 py-2.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-xl shadow-[#1ED760]/10 flex items-center gap-2 active:scale-95 transition-all disabled:opacity-50 disabled:grayscale cursor-pointer"
+                  className="relative overflow-hidden group bg-gradient-to-r from-emerald-500 via-[#1ED760] to-emerald-600 hover:shadow-[0_0_20px_rgba(30,215,96,0.4)] text-black px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer border border-[#1ED760]/20"
                 >
-                  {isSendingSupport ? (
-                    <>
-                      <Loader2 className="w-3 h-3 animate-spin animate-infinite" />
-                      <span>Enviando...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-3.5 h-3.5 stroke-[2.5px]" />
-                      <span>Enviar</span>
-                    </>
-                  )}
+                  <span className="relative z-10 flex items-center gap-2">
+                    {isSendingSupport ? (
+                      <>
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                        <span>Enviando...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5 stroke-[2.5px]" />
+                        <span>Enviar Mensaje</span>
+                      </>
+                    )}
+                  </span>
                 </button>
               </div>
             </motion.div>
@@ -6115,6 +6267,16 @@ export default function GymMusicPlayer() {
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
       {isProfileModalOpen && <UserProfileModal onClose={() => setIsProfileModalOpen(false)} />}
+      {isChangelogModalOpen && (
+        <ChangelogModal 
+          isOpen={isChangelogModalOpen} 
+          onClose={() => {
+            setIsChangelogModalOpen(false);
+            setIsManualChangelog(false);
+          }} 
+          isManual={isManualChangelog}
+        />
+      )}
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
         <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">

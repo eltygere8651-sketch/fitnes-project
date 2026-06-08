@@ -76,10 +76,11 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
             
             if (!userSnap.exists()) {
               // Create user doc without trial
+              const defaultAvatar = u.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(u.displayName || u.email || u.uid)}`;
               await setDoc(userRef, {
                 email: u.email || "anonymous",
                 displayName: u.displayName || "Usuario",
-                photoURL: u.photoURL,
+                photoURL: defaultAvatar,
                 lastLogin: serverTimestamp(),
                 trialStart: null,
                 plan: "none",

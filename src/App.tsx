@@ -14,19 +14,59 @@ import {
   Shield,
   ChevronDown,
   PlusSquare,
-  ArrowDown
+  ArrowDown,
+  Bell
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
-import { logout } from "./lib/firebase";
+import { logout, db } from "./lib/firebase";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
+import { NotificationsModal } from "./components/NotificationsModal";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
   const isAdmin = user?.email === "eltygere8651@gmail.com";
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [hasUnread, setHasUnread] = useState(false);
+
+  useEffect(() => {
+    const checkUnread = async () => {
+      try {
+        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
+        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+        const snap = await getDocs(q);
+        if (!snap.empty) {
+          const newestDoc = snap.docs[0];
+          if (newestDoc.id !== lastViewed) {
+            setHasUnread(true);
+            return;
+          }
+        }
+        if (!lastViewed) {
+          setHasUnread(true);
+        }
+      } catch (err) {
+        console.warn("No se pudo revisar anuncios de Firebase:", err);
+        if (!localStorage.getItem("flux_last_viewed_announcement_id")) {
+          setHasUnread(true);
+        }
+      }
+    };
+
+    checkUnread();
+
+    const handleRead = () => {
+      setHasUnread(false);
+    };
+    window.addEventListener("notifications-read", handleRead);
+    return () => {
+      window.removeEventListener("notifications-read", handleRead);
+    };
+  }, []);
 
   // --- Page Visibility State for Power Saving ---
   const [isPageVisible, setIsPageVisible] = useState(true);
@@ -127,11 +167,22 @@ function AppContent() {
                   if (window.innerWidth < 640) setIsMobileMenuOpen(!isMobileMenuOpen);
                   else setIsDesktopMenuOpen(!isDesktopMenuOpen);
                 }}
-                className="flex items-center justify-center h-8 w-8 sm:h-9 sm:w-auto sm:px-3 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group"
+                className="flex items-center justify-center p-1.5 sm:p-2 pr-3.5 sm:pr-4 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-emerald-500/30 transition-all duration-300 active:scale-90 cursor-pointer gap-2 group shadow-[0_2px_10px_rgba(0,0,0,0.4)]"
                 title="Menú"
              >
-                <Menu className="w-4 h-4 group-hover:text-emerald-400 transition-colors" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] hidden sm:inline-block">Menú</span>
+                {user ? (
+                  <img 
+                    src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
+                    alt="Perfil" 
+                    className="w-5.5 h-5.5 sm:w-6 sm:h-6 rounded-full object-cover border border-[#1ED760]/30 shrink-0 shadow-md" 
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <Menu className="w-4 h-4 group-hover:text-emerald-400 transition-colors shrink-0" />
+                )}
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] group-hover:text-emerald-300 transition-colors">
+                  Menú
+                </span>
              </button>
           </div>
 
@@ -160,7 +211,21 @@ function AppContent() {
               </div>
             </div>
           </div>
-          <div className="w-8 shrink-0" /> {/* Spacer for symmetry */}
+          
+          {/* RIGHT: PREMIUM BELL NOTIFICATIONS */}
+          <div className="flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setIsNotificationsOpen(true)}
+              className="relative flex items-center justify-center p-2 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.4)] group"
+              title="Avisos e importantes"
+            >
+              <Bell className="w-4 h-4 group-hover:text-amber-400 transition-colors shrink-0" />
+              {hasUnread && (
+                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 border border-[#080809] rounded-full animate-bounce shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+              )}
+            </button>
+          </div>
         </div>
 
         {/* MOBILE MENU */}
@@ -173,21 +238,36 @@ function AppContent() {
               transition={{ duration: 0.2, ease: "easeInOut" }}
               className="sm:hidden overflow-hidden w-full border-t border-white/5 bg-[#090b0a]"
             >
-              <div className="px-3.5 py-2.5 flex items-center justify-center gap-2 bg-[#090b0a]">
+              <div className="px-3.5 py-2.5 flex flex-wrap items-center justify-center gap-2 bg-[#090b0a]">
                 {canShowInstallHelper && (
                   <button
                     type="button"
                     onClick={() => { setIsMobileMenuOpen(false); handleInstallPress(); }}
-                    className="flex-1 h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shadow-[0_2px_8px_rgba(30,215,96,0.15)] active:scale-[0.98]"
+                    className="flex-1 min-w-[90px] h-8 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 shadow-[0_2px_8px_rgba(30,215,96,0.15)] active:scale-[0.98]"
                   >
                     <Download className="w-3 h-3 stroke-[2.5px]" />
                     <span>Instalar App</span>
                   </button>
                 )}
+                {user && (
+                  <button
+                    type="button"
+                    onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
+                    className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-emerald-500/20 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-[0.98]"
+                  >
+                    <img 
+                      src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
+                      alt="Perfil" 
+                      className="w-4 h-4 rounded-full object-cover border border-[#1ED760]/30" 
+                      referrerPolicy="no-referrer"
+                    />
+                    <span>Perfil</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-support')); }}
-                  className="flex-1 h-8 bg-[#121212] border border-[#1ED760]/15 hover:border-[#1ED760]/30 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                  className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-[#1ED760]/15 hover:border-[#1ED760]/30 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
                 >
                   <Headphones className="w-3 h-3 stroke-[2.5px]" />
                   <span>Soporte</span>
@@ -196,7 +276,7 @@ function AppContent() {
                   <button
                     type="button"
                     onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-admin-panel')); }}
-                    className="flex-1 h-8 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    className="flex-1 min-w-[90px] h-8 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
                   >
                     <Shield className="w-3 h-3 stroke-[2.5px]" />
                     <span>Admin</span>
@@ -206,7 +286,7 @@ function AppContent() {
                   <button
                     type="button"
                     onClick={() => { setIsMobileMenuOpen(false); logout(); }}
-                    className="flex-1 h-8 bg-emerald-950/25 border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    className="flex-1 min-w-[90px] h-8 bg-emerald-950/25 border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
                   >
                     <LogOut className="w-3 h-3 stroke-[2.5px]" />
                     <span>Salir</span>
@@ -215,7 +295,7 @@ function AppContent() {
                   <button
                     type="button"
                     onClick={() => { setIsMobileMenuOpen(false); setAuthModalOpen(true); }}
-                    className="flex-1 h-8 bg-[#121212] border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
+                    className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-[#1ED760]/20 hover:border-[#1ED760]/30 text-[#1ED760] font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
                   >
                     <LogIn className="w-3 h-3 stroke-[2.5px]" />
                     <span>Entrar</span>
@@ -245,6 +325,21 @@ function AppContent() {
                 >
                   <Download className="w-3.5 h-3.5 stroke-[2.5px]" />
                   <span>Instalar App</span>
+                </button>
+              )}
+              {user && (
+                <button
+                  type="button"
+                  onClick={() => { setIsDesktopMenuOpen(false); window.dispatchEvent(new Event('open-profile-modal')); }}
+                  className="h-8 bg-[#121212] border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
+                >
+                  <img 
+                    src={user.photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user.uid || 'flux')}`} 
+                    alt="Perfil" 
+                    className="w-4.5 h-4.5 rounded-full object-cover border border-[#1ED760]/30 shrink-0" 
+                    referrerPolicy="no-referrer"
+                  />
+                  <span>Mi Perfil</span>
                 </button>
               )}
               <button
@@ -373,6 +468,13 @@ function AppContent() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* PREMIUM COMPACT NOTIFICATIONS DIALOG */}
+      <NotificationsModal 
+        isOpen={isNotificationsOpen} 
+        onClose={() => setIsNotificationsOpen(false)} 
+        isAdmin={isAdmin}
+      />
     </div>
   );
 }

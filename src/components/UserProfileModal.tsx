@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { useFirebase } from "./FirebaseProvider";
 import { auth, db } from "../lib/firebase";
 import { 
@@ -25,7 +25,9 @@ import {
   Check, 
   AlertCircle, 
   Sparkles,
-  RefreshCw
+  RefreshCw,
+  Camera,
+  Upload
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -33,14 +35,43 @@ interface UserProfileModalProps {
   onClose: () => void;
 }
 
+// Preset cartoon seeds for premium avatar select
+const PRESET_AVATARS = [
+  { name: "Guerrero", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Jack" },
+  { name: "Estrella", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Luna" },
+  { name: "Fuerte", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Racer" },
+  { name: "Escucha", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Milo" },
+  { name: "Cósmico", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Nova" },
+  { name: "Ciborg", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Ciborg" },
+  { name: "Atleta", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Spike" },
+  { name: "Fénix", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix" },
+];
+
+const ADMIN_AVATARS = [
+  { name: "Líder Supremo", url: "https://api.dicebear.com/7.x/bottts-neutral/svg?seed=Supremo&eyes=glowing&mouth=smile" },
+  { name: "Cerebro Flux", url: "https://api.dicebear.com/7.x/bottts/svg?seed=FluxBrain&eyes=scared&mouth=bite" },
+  { name: "Comandante", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=Commander" },
+  { name: "Guardiana", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=Guardian" },
+  { name: "Arquitecto", url: "https://api.dicebear.com/7.x/shapes/svg?seed=Architect" },
+  { name: "Soberano Oro", url: "https://api.dicebear.com/7.x/bottts/svg?seed=GoldRoyal&backgroundType=solid&backgroundColor=f59e0b" },
+  { name: "Ciber Neon", url: "https://api.dicebear.com/7.x/pixel-art/svg?seed=NeonViper&backgroundType=solid&backgroundColor=10b981" },
+  { name: "Deidad Flux", url: "https://api.dicebear.com/7.x/identicon/svg?seed=FluxDeity&backgroundType=solid&backgroundColor=6366f1" }
+];
+
 export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) => {
   const { user, accessData } = useFirebase();
+  const isAdmin = user?.email === "eltygere8651@gmail.com";
 
   // Basic form states
   const [nickname, setNickname] = useState(user?.displayName || "");
   const [email, setEmail] = useState(user?.email || "");
   const [newPassword, setNewPassword] = useState("");
   
+  // Custom Avatar Picker & Upload states
+  const [photoURL, setPhotoURL] = useState(user?.photoURL || "");
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   // Re-auth requirements
   const [showReauth, setShowReauth] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -70,6 +101,67 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
     return "Socio Premium";
   };
 
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      setErrorMsg("La imagen de perfil no debe superar los 10MB para optimización.");
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Canvas compression to 128x128 max keeping aspects
+        const canvas = document.createElement("canvas");
+        const MAX_WIDTH = 120;
+        const MAX_HEIGHT = 120;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_WIDTH) {
+            height = Math.round((height * MAX_WIDTH) / width);
+            width = MAX_WIDTH;
+          }
+        } else {
+          if (height > MAX_HEIGHT) {
+            width = Math.round((width * MAX_HEIGHT) / height);
+            height = MAX_HEIGHT;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL("image/jpeg", 0.7);
+          setPhotoURL(compressedDataUrl);
+          setSuccessMsg("¡Imagen cargada y optimizada con éxito! Pulsa guardar para guardar los cambios.");
+        }
+        setIsLoading(false);
+      };
+      img.onerror = () => {
+        setErrorMsg("Error al procesar el archivo como imagen.");
+        setIsLoading(false);
+      };
+      img.src = event.target?.result as string;
+    };
+    reader.onerror = () => {
+      setErrorMsg("No se pudo leer el archivo seleccionado.");
+      setIsLoading(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!nickname.trim()) {
@@ -82,14 +174,21 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
     setSuccessMsg(null);
 
     try {
-      // 1. Update nickname (DisplayName)
-      if (nickname.trim() !== (user.displayName || "")) {
-        await updateProfile(user, { displayName: nickname.trim() });
+      // 1. Update basic profile info (Display Name & photoURL)
+      const isNameChanged = nickname.trim() !== (user.displayName || "");
+      const isPhotoChanged = photoURL !== (user.photoURL || "");
+
+      if (isNameChanged || isPhotoChanged) {
+        await updateProfile(user, {
+          displayName: nickname.trim(),
+          photoURL: photoURL
+        });
         
-        // Also update the Firestore user doc
+        // Also update Firestore users database copy
         const userRef = doc(db, "users", user.uid);
         await updateDoc(userRef, {
-          displayName: nickname.trim()
+          displayName: nickname.trim(),
+          photoURL: photoURL
         });
       }
 
@@ -250,17 +349,164 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
             {!showReauth ? (
               <form onSubmit={handleUpdateProfile} className="space-y-5">
                 {/* Visual Avatar Header */}
-                <div className="flex flex-col items-center text-center pb-4 pt-1 border-b border-white/5">
-                  <div className="relative w-18 h-18 bg-gradient-to-tr from-emerald-500 to-[#1ED760] rounded-full flex items-center justify-center text-black font-black text-2xl shadow-xl shadow-black/40 mb-3 select-none">
-                    <span>
-                      {nickname.trim() ? nickname.trim().substring(0, 2).toUpperCase() : "U"}
-                    </span>
-                    <span className="absolute bottom-0 right-0 w-5 h-5 bg-black border border-white/10 rounded-full flex items-center justify-center">
-                      <Sparkles className="w-3 h-3 text-[#1ED760]" />
+                <div className="flex flex-col items-center text-center pb-4 pt-1 border-b border-white/5 space-y-2.5">
+                  <div className="relative group">
+                    <div className="relative w-20 h-20 bg-black/40 rounded-full flex items-center justify-center text-black font-black text-2xl shadow-xl shadow-black/40 select-none overflow-hidden border-2 border-[#1ED760]">
+                      <img 
+                        src={photoURL || `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user?.uid || 'flux')}`} 
+                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110" 
+                        alt="Avatar Premium"
+                        onError={(e) => {
+                          (e.target as any).src = `https://api.dicebear.com/7.x/adventurer/svg?seed=${encodeURIComponent(user?.uid || 'flux')}`;
+                        }}
+                        referrerPolicy="no-referrer"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex flex-col items-center justify-center text-white gap-1 cursor-pointer"
+                        title="Subir nueva foto"
+                      >
+                        <Camera className="w-5 h-5 text-[#1ED760]" />
+                        <span className="text-[7.5px] uppercase font-black tracking-widest text-[#1ED760]">Subir</span>
+                      </button>
+                    </div>
+                    <span className="absolute bottom-0.5 right-0.5 w-6 h-6 bg-black border border-white/10 rounded-full flex items-center justify-center shadow-md shadow-black/40">
+                      <Sparkles className="w-3.5 h-3.5 text-[#1ED760]" />
                     </span>
                   </div>
-                  <h2 className="text-white text-base font-black tracking-tight">{nickname || "Usuario Premium"}</h2>
-                  <p className="text-[10px] uppercase font-bold text-slate-500 mt-0.5 tracking-wider truncate max-w-xs">{user.email}</p>
+
+                  <div className="space-y-1">
+                    <h2 className="text-white text-sm font-black tracking-tight flex items-center justify-center gap-1.5">{nickname || "Usuario Premium"}</h2>
+                    <p className="text-[9px] uppercase font-black text-slate-500 tracking-wider truncate max-w-xs">{user.email}</p>
+                  </div>
+
+                  {/* Custom image input */}
+                  <input 
+                    type="file" 
+                    ref={fileInputRef} 
+                    className="hidden" 
+                    accept="image/*"
+                    onChange={handleImageUpload}
+                  />
+
+                  {/* Preset & Upload Toggler */}
+                  <div className="w-full max-w-sm pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setShowAvatarPicker(!showAvatarPicker)}
+                      className="text-[9px] font-black uppercase tracking-widest text-[#1ED760] hover:text-[#18b550] border border-[#1ED760]/20 bg-[#1ED760]/5 hover:bg-[#1ED760]/10 px-3 py-1.5 rounded-lg transition-all cursor-pointer inline-flex items-center gap-1 active:scale-[0.98]"
+                    >
+                      <span>🎨 Personalizar Foto / Avatar</span>
+                    </button>
+                  </div>
+
+                  {/* Avatar Picker Panel */}
+                  <AnimatePresence>
+                    {showAvatarPicker && (
+                      <motion.div
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="w-full bg-[#121214] border border-white/5 rounded-2xl p-3.5 space-y-3.5 overflow-hidden text-left"
+                      >
+                        <div>
+                          {isAdmin && (
+                            <div className="mb-4 bg-emerald-500/5 border border-emerald-500/25 p-3 rounded-2xl">
+                              <div className="flex items-center gap-1.5 mb-2.5 px-0.5">
+                                <span className="text-[8px] bg-[#1ED760] text-black px-2 py-0.5 rounded-full font-black uppercase tracking-wider ring-4 ring-[#1ED760]/10 shrink-0">EXCLUSIVO ADMIN</span>
+                                <p className="text-[9px] font-black uppercase text-emerald-400 tracking-widest font-sans">Avatares del Administrador Supremo:</p>
+                              </div>
+                              <div className="grid grid-cols-4 gap-2">
+                                {ADMIN_AVATARS.map((av) => {
+                                  const isSelected = photoURL === av.url;
+                                  return (
+                                    <button
+                                      key={av.name}
+                                      type="button"
+                                      onClick={() => {
+                                        setPhotoURL(av.url);
+                                        setSuccessMsg(`¡Avatar Supremo seleccionado: "${av.name}"! Guarda los cambios.`);
+                                      }}
+                                      className={`relative aspect-square rounded-xl overflow-hidden border bg-black/40 hover:scale-105 active:scale-95 transition-all cursor-pointer p-0.5 ${isSelected ? 'border-emerald-400 shadow-[0_0_15px_rgba(16,185,129,0.5)]' : 'border-emerald-500/20 hover:border-emerald-500/50'}`}
+                                      title={av.name}
+                                    >
+                                      <img 
+                                        src={av.url} 
+                                        alt={av.name} 
+                                        className="w-full h-full object-cover rounded-lg" 
+                                        referrerPolicy="no-referrer"
+                                      />
+                                      {isSelected && (
+                                        <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-emerald-400 rounded-full flex items-center justify-center shadow-sm z-10 animate-pulse">
+                                          <Check className="w-2.5 h-2.5 text-black stroke-[4px]" />
+                                        </span>
+                                      )}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+
+                          <p className="text-[9px] font-black uppercase text-slate-400 tracking-widest mb-2 px-0.5 font-sans">Elige un avatar caricaturesco:</p>
+                          <div className="grid grid-cols-4 gap-2">
+                            {PRESET_AVATARS.map((av) => {
+                              const isSelected = photoURL === av.url;
+                              return (
+                                <button
+                                  key={av.name}
+                                  type="button"
+                                  onClick={() => {
+                                    setPhotoURL(av.url);
+                                    setSuccessMsg(`Seleccionado avatar: "${av.name}". Pulsa guardar para confirmar.`);
+                                  }}
+                                  className={`relative aspect-square rounded-xl overflow-hidden border bg-black/20 hover:scale-105 active:scale-95 transition-all cursor-pointer p-0.5 ${isSelected ? 'border-[#1ED760] shadow-[0_0_10px_rgba(30,215,96,0.25)]' : 'border-white/5 hover:border-white/20'}`}
+                                >
+                                  <img 
+                                    src={av.url} 
+                                    alt={av.name} 
+                                    className="w-full h-full object-cover rounded-lg" 
+                                    referrerPolicy="no-referrer"
+                                  />
+                                  {isSelected && (
+                                    <span className="absolute top-1 right-1 w-3.5 h-3.5 bg-[#1ED760] rounded-full flex items-center justify-center shadow-sm">
+                                      <Check className="w-2.5 h-2.5 text-black stroke-[4px]" />
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        <div className="border-t border-white/[0.04] pt-3 flex flex-col sm:flex-row gap-2">
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 py-1.5 bg-white/5 hover:bg-white/10 text-white font-black text-[9px] uppercase tracking-widest rounded-lg border border-white/10 transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                          >
+                            <Upload className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Subir de tu Galería</span>
+                          </button>
+                          
+                          {isGoogleProvider && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const googlePhoto = user.providerData.find(p => p.providerId === "google.com")?.photoURL || "";
+                                setPhotoURL(googlePhoto);
+                                setSuccessMsg("Imagen Google cargada. Haz click en Guardar para confirmar.");
+                              }}
+                              className="flex-1 py-1.5 bg-black hover:bg-white/[0.02] text-slate-400 hover:text-white font-black text-[9.5px] uppercase tracking-widest rounded-lg border border-white/5 transition-colors cursor-pointer flex items-center justify-center gap-1"
+                            >
+                              <span>Restablecer Google</span>
+                            </button>
+                          )}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
                 </div>
 
                 {/* Subscription Status Panel */}
@@ -404,6 +650,19 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
                     ) : (
                       <span>Guardar</span>
                     )}
+                  </button>
+                </div>
+
+                <div className="pt-2 text-center">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      window.dispatchEvent(new Event("open-changelog"));
+                    }}
+                    className="text-[9px] uppercase font-black tracking-widest text-[#1ED760]/65 hover:text-[#1ED760] transition-colors cursor-pointer font-bold"
+                  >
+                    🚀 Ver Notas de la Actualización (Changelog)
                   </button>
                 </div>
               </form>

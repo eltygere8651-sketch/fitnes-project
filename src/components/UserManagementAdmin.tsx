@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
-import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download } from "lucide-react";
+import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug } from "lucide-react";
 import { jsPDF } from "jspdf";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
@@ -19,6 +19,47 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
   const [activeTab, setActiveTab] = useState<"users" | "support" | "notifications">("users");
+  const [supportFilter, setSupportFilter] = useState<"todos" | "soporte" | "fallo" | "feedback">("todos");
+  const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
+
+  // Announcement composition states
+  const [annTitle, setAnnTitle] = useState("");
+  const [annContent, setAnnContent] = useState("");
+  const [annCategory, setAnnCategory] = useState<"noticia" | "urgente" | "mantenimiento" | "actualizacion">("noticia");
+  const [isPublishing, setIsPublishing] = useState(false);
+  const [annSuccessMsg, setAnnSuccessMsg] = useState("");
+
+  const publishAnnouncement = async () => {
+    if (!annTitle.trim() || !annContent.trim()) {
+      alert("Por favor completa el título y el contenido del comunicado.");
+      return;
+    }
+    try {
+      setIsPublishing(true);
+      setAnnSuccessMsg("");
+      const randId = "ann_" + Math.random().toString(36).substring(2, 11);
+      const docRef = doc(db, "announcements", randId);
+      await setDoc(docRef, {
+        title: annTitle.trim(),
+        content: annContent.trim(),
+        category: annCategory,
+        createdAt: new Date(),
+        active: true
+      });
+      setAnnTitle("");
+      setAnnContent("");
+      setAnnCategory("noticia");
+      setAnnSuccessMsg("¡Comunicado global publicado con éxito en la base de datos de FLUX!");
+      // Trigger update badge event
+      window.dispatchEvent(new Event("notifications-read"));
+      setTimeout(() => setAnnSuccessMsg(""), 4500);
+    } catch (err) {
+      console.error("Error publicando anuncio:", err);
+      alert("Error al publicar el anuncio: " + err);
+    } finally {
+      setIsPublishing(false);
+    }
+  };
 
   useEffect(() => {
     fetchUsers();
@@ -126,10 +167,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const handleDeleteSupportMessage = async (msgId: string) => {
     try {
       if (!window.confirm("¿Eliminar este mensaje de soporte?")) return;
+      setSupportMessages(prev => prev.filter(m => m.id !== msgId));
       await deleteDoc(doc(db, "support_messages", msgId));
-      fetchSupportMessages();
     } catch (err) {
       console.error("Error deleting support message:", err);
+      fetchSupportMessages();
     }
   };
 
@@ -428,6 +470,18 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           </button>
 
           <button
+            onClick={() => setActiveTab("notifications")}
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+              activeTab === "notifications"
+                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Notificaciones</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab("support")}
             className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
               activeTab === "support"
@@ -442,18 +496,6 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 {supportMessages.length}
               </span>
             )}
-          </button>
-
-          <button
-            onClick={() => setActiveTab("notifications")}
-            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
-              activeTab === "notifications"
-                ? "bg-purple-500/15 text-purple-400 border border-purple-500/20"
-                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
-            }`}
-          >
-            <Send className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-            <span>Notificaciones</span>
           </button>
         </div>
 
@@ -550,126 +592,329 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           )}
 
           {activeTab === "notifications" && (
-            /* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM */
-          <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
-            <h3 className="text-xs font-black uppercase text-[#1ED760] tracking-wider flex items-center gap-2">
-              <Send className="w-4 h-4 text-[#1ED760]" /> Configurar Notificaciones en Telegram
-            </h3>
-            <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-              Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 7 días. Puedes aprobar el acceso directamente con un botón desde este panel.
-            </p>
+            <>
+            {/* SECCIÓN NUEVA: DIFUSION DE COMUNICADOS DEL ADMIN */}
+            <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4 text-left">
+              <h3 className="text-xs font-black uppercase text-[#1ED760] tracking-wider flex items-center gap-2">
+                <MessageSquare className="w-4 h-4 text-[#1ED760]" /> Difundir Comunicado Global (Avisos del Admin)
+              </h3>
+              <p className="text-[11px] text-slate-400 leading-relaxed font-semibold">
+                Publica notificaciones instantáneas, incidencias de servidores, novedades importantes o parches de actualización. Todos los clientes verán un punto rojo de notificación y el mensaje en su centro de avisos.
+              </p>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                  Telegram Bot Token
-                </label>
-                <div className="relative">
-                  <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-                  <input
-                    type="password"
-                    value={telegramToken}
-                    onChange={(e) => setTelegramToken(e.target.value)}
-                    placeholder="Ej. 123456789:ABCdefGhIJKlmNoPQRsT"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
-                  />
+              <div className="space-y-4">
+                {/* Category Selection */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                    Categoría del Comunicado
+                  </label>
+                  <div className="grid grid-cols-4 gap-2">
+                    {(["noticia", "urgente", "mantenimiento", "actualizacion"] as const).map((cat) => (
+                      <button
+                        key={cat}
+                        type="button"
+                        onClick={() => setAnnCategory(cat)}
+                        className={`py-2 px-3 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          annCategory === cat
+                            ? "bg-[#1ED760] text-black border-[#1ED760] font-black shadow-[0_0_10px_rgba(30,215,96,0.2)]"
+                            : "bg-black/30 border-white/5 text-slate-400 hover:text-white"
+                        }`}
+                      >
+                        {cat}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                  Telegram Chat ID
-                </label>
-                <div className="relative">
-                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">ID</span>
+                {/* Title block */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                    Título del Aviso
+                  </label>
                   <input
                     type="text"
-                    value={telegramChatId}
-                    onChange={(e) => setTelegramChatId(e.target.value)}
-                    placeholder="Ej. -100123456789 o tu ID personal"
-                    className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
+                    value={annTitle}
+                    onChange={(e) => setAnnTitle(e.target.value)}
+                    placeholder="Ej. Mantenimiento del Sistema o Se ha caído el servidor YouTube API"
+                    className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
                   />
                 </div>
+
+                {/* Content block */}
+                <div className="space-y-1.5">
+                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                    Mensaje / Contenido / Detalles (Corto y Premium)
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={annContent}
+                    onChange={(e) => setAnnContent(e.target.value)}
+                    placeholder="Ej. El servidor CDN maestro está en mantenimiento programado. No debería causar cortes en tu reproductor."
+                    className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold resize-none"
+                  />
+                </div>
+
+                {/* Success/Action block */}
+                {annSuccessMsg && (
+                  <div className="p-3 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-xl text-[10px] font-bold text-center">
+                    {annSuccessMsg}
+                  </div>
+                )}
+
+                <button
+                  onClick={publishAnnouncement}
+                  disabled={isPublishing}
+                  className="w-full py-3 bg-[#1ED760] hover:bg-[#1fdf64] disabled:opacity-40 text-black text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                  {isPublishing ? "Publicando Aviso..." : "Publicar Comunicado para Todos"}
+                </button>
               </div>
             </div>
 
-            <div className="flex gap-2 pt-2">
+            {/* SECCIÓN NUEVA: CONFIGURACIÓN DE TELEGRAM (COLAPSIBLE/DESPLEGABLE PREMIUM) */}
+            <div className="bg-[#121214] border border-white/5 rounded-3xl overflow-hidden mb-2 transition-all duration-300">
               <button
-                onClick={saveTelegramConfig}
-                disabled={isSavingTelegram}
-                className="px-4 py-2.5 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                type="button"
+                onClick={() => setIsTelegramConfigExpanded(!isTelegramConfigExpanded)}
+                className="w-full flex items-center justify-between p-5 text-left bg-black/10 hover:bg-black/20 focus:outline-none transition-all cursor-pointer group"
               >
-                <Save className="w-4 h-4 animate-pulse hover:animate-none" />
-                {isSavingTelegram ? "Guardando..." : "Guardar Configuración"}
+                <div className="flex items-center gap-2.5">
+                  <Send className="w-4 h-4 text-slate-400 group-hover:text-[#1ED760] transition-colors" />
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-slate-300 group-hover:text-[#1ED760] tracking-wider transition-colors">
+                      Configurar Notificaciones en Telegram
+                    </h3>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">
+                      Activar bots para recibir avisos de nuevos registros en tiempo real
+                    </p>
+                  </div>
+                </div>
+                <div className="p-1.5 rounded-xl bg-white/5 group-hover:bg-white/10 text-slate-400 group-hover:text-white transition-all">
+                  {isTelegramConfigExpanded ? (
+                    <ChevronUp className="w-4 h-4" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4" />
+                  )}
+                </div>
               </button>
-              
-              <button
-                onClick={testTelegramConfig}
-                disabled={isTestingTelegram}
-                className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
-              >
-                <Send className="w-4 h-4" />
-                {isTestingTelegram ? "Enviando..." : "Enviar Mensaje de Prueba"}
-              </button>
+
+              {isTelegramConfigExpanded && (
+                <div className="p-5 pt-1 border-t border-white/5 space-y-4 text-left animate-slideDown">
+                  <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
+                    Conecta tu Bot de Telegram para recibir alertas en tiempo real cuando un nuevo usuario registre su cuenta de prueba de 7 días. Puedes aprobar el acceso directamente con un botón desde este panel.
+                  </p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                        Telegram Bot Token
+                      </label>
+                      <div className="relative">
+                        <Key className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+                        <input
+                          type="password"
+                          value={telegramToken}
+                          onChange={(e) => setTelegramToken(e.target.value)}
+                          placeholder="Ej. 123456789:ABCdefGhIJKlmNoPQRsT"
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
+                        Telegram Chat ID
+                      </label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-slate-500">ID</span>
+                        <input
+                          type="text"
+                          value={telegramChatId}
+                          onChange={(e) => setTelegramChatId(e.target.value)}
+                          placeholder="Ej. -100123456789 o tu ID personal"
+                          className="w-full pl-10 pr-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 pt-2">
+                    <button
+                      onClick={saveTelegramConfig}
+                      disabled={isSavingTelegram}
+                      className="px-4 py-2.5 bg-[#1ED760] hover:bg-[#1fdf64] text-black text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Save className="w-4 h-4 animate-pulse hover:animate-none" />
+                      {isSavingTelegram ? "Guardando..." : "Guardar Configuración"}
+                    </button>
+                    
+                    <button
+                      onClick={testTelegramConfig}
+                      disabled={isTestingTelegram}
+                      className="px-4 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 text-white text-[10px] font-black uppercase tracking-wider rounded-xl transition-all cursor-pointer flex items-center gap-1.5 disabled:opacity-50"
+                    >
+                      <Send className="w-4 h-4" />
+                      {isTestingTelegram ? "Enviando..." : "Enviar Mensaje de Prueba"}
+                    </button>
+                  </div>
+                  
+                  <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-[10px] text-slate-500 leading-relaxed font-semibold">
+                    💡 <span className="text-slate-300 font-bold">Guía de Configuración Súper Rápida:</span><br/>
+                    1. Abre Telegram y escribe a <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@BotFather</a> para crear tu bot enviando <code className="text-[#1ED760] select-all font-mono">/newbot</code>. Copia el token que te dé.<br/>
+                    2. Obtén tu Chat ID escribiendo a <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@userinfobot</a>. Te dará tu ID personal numérico.<br/>
+                    3. ¡Asegúrate de pulsar <strong className="text-white">INICIAR</strong> en tu bot creado antes para que pueda enviarte mensajes!<br/>
+                    4. Introduce ambos datos arriba, pulsa <strong className="text-emerald-400">Guardar</strong> y luego <strong className="text-white">Enviar Mensaje de Prueba</strong>.
+                  </div>
+                </div>
+              )}
             </div>
-            
-            <div className="bg-black/40 border border-white/5 p-3 rounded-2xl text-[10px] text-slate-500 leading-relaxed font-semibold">
-              💡 <span className="text-slate-300 font-bold">Guía de Configuración Súper Rápida:</span><br/>
-              1. Abre Telegram y escribe a <a href="https://t.me/BotFather" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@BotFather</a> para crear tu bot enviando <code className="text-[#1ED760] select-all font-mono">/newbot</code>. Copia el token que te dé.<br/>
-              2. Obtén tu Chat ID escribiendo a <a href="https://t.me/userinfobot" target="_blank" rel="noopener noreferrer" className="text-[#1ED760] hover:underline font-bold">@userinfobot</a>. Te dará tu ID personal numérico.<br/>
-              3. ¡Asegúrate de pulsar <strong className="text-white">INICIAR</strong> en tu bot creado antes para que pueda enviarte mensajes!<br/>
-              4. Introduce ambos datos arriba, pulsa <strong className="text-emerald-400">Guardar</strong> y luego <strong className="text-white">Enviar Mensaje de Prueba</strong>.
-            </div>
-          </div>
+            </>
           )}
 
           {activeTab === "support" && (
             /* SECCIÓN NUEVA: MENSAJES DE SOPORTE */
-          <div className="bg-[#121214] border border-white/5 rounded-3xl p-5 mb-2 space-y-4">
-            <div className="flex justify-between items-center sm:flex-row flex-col gap-2">
-              <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-purple-400" /> Mensajes de Soporte Recibidos ({supportMessages.length})
-              </h3>
-              <button
-                onClick={fetchSupportMessages}
-                className="text-[10px] bg-white/5 hover:bg-white/10 px-2.5 py-1 rounded-lg text-slate-300 font-bold border border-white/5 cursor-pointer transition-all uppercase tracking-wider"
-              >
-                Actualizar
-              </button>
-            </div>
-
-            {loadingMessages ? (
-              <div className="text-xs text-slate-500 animate-pulse">Cargando mensajes de soporte...</div>
-            ) : supportMessages.length === 0 ? (
-              <p className="text-xs text-slate-500 font-medium">No hay mensajes de soporte guardados en la base de datos.</p>
-            ) : (
-              <div className="max-h-[300px] overflow-y-auto space-y-3 pr-2 scrollbar-thin scrollbar-thumb-white/5">
-                {supportMessages.map((msg: any) => (
-                  <div key={msg.id} className="p-4 bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col sm:flex-row justify-between items-start gap-4 hover:border-purple-500/20 transition-all">
-                    <div className="space-y-2 flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-white font-black text-xs uppercase tracking-wide">{msg.userName || "Anónimo"}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold truncate">({msg.userEmail || "Sin email"})</span>
-                        <span className="text-[9px] text-slate-500 font-mono">
-                          {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "N/A"}
-                        </span>
-                      </div>
-                      <p className="text-xs text-slate-200 bg-black/30 p-3 rounded-xl border border-white/[0.03] whitespace-pre-wrap leading-relaxed font-medium">
-                        {msg.message}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => handleDeleteSupportMessage(msg.id)}
-                      className="p-2 bg-red-500/10 hover:bg-red-500/25 border border-red-500/20 text-red-400 rounded-xl transition-all cursor-pointer shrink-0 self-end sm:self-start flex items-center justify-center animate-pulse hover:animate-none"
-                      title="Eliminar Mensaje"
-                    >
-                      <Trash className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
+            <div className="bg-[#121214] border border-white/5 rounded-3xl p-6 mb-2 space-y-5 text-left">
+              <div className="flex justify-between items-start sm:flex-row flex-col gap-3">
+                <div>
+                  <h3 className="text-xs font-black uppercase text-purple-400 tracking-wider flex items-center gap-2">
+                    <MessageSquare className="w-4 h-4 text-purple-400" /> Solicitudes, Fallos y Feedback Recibidos
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-semibold mt-1">
+                    Gestiona los reportes recibidos desde la app clasificados por canal de soporte prioritario del socio
+                  </p>
+                </div>
               </div>
-            )}
-          </div>
+
+              {/* Filtros de Tipos de Solicitudes */}
+              <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center p-2 bg-black/40 border border-white/5 rounded-2xl gap-3">
+                <div className="flex flex-wrap gap-1.5">
+                  {(["todos", "soporte", "fallo", "feedback"] as const).map((filter) => {
+                    const labels = {
+                      todos: `Todos (${supportMessages.length})`,
+                      soporte: `Soporte (${supportMessages.filter(m => m.category === "soporte" || !m.category).length})`,
+                      fallo: `Fallos (${supportMessages.filter(m => m.category === "fallo").length})`,
+                      feedback: `Feedback (${supportMessages.filter(m => m.category === "feedback").length})`
+                    };
+                    return (
+                      <button
+                        key={filter}
+                        type="button"
+                        onClick={() => setSupportFilter(filter)}
+                        className={`px-3 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
+                          supportFilter === filter
+                            ? "bg-purple-600 text-white font-extrabold shadow-[0_2px_10px_rgba(147,51,234,0.1)]"
+                            : "text-slate-400 hover:text-white bg-transparent hover:bg-white/5"
+                        }`}
+                      >
+                        {labels[filter]}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={fetchSupportMessages}
+                  className="text-[9px] bg-white/5 hover:bg-white/10 px-3 py-2 rounded-xl text-slate-300 font-extrabold border border-white/5 cursor-pointer transition-all uppercase tracking-wider flex items-center justify-center gap-1 shrink-0"
+                >
+                  Actualizar Lista
+                </button>
+              </div>
+
+              {loadingMessages ? (
+                <div className="text-xs text-slate-500 animate-pulse py-6 text-center">Cargando mensajes de soporte...</div>
+              ) : supportMessages.length === 0 ? (
+                <p className="text-xs text-slate-500 font-medium py-6 text-center">No hay mensajes de soporte guardados en la base de datos de FLUX.</p>
+              ) : supportMessages.filter((msg: any) => {
+                  if (supportFilter === "todos") return true;
+                  if (supportFilter === "soporte") return msg.category === "soporte" || !msg.category;
+                  return msg.category === supportFilter;
+                }).length === 0 ? (
+                <p className="text-xs text-slate-500 font-medium py-6 text-center">No se encontraron mensajes que coincidan con el filtro seleccionado.</p>
+              ) : (
+                <div className="max-h-[380px] overflow-y-auto space-y-4 pr-2 scrollbar-thin scrollbar-thumb-white/5">
+                  {supportMessages
+                    .filter((msg: any) => {
+                      if (supportFilter === "todos") return true;
+                      if (supportFilter === "soporte") return msg.category === "soporte" || !msg.category;
+                      return msg.category === supportFilter;
+                    })
+                    .map((msg: any) => {
+                      const initial = (msg.userName || "S").charAt(0).toUpperCase();
+                      const category = msg.category || "soporte";
+
+                      // Badges customized depending on categorization
+                      let badgeColor = "bg-purple-500/10 text-purple-400 border border-purple-500/20";
+                      let badgeLabel = "Soporte General";
+                      let BadgeIcon = MessageSquare;
+
+                      if (category === "fallo") {
+                        badgeColor = "bg-rose-500/10 text-rose-400 border border-rose-500/20";
+                        badgeLabel = "Fallo Técnico";
+                        BadgeIcon = Bug;
+                      } else if (category === "feedback") {
+                        badgeColor = "bg-emerald-500/10 text-emerald-400 border border-emerald-500/20";
+                        badgeLabel = "Feedback App";
+                        BadgeIcon = Sparkles;
+                      }
+
+                      return (
+                        <div key={msg.id} className="p-4 bg-white/[0.01] hover:bg-white/[0.02] border border-white/5 rounded-2xl flex flex-col justify-between gap-4 hover:border-purple-500/10 transition-all text-left">
+                          <div className="flex items-start gap-3">
+                            {/* Circle initial avatar */}
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-purple-600 to-indigo-700 flex items-center justify-center text-white text-xs font-black shrink-0 shadow-inner">
+                              {initial}
+                            </div>
+                            <div className="space-y-1.5 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-white font-black text-xs uppercase tracking-wide">{msg.userName || "Anónimo"}</span>
+                                <span className="text-[9px] text-slate-500 font-semibold truncate hover:text-[#1ED760] transition-colors mr-2">
+                                  ({msg.userEmail || "Sin email"})
+                                </span>
+                                <span className="text-[8px] text-slate-500 font-mono ml-auto">
+                                  {msg.createdAt ? new Date(msg.createdAt).toLocaleString() : "N/A"}
+                                </span>
+                              </div>
+                              
+                              <div className="flex gap-2 items-center">
+                                <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-wider ${badgeColor}`}>
+                                  <BadgeIcon className="w-2.5 h-2.5" />
+                                  {badgeLabel}
+                                </span>
+                              </div>
+
+                              <p className="text-xs text-slate-200 bg-black/40 p-3.5 rounded-xl border border-white/[0.03] whitespace-pre-wrap leading-relaxed font-semibold mt-2">
+                                {msg.message}
+                              </p>
+                            </div>
+                          </div>
+
+                          {/* Reply direct contact & trash can footer toolbar */}
+                          <div className="flex items-center justify-between border-t border-white/5 pt-3">
+                            {msg.userEmail && msg.userEmail !== "Anónimo" && msg.userEmail !== "Sin email" ? (
+                              <a
+                                href={`mailto:${msg.userEmail}?subject=Respuesta Prioritaria de Flux Music&body=Hola ${msg.userName || "Socio"},\n\nHemos recibido tu mensaje de ${badgeLabel.toLowerCase()}:\n"${msg.message}"\n\n[Escribe aquí tu respuesta...]`}
+                                className="px-3 py-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] text-[9px] font-black uppercase tracking-wider rounded-lg transition-all border border-[#1ED760]/10 hover:border-[#1ED760]/30 cursor-pointer flex items-center gap-1.5"
+                              >
+                                <Send className="w-3 h-3" /> Responder por Email
+                              </a>
+                            ) : (
+                              <span className="text-[8px] text-slate-500 font-black uppercase">Socio No Identificado</span>
+                            )}
+
+                            <button
+                              onClick={() => handleDeleteSupportMessage(msg.id)}
+                              className="p-1.5 bg-red-500/5 hover:bg-red-500/20 text-red-400 hover:text-red-300 rounded-lg transition-all border border-transparent hover:border-red-500/20 cursor-pointer flex items-center justify-center animate-pulse hover:animate-none"
+                              title="Eliminar Reporte"
+                            >
+                              <Trash className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                </div>
+              )}
+            </div>
           )}
 
           {activeTab === "users" && (

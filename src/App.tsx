@@ -52,20 +52,21 @@ function AppContent() {
         const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
         let hasUnreadDb = false;
 
+        let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
+        let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
+
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
-          const dbDate = newestDoc.data().createdAt?.toDate() || new Date(0);
-          const staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
+          const createdAt = newestDoc.data().createdAt;
+          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
           
-          const newestId = dbDate > staticDate ? newestDoc.id : (COMPILED_UPDATES[0]?.id || newestDoc.id);
+          if (dbDate > staticDate) {
+            newestId = newestDoc.id;
+          }
+        }
 
-          if (newestId !== lastViewed) {
-            hasUnreadDb = true;
-          }
-        } else if (COMPILED_UPDATES.length > 0) {
-          if (COMPILED_UPDATES[0].id !== lastViewed) {
-            hasUnreadDb = true;
-          }
+        if (newestId && newestId !== lastViewed) {
+          hasUnreadDb = true;
         }
 
         setHasUnread(hasUnreadDb);

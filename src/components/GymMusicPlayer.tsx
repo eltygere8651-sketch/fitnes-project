@@ -1421,7 +1421,7 @@ export default function GymMusicPlayer() {
           } else if (foundSelected) {
             setPlayingPlaylist(foundSelected);
           } else {
-            setPlayingPlaylist(folders[0]);
+            setPlayingPlaylist(null);
           }
         }
         playlistsLoadedInitiallyRef.current = true;

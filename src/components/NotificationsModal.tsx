@@ -75,12 +75,14 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
       const firebaseList: Announcement[] = [];
       querySnap.forEach((docSnap) => {
         const data = docSnap.data();
+        const ca = data.createdAt;
+        const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
         firebaseList.push({
           id: docSnap.id,
           title: data.title || "Aviso",
           content: data.content || "",
           category: data.category || "noticia",
-          createdAt: data.createdAt?.toDate() || new Date()
+          createdAt: parsedDate
         });
       });
 

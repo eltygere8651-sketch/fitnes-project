@@ -15,6 +15,24 @@ import { motion, AnimatePresence } from "motion/react";
 import { collection, onSnapshot, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
+// Compiled App Updates to ensure update history is always populated
+export const COMPILED_UPDATES: Announcement[] = [
+  {
+    id: "update-v1.4.0",
+    title: "✨ Actualización Flux v1.4.0",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T11:00:00Z"),
+    content: "• Rediseño premium de la cabecera e íconos a blanco puro con neón.\n• PDF Comercial optimizado: Detalles del ecosistema Flux, miles de playlists actualizadas y potente buscador global.\n• Experiencia de pantalla invertida con prevención automática de bloqueo del dispositivo.\n• Valores fundamentales del ecosistema destacados y depurados en el PDF."
+  },
+  {
+    id: "update-v1.3.1",
+    title: "⚡ Actualización Flux v1.3.1",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-08T01:15:00Z"),
+    content: "¡Hemos integrado de forma unificada el Centro de Notificaciones y Avisos Directos! Se han eliminado las ventanas emergentes (popups) molestas. Ahora el historial es continuo en tiempo real en español.",
+  }
+];
+
 export interface Announcement {
   id: string;
   title: string;
@@ -52,10 +70,18 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
         });
       });
 
-      setAnnouncements(firebaseList);
+      // Merge realtime database announcements with compiled app updates
+      const combined = [...firebaseList, ...COMPILED_UPDATES];
+      combined.sort((a, b) => {
+        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+        return dateB - dateA;
+      });
+
+      setAnnouncements(combined);
       
-      if (firebaseList.length > 0) {
-        localStorage.setItem("flux_last_viewed_announcement_id", firebaseList[0].id);
+      if (combined.length > 0) {
+        localStorage.setItem("flux_last_viewed_announcement_id", combined[0].id);
       }
       
       if (isOpen) {
@@ -182,7 +208,7 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
                         <span className="text-[8.5px] text-slate-500 font-bold whitespace-nowrap">
                           {formattedTime}
                         </span>
-                        {isAdmin && (
+                        {isAdmin && !item.id.startsWith("update-") && (
                           <button
                             onClick={(e) => handleDeleteAnnouncement(item.id, e)}
                             className="text-slate-500 hover:text-red-400 transition-colors"

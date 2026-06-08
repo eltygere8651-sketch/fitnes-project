@@ -24,7 +24,7 @@ import { logout, db } from "./lib/firebase";
 import { collection, getDocs, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
-import { NotificationsModal } from "./components/NotificationsModal";
+import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
 
 function AppContent() {
   const { user, loading: authLoading, isOnline, setAuthModalOpen } = useFirebase();
@@ -54,7 +54,16 @@ function AppContent() {
 
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
-          if (newestDoc.id !== lastViewed) {
+          const dbDate = newestDoc.data().createdAt?.toDate() || new Date(0);
+          const staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
+          
+          const newestId = dbDate > staticDate ? newestDoc.id : (COMPILED_UPDATES[0]?.id || newestDoc.id);
+
+          if (newestId !== lastViewed) {
+            hasUnreadDb = true;
+          }
+        } else if (COMPILED_UPDATES.length > 0) {
+          if (COMPILED_UPDATES[0].id !== lastViewed) {
             hasUnreadDb = true;
           }
         }
@@ -228,7 +237,10 @@ function AppContent() {
             >
               <Bell className="w-4 h-4 group-hover:text-amber-400 transition-colors shrink-0" />
               {hasUnread && (
-                <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 border border-[#080809] rounded-full animate-bounce shadow-[0_0_8px_rgba(244,63,94,0.8)]" />
+                <>
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-rose-500 rounded-full animate-ping opacity-75" />
+                  <span className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 bg-rose-500 border border-[#080809] rounded-full shadow-[0_0_8px_rgba(244,63,94,1)] animate-pulse" />
+                </>
               )}
             </button>
           </div>

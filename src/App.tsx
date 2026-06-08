@@ -18,9 +18,10 @@ import {
   Bell
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
+import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, onSnapshot } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal } from "./components/NotificationsModal";
@@ -34,13 +35,13 @@ function AppContent() {
   const [hasUnread, setHasUnread] = useState(false);
 
   useEffect(() => {
-    const checkUnread = async () => {
+    // Real-time unread check to guarantee 100% instant notification indicator illumination
+    const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+    const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
       try {
         const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
-        const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
-        const snap = await getDocs(q);
-        if (!snap.empty) {
-          const newestDoc = snap.docs[0];
+        if (!snapshot.empty) {
+          const newestDoc = snapshot.docs[0];
           if (newestDoc.id !== lastViewed) {
             setHasUnread(true);
             return;
@@ -50,20 +51,18 @@ function AppContent() {
           setHasUnread(true);
         }
       } catch (err) {
-        console.warn("No se pudo revisar anuncios de Firebase:", err);
-        if (!localStorage.getItem("flux_last_viewed_announcement_id")) {
-          setHasUnread(true);
-        }
+        console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
       }
-    };
-
-    checkUnread();
+    }, (error) => {
+      console.warn("Error en el snapshot de anuncios:", error);
+    });
 
     const handleRead = () => {
       setHasUnread(false);
     };
     window.addEventListener("notifications-read", handleRead);
     return () => {
+      unsubscribeSnapshot();
       window.removeEventListener("notifications-read", handleRead);
     };
   }, []);
@@ -192,10 +191,7 @@ function AppContent() {
               className="flex items-center gap-2.5 group cursor-default select-none"
             >
               <div className="relative">
-                <div className="w-9 h-9 bg-emerald-500 rounded-lg flex items-center justify-center shadow-[0_0_10px_rgba(16,185,129,0.2)] transition-transform duration-300 overflow-hidden relative">
-                  <img src="/icon-512.png" alt="Logo" className="w-full h-full object-cover relative z-0" referrerPolicy="no-referrer" />
-                  <div className="absolute inset-x-0 bottom-0 h-1 bg-black/20 z-40" />
-                </div>
+                <FluxLogo className="w-9 h-9" />
               </div>
               <div className="flex flex-col items-center">
                 <span className="text-2xl font-brand font-black tracking-[-0.05em] uppercase leading-none select-none text-white transition-all duration-700 group-hover:tracking-[0.05em]">
@@ -431,8 +427,8 @@ function AppContent() {
                 >
                   <X className="w-6 h-6" />
                 </button>
-                <div className="w-20 h-20 bg-emerald-500 rounded-[20px] sm:rounded-[24px] flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] mb-8 shrink-0 overflow-hidden">
-                  <img src="/icon-512.png" alt="Flux Music" className="w-full h-full object-cover" />
+                <div className="mb-8 shrink-0">
+                  <FluxLogoLarge className="w-20 h-20" />
                 </div>
                 <h2 className="text-2xl font-black text-white uppercase tracking-widest mb-4 text-center">Instalar en iOS</h2>
                 <div className="bg-[#121212] border border-white/10 rounded-2xl p-6 w-full max-w-sm flex flex-col items-center gap-6 shadow-2xl">

@@ -15,18 +15,8 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose,
   const [shouldShow, setShouldShow] = useState(false);
 
   useEffect(() => {
-    if (isOpen) {
-      setShouldShow(true);
-      return;
-    }
-
-    if (!isManual) {
-      const lastSeenVersion = localStorage.getItem("flux_last_viewed_version");
-      if (lastSeenVersion !== CURRENT_APP_VERSION) {
-        setShouldShow(true);
-      }
-    }
-  }, [isOpen, isManual]);
+    setShouldShow(isOpen);
+  }, [isOpen]);
 
   const handleDismiss = () => {
     localStorage.setItem("flux_last_viewed_version", CURRENT_APP_VERSION);
@@ -80,7 +70,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose,
               ¿Qué hay de nuevo en FLUX Music?
             </h2>
             <p className="text-slate-400 text-xs mt-1.5 font-semibold">
-              Echa un vistazo a las últimas mejoras integradas para potenciar tus entrenamientos.
+              Echa un vistazo a las últimas mejoras integradas para potenciar tu experiencia musical premium.
             </p>
           </div>
 
@@ -127,7 +117,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose,
                   ⚡ Rendimiento Optimizado y Corrección de Bucles
                 </h3>
                 <p className="text-slate-400 text-[11.5px] leading-relaxed mt-1 font-semibold">
-                  Corregimos un error donde dar "Me gusta" o actualizar datos del perfil saltaba y reiniciaba la reproducción actual a la primera pista. Tu experiencia musical de fondo para el gimnasio ahora es totalmente continua y fluida de principio a fin.
+                  Corregimos un error donde dar "Me gusta" o actualizar datos del perfil saltaba y reiniciaba la reproducción actual a la primera pista. Tu experiencia musical de fondo para tus locales o el día a día ahora es totalmente continua y fluida de principio a fin.
                 </p>
               </div>
             </div>
@@ -158,7 +148,7 @@ export const ChangelogModal: React.FC<ChangelogModalProps> = ({ isOpen, onClose,
               onClick={handleDismiss}
               className="w-full sm:w-auto px-8 py-3 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-black uppercase text-[10px] tracking-wider rounded-xl shadow-[0_4px_20px_rgba(30,215,96,0.25)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-2 shrink-0 ml-auto"
             >
-              <span>¡Entendido, a Entrenar!</span>
+              <span>¡Entendido, a Escuchar!</span>
               <ChevronRight className="w-4 h-4 stroke-[3px]" />
             </button>
           </div>

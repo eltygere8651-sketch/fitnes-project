@@ -1,6 +1,6 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 export interface UserAccessData {
@@ -40,6 +40,7 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [dbUserProfile, setDbUserProfile] = useState<{ displayName?: string, photoURL?: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [authError, setAuthError] = useState<any | null>(null);
@@ -60,19 +61,66 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuthError(error);
     });
 
+    let unsubscribeFirestore: (() => void) | null = null;
+
     const unsubscribe = onAuthStateChanged(auth, async (u) => {
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+        unsubscribeFirestore = null;
+      }
+
       if (u) {
+        // Listen to Firestore changes in real-time
+        const userRef = doc(db, "users", u.uid);
+        unsubscribeFirestore = onSnapshot(userRef, (snapshot) => {
+          if (snapshot.exists()) {
+            const data = snapshot.data();
+            setDbUserProfile({
+              displayName: data.displayName,
+              photoURL: data.photoURL
+            });
+
+            const tStart = data.trialStart || null;
+            const subEnd = data.subscriptionEnd || null;
+            const planType = data.plan || "free";
+            const allowedUsers = data.maxUsers || 1;
+            const now = Date.now();
+            const msPerDay = 1000 * 60 * 60 * 24;
+
+            let isValid = false;
+            let daysRemaining = 0;
+
+            if (u.email === "eltygere8651@gmail.com") {
+              isValid = true;
+              daysRemaining = 999;
+            } else if (subEnd && subEnd > now) {
+              isValid = true;
+              daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
+            } else if (planType === "free" && tStart) {
+              const trialEnd = tStart + 7 * msPerDay;
+              if (trialEnd > now) {
+                isValid = true;
+                daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
+              }
+            }
+
+            setAccessData({
+              trialStart: tStart,
+              subscriptionEnd: subEnd,
+              plan: planType,
+              isValid,
+              daysRemaining,
+              maxUsers: allowedUsers
+            });
+          }
+        }, (err) => {
+          console.error("Firestore onSnapshot error:", err);
+        });
+
         const syncProfile = async (retryCount = 0) => {
           try {
             const userRef = doc(db, "users", u.uid);
             const userSnap = await getDoc(userRef);
-            
-            let tStart: number | null = null;
-            let subEnd: number | null = null;
-            let planType: any = null;
-            let allowedUsers = 1;
-            
-            const now = Date.now();
             
             if (!userSnap.exists()) {
               // Create user doc without trial
@@ -86,50 +134,10 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
                 plan: "none",
                 maxUsers: 1
               });
-              tStart = null;
-              planType = "none";
-              allowedUsers = 1;
             } else {
-              const data = userSnap.data();
               // Update last login
               await setDoc(userRef, { lastLogin: serverTimestamp() }, { merge: true });
-              
-              tStart = data.trialStart || null;
-              subEnd = data.subscriptionEnd || null;
-              planType = data.plan || "free";
-              allowedUsers = data.maxUsers || 1;
             }
-            
-            let isValid = false;
-            let daysRemaining = 0;
-            const msPerDay = 1000 * 60 * 60 * 24;
-            
-            // Si es admin nunca caduca o si es master (si su email coincide)
-            if (u.email === "eltygere8651@gmail.com") {
-               isValid = true;
-               daysRemaining = 999;
-            } else if (subEnd && subEnd > now) {
-                // Plan activo
-                isValid = true;
-                daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
-            } else if (planType === "free" && tStart) {
-                // Evaluar Trial (7 días)
-                const trialEnd = tStart + 7 * msPerDay;
-                if (trialEnd > now) {
-                  isValid = true;
-                  daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
-                }
-            }
-            
-            setAccessData({
-              trialStart: tStart,
-              subscriptionEnd: subEnd,
-              plan: planType,
-              isValid,
-              daysRemaining,
-              maxUsers: allowedUsers
-            });
-
           } catch (e) {
             console.error("Profile sync attempt failed", e);
             if (retryCount < 2) {
@@ -140,19 +148,46 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
         syncProfile();
       } else {
         setAccessData(null);
+        setDbUserProfile(null);
       }
       setUser(u);
       setLoading(false);
     });
+
     return () => {
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
       unsubscribe();
+      if (unsubscribeFirestore) {
+        unsubscribeFirestore();
+      }
     };
   }, []);
 
+  const mergedUser = useMemo(() => {
+    if (!user) return null;
+    const u = Object.create(user);
+    if (dbUserProfile?.displayName) {
+      Object.defineProperty(u, "displayName", {
+        value: dbUserProfile.displayName,
+        writable: true,
+        configurable: true,
+        enumerable: true
+      });
+    }
+    if (dbUserProfile?.photoURL) {
+      Object.defineProperty(u, "photoURL", {
+        value: dbUserProfile.photoURL,
+        writable: true,
+        configurable: true,
+        enumerable: true
+      });
+    }
+    return u as User;
+  }, [user, dbUserProfile]);
+
   return (
-    <FirebaseContext.Provider value={{ user, loading, isOnline, authError, clearAuthError, isAuthModalOpen, setAuthModalOpen, accessData }}>
+    <FirebaseContext.Provider value={{ user: mergedUser, loading, isOnline, authError, clearAuthError, isAuthModalOpen, setAuthModalOpen, accessData }}>
       {children}
     </FirebaseContext.Provider>
   );

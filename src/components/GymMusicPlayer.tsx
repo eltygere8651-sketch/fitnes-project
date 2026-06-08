@@ -632,9 +632,7 @@ export default function GymMusicPlayer() {
   const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
   const [isMembershipDropdownOpen, setIsMembershipDropdownOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
-  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(() => {
-    return localStorage.getItem("flux_last_viewed_version") !== "1.3.0";
-  });
+  const [isChangelogModalOpen, setIsChangelogModalOpen] = useState(false);
   const [isManualChangelog, setIsManualChangelog] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
@@ -1952,14 +1950,14 @@ export default function GymMusicPlayer() {
         tracks: [{
           id: item.id,
           title: item.title,
-          artist: item.artist || "YouTube",
+          artist: item.artist || "Flux",
           duration: item.duration || "N/A",
           url: item.url || `https://www.youtube.com/watch?v=${item.id}`,
           thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`
         }],
         thumbnail_url: item.thumbnail,
         ownerId: "youtube",
-        ownerName: item.artist || "YouTube",
+        ownerName: item.artist || "Flux",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
@@ -1981,7 +1979,7 @@ export default function GymMusicPlayer() {
           tracks: tracks,
           thumbnail_url: item.thumbnail,
           ownerId: "youtube",
-          ownerName: item.artist || "YouTube",
+          ownerName: item.artist || "Flux",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
         };
@@ -2075,7 +2073,7 @@ export default function GymMusicPlayer() {
                 thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`,
               }));
             } else {
-              showNotification("No se pudieron extraer las pistas del enlace en YouTube.");
+              showNotification("No se pudieron extraer las pistas del enlace.");
               setIsProcessingModalAdd(false);
               return;
             }
@@ -3015,7 +3013,7 @@ export default function GymMusicPlayer() {
         {[
           { label: "Energía", query: "Energía Mix Oficial YouTube Music Playlist" },
           { label: "Relax", query: "Relax Chill Mix Oficial YouTube Music Playlist" },
-          { label: "Entrenamiento", query: "Entrenamiento Workout Mix Oficial YouTube Music Playlist" },
+          { label: "Éxitos", query: "Exitos Mix Oficial YouTube Music Playlist" },
           { label: "Fiesta", query: "Fiesta Reggaeton Mix Oficial YouTube Music Playlist" },
           { label: "Concentración", query: "Concentración Focus Mix Oficial YouTube Music Playlist" }
         ].map((pill, idx) => (
@@ -4158,7 +4156,7 @@ export default function GymMusicPlayer() {
                             if (ytTrack.subType === 'mix') {
                               return (
                                 <span className="bg-purple-500/20 text-purple-400 text-[8px] px-1.5 py-0.5 rounded-full font-black uppercase shrink-0 tracking-wider">
-                                  MIX YOUTUBE
+                                  MIX PREMIUM
                                 </span>
                               );
                             } else {
@@ -4214,7 +4212,7 @@ export default function GymMusicPlayer() {
                                       .map(t => ({
                                         id: `yt_temp_${t.id}`,
                                         title: t.title,
-                                        artist: t.artist || "YouTube",
+                                        artist: t.artist || "Flux",
                                         url: t.url,
                                         duration: t.duration || "N/A",
                                         bpm: 120
@@ -5356,7 +5354,7 @@ export default function GymMusicPlayer() {
                                         const mappedTrack: MusicTrack = {
                                           id: track.id || `preview_${trackIdx}`,
                                           title: track.title,
-                                          artist: track.artist || "YouTube",
+                                          artist: track.artist || "Flux",
                                           url: track.url,
                                           duration: track.duration || "N/A",
                                           bpm: 120

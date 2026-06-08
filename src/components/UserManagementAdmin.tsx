@@ -3,6 +3,7 @@ import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "
 import { db } from "../lib/firebase";
 import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug } from "lucide-react";
 import { jsPDF } from "jspdf";
+import { FluxLogoMini } from "./FluxLogo";
 
 export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [users, setUsers] = useState<any[]>([]);
@@ -73,75 +74,378 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     try {
       const doc = new jsPDF();
       
-      // Config colors & fonts for presentation matching Flux Music colors
-      doc.setFillColor(7, 7, 8); // Deep black/slate background
-      doc.rect(0, 0, 210, 297, "F");
+      // PAGE 1: PORTADA PRINCIPAL (Estilo Blanco Minimalista con Banda Verde)
+      // 1. Banda verde en la parte superior
+      doc.setFillColor(30, 215, 96); 
+      doc.rect(0, 0, 210, 12, "F");
 
-      doc.setTextColor(30, 215, 96); // Emerald Green
+      // 2. LOGO OFICIAL VECTORIAL FLUX MUSIC (Diseño doble círculo concéntrico con dos puntos internos)
+      const logoX = 105;
+      const logoY = 75;
+      // Círculo exterior verde
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(0.8);
+      doc.circle(logoX, logoY, 18, "S");
+      // Círculo medio gris
+      doc.setDrawColor(148, 163, 184);
+      doc.setLineWidth(0.4);
+      doc.circle(logoX, logoY, 15, "S");
+      // Círculo interior verde
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(0.8);
+      doc.circle(logoX, logoY, 12, "S");
+      // Dos puntos verdes rellenos
+      doc.setFillColor(30, 215, 96);
+      doc.circle(logoX - 4.5, logoY, 1.8, "F");
+      doc.circle(logoX + 4.5, logoY, 1.8, "F");
+
+      // 3. TÍTULOS DE PORTADA
+      doc.setTextColor(15, 23, 42); // Slate 900
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(28);
-      doc.text("FLUX MUSIC PRO", 105, 40, { align: "center" });
+      doc.setFontSize(36);
+      doc.text("FLUX MUSIC", 105, 122, { align: "center" });
 
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(16);
-      doc.text("La Evolución Musical para tu Negocio", 105, 50, { align: "center" });
+      doc.setTextColor(30, 215, 96); // Verde Flux
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12.5);
+      doc.text("STREAMING AUDIO PREMIUM DE ALTO RENDIMIENTO", 105, 133, { align: "center" });
 
+      // 4. TEXTO INTRODUCTORIO CENTRADO
+      doc.setTextColor(71, 85, 105); // Slate 600
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(12);
-      doc.setTextColor(200, 200, 200);
-
-      const margin = 20;
-      let y = 75;
+      doc.setFontSize(10.5);
+      const introText = "Un ecosistema de streaming adaptado para una experiencia premium en hogares, oficinas, tiendas, bares y locales comerciales. Conectado de forma dinamica a una potente red de audio optimizada con control total, listas sincronizadas en tiempo real y compatibilidad de reproduccion de alta gama.";
+      const splitIntro = doc.splitTextToSize(introText, 160);
       
-      const lines = [
-        "¿QUÉ ES FLUX MUSIC?",
-        "Flux Music no es solo un reproductor, es una solución integral para ambientes",
-        "comerciales, bares, restaurantes, hoteles y gimnasios.",
-        "Integra toda la biblioteca de YouTube Music con una interfaz premium",
-        "tipo Spotify, garantizando reproducción continua y sin cortes.",
-        "",
-        "----------------------------------------------------------------",
-        "",
-        "BENEFICIOS PARA NEGOCIOS:",
-        "• Control Centralizado y Remoto: Maneja las playlists desde una PC",
-        "  en tu oficina o directamente en tu móvil.",
-        "• Estética Premium: Transmite profesionalismo si tienes pantallas",
-        "  a la vista de los clientes con el modo Player Compacto.",
-        "• Control de Dispositivos: Licencias de 1 a 6 pantallas concurrentes",
-        "  para cubrir todo el establecimiento.",
-        "• Rentabilidad y Privacidad: Música ininterrumpida sin cuentas públicas.",
-        "",
-        "----------------------------------------------------------------",
-        "",
-        "PROPUESTA COMERCIAL PARA PROMOTORES:",
-        "Ofrecemos atractivas comisiones para socios y promotores que sumen locales.",
-        "Puedes dar 14 días de prueba gratuitos al cliente para que viva",
-        "la experiencia sin compromiso. Luego ofrecemos planes hipercompetitivos.",
-        "",
-        "PRECIOS SUGERIDOS PARA PÚBLICO GENERAL:",
-        "Planes privados para no alertar al usuario normal.",
-        "• Plan 1 Pantalla/Usuario: $1.99 / mes",
-        "• Plan 2 Pantallas/Usuarios: $2.99 / mes",
-        "• Funciones Familiares pueden habilitarse si demanda múltiples dispositivos.",
-      ];
-
-      lines.forEach(line => {
-        if (line.includes("¿QUÉ ES") || line.includes("BENEFICIOS:") || line.includes("PROPUESTA") || line.includes("PRECIOS")) {
-          doc.setFont("helvetica", "bold");
-          doc.setTextColor(30, 215, 96);
-        } else if (line.includes("---")) {
-          doc.setTextColor(50, 50, 50);
-        } else {
-           doc.setFont("helvetica", "normal");
-           doc.setTextColor(215, 215, 215);
-        }
-        doc.text(line, margin, y);
-        y += 7.5;
+      // Pintar con interlineado manual de 5.5
+      let tempY = 146;
+      splitIntro.forEach((line: string) => {
+        doc.text(line, 105, tempY, { align: "center" });
+        tempY += 5.5;
       });
 
-      doc.setFontSize(9);
-      doc.setTextColor(150, 150, 150);
-      doc.text("Documento Confidencial - Propiedad de Flux Music", 105, 280, { align: "center" });
+      // 5. RECUADRO CON VALORES FUNDAMENTALES DU PROYECTO
+      doc.setDrawColor(30, 215, 96);
+      doc.setLineWidth(0.6);
+      doc.setFillColor(255, 255, 255);
+      doc.rect(25, 182, 160, 48, "S");
+
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text("VALORES FUNDAMENTALES DEL PROYECTO", 105, 194, { align: "center" });
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(51, 65, 85);
+      doc.text("- Distribucion de Contenido de Alta Fidelidad - Infinidad de canciones y listas.", 32, 203);
+      doc.text("- Optimizacion de Audio en Segundo Plano - Prevencion de cortes de reproduccion.", 32, 211);
+      doc.text("- Canales Tematicos Modulables - Energia, Relax, Exitos y Mas.", 32, 219);
+
+      // 6. PIE DE PORTADA
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate 400
+      doc.text("FLUX AUDIO STUDIO LTDA * REGISTRO DE PRODUCTO 2026", 105, 268, { align: "center" });
+
+
+      // PAGE 2: ¿POR QUÉ ELEGIR FLUX MUSIC?
+      doc.addPage();
+      
+      // Banda verde superior
+      doc.setFillColor(30, 215, 96); 
+      doc.rect(0, 0, 210, 12, "F");
+
+      // Cabecera superior institucional del PDF
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text("FLUX MUSIC • DOSSIER COMERCIAL & PROYECTO B2B", 20, 20);
+      doc.text("PAGINA 2", 190, 20, { align: "right" });
+
+      // Línea divisora sutil
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(20, 22.5, 190, 22.5);
+
+      // TÍTULO EN NEGRO CON PEQUEÑA BARRA ACENTUADA
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("1. ¿Por que elegir FLUX Music?", 20, 35);
+
+      // Barra de acentuación
+      doc.setFillColor(30, 215, 96);
+      doc.rect(20, 38, 170, 1, "F");
+
+      // Párrafo de justificación
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(71, 85, 105);
+      const textChoose = "La ambientacion musical es un factor critico de conversion y energia, tanto en centros de trabajo donde eleva la productividad un 15% como en locales comerciales (hoteles, bares, tiendas) donde incrementa el tiempo de permanencia. Sin embargo, la oferta legal de la competencia es costosa y carece de dinamismo. FLUX ofrece una alternativa de alto impacto, interactiva y robusta.";
+      const splitChoose = doc.splitTextToSize(textChoose, 170);
+      let yChoose = 45;
+      splitChoose.forEach((line: string) => {
+        doc.text(line, 20, yChoose);
+        yChoose += 5.2;
+      });
+
+      // Subtítulo Características Técnicas
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text("CARACTERISTICAS TECNICAS DESTACADAS", 20, 74);
+
+      // Array de características destacadas
+      const techSpecs = [
+        {
+          title: "Sincronizacion en la Nube Completa (Firebase)",
+          desc: "Guarda favoritos, listas personalizadas y preferencias de forma instantanea bajo tu ID de usuario."
+        },
+        {
+          title: "Interfaz Premium 'Spoty-Vibe' Optimizada",
+          desc: "Diseno premium adaptable con controles tactiles optimizados tanto para movil como para sobremesa."
+        },
+        {
+          title: "Canales Tematicos Modulares",
+          desc: "Cambia la vibracion del entorno en 1 segundo con accesos rapidos como Energia, Relax, Exitos y Explorar."
+        },
+        {
+          title: "Guardian de Fluidez de Audio",
+          desc: "Algoritmos optimizados de alerta de primer plano para evitar interrupciones de reproduccion al bloquear el movil."
+        }
+      ];
+
+      let featY = 82;
+      techSpecs.forEach((spec) => {
+        // Cuadrado verde como viñeta
+        doc.setFillColor(30, 215, 96);
+        doc.rect(20, featY, 3.5, 3.5, "F");
+
+        // Título de la característica
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(10.5);
+        doc.setTextColor(15, 23, 42);
+        doc.text(spec.title, 26, featY + 3);
+
+        // Descripción de la característica
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9.5);
+        doc.setTextColor(71, 85, 105);
+        doc.text(spec.desc, 26, featY + 8);
+
+        featY += 18;
+      });
+
+
+      // PAGE 3: MODELOS DE LICENCIA, TARIFAS Y COMPARACIÓN
+      doc.addPage();
+
+      // Banda verde superior
+      doc.setFillColor(30, 215, 96); 
+      doc.rect(0, 0, 210, 12, "F");
+
+      // Cabecera superior
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(71, 85, 105);
+      doc.text("FLUX MUSIC • DOSSIER COMERCIAL & PROYECTO B2B", 20, 20);
+      doc.text("PAGINA 3", 190, 20, { align: "right" });
+
+      // Línea divisora
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.4);
+      doc.line(20, 22.5, 190, 22.5);
+
+      // TÍTULO DE TARIFAS
+      doc.setTextColor(15, 23, 42);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(18);
+      doc.text("2. Modelos de Licencia y Tarifas", 20, 35);
+
+      // Barra acentuada
+      doc.setFillColor(30, 215, 96);
+      doc.rect(20, 38, 170, 1, "F");
+
+      // Párrafo introductorio
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(9.5);
+      doc.setTextColor(71, 85, 105);
+      const textRates = "Nuestras tarifas estan estructuradas en Euros (EUR) de forma transparente y optimizada, pensada para ofrecer una alternativa legal ultra-accesible y maximizar la conversion frente a los competidores tradicionales.";
+      const splitRates = doc.splitTextToSize(textRates, 170);
+      let yRates = 45;
+      splitRates.forEach((line: string) => {
+        doc.text(line, 20, yRates);
+        yRates += 5.2;
+      });
+
+      // TARJETA DE PLAN 1: PLAN INDIVIDUAL (4,99 EUR)
+      const p1X = 20;
+      const p1Y = 58;
+      const cardHeight = 31;
+      
+      // Dibujar fondo de tarjeta
+      doc.setFillColor(248, 250, 252); // Soft light slate background
+      doc.rect(p1X, p1Y, 170, cardHeight, "F");
+      // Outline sutil
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.rect(p1X, p1Y, 170, cardHeight, "S");
+      // Línea izquierda verde ancha de la tarjeta
+      doc.setFillColor(30, 215, 96);
+      doc.rect(p1X, p1Y, 2.5, cardHeight, "F");
+
+      // Textos Tarjeta 1
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("PLAN INDIVIDUAL", p1X + 6, p1Y + 6);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 215, 96);
+      doc.text("4,99 EUR / mes", 190 - 6, p1Y + 6, { align: "right" });
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Para 1 Usuario Personal", p1X + 6, p1Y + 11);
+
+      // Viñetas dobles en la tarjeta
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
+      doc.text("• Acceso completo personal", p1X + 6, p1Y + 18);
+      doc.text("• Listas ilimitadas en la nube", p1X + 6, p1Y + 24);
+      doc.text("• Buscador global integrado", p1X + 85, p1Y + 18);
+      doc.text("• Sincronizacion de favoritos", p1X + 85, p1Y + 24);
+
+
+      // TARJETA DE PLAN 2: PLAN DUO (7,99 EUR)
+      const p2X = 20;
+      const p2Y = 94;
+
+      // Dibujar fondo de tarjeta
+      doc.setFillColor(248, 250, 252); 
+      doc.rect(p2X, p2Y, 170, cardHeight, "F");
+      // Outline sutil
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.3);
+      doc.rect(p2X, p2Y, 170, cardHeight, "S");
+      // Línea izquierda verde ancha
+      doc.setFillColor(30, 215, 96);
+      doc.rect(p2X, p2Y, 2.5, cardHeight, "F");
+
+      // Textos Tarjeta 2
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text("PLAN DUO (Premium Duo)", p2X + 6, p2Y + 6);
+      
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(30, 215, 96);
+      doc.text("7,99 EUR / mes", 190 - 6, p2Y + 6, { align: "right" });
+
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text("Para 2 Usuarios Simultaneos", p2X + 6, p2Y + 11);
+
+      // Viñetas dobles
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(51, 65, 85);
+      doc.text("• Ideal para parejas o amigos", p2X + 6, p2Y + 18);
+      doc.text("• Doble stream activo a la vez", p2X + 6, p2Y + 24);
+      doc.text("• Perfiles aislados de favoritos", p2X + 85, p2Y + 18);
+      doc.text("• Comparticion simplificada", p2X + 85, p2Y + 24);
+
+
+      // 4. NUESTRAS TARIFAS COMPARADAS (TABLA DE MERCADO PREMIUM)
+      let tableY = 135;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text("TABLA COMPARATIVA CON OTRAS GRANDES PLATAFORMAS", 20, tableY);
+
+      tableY += 5;
+      // Dibujar cabecera de la tabla
+      doc.setFillColor(30, 215, 96); // Verde Flux
+      doc.rect(20, tableY, 170, 7.5, "F");
+      
+      doc.setTextColor(15, 23, 42); // Texto oscuro legible en verde
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.text("PLATAFORMA (STREAMING MUSICA)", 23, tableY + 5);
+      doc.text("PLAN DE ACCESO", 93, tableY + 5);
+      doc.text("PRECIO MENSUAL", 143, tableY + 5);
+
+      tableY += 7.5;
+
+      const comparisons = [
+        { name: "Spotify Premium Individual", plan: "1 Usuario", price: "11,99 e / mes", highlight: false },
+        { name: "Apple Music Individual", plan: "1 Usuario", price: "10,99 e / mes", highlight: false },
+        { name: "Amazon Music Unlimited", plan: "1 Usuario", price: "10,99 e / mes", highlight: false },
+        { name: "Flux Music Premium (1 Usuario)", plan: "1 Usuario", price: "4,99 e / mes (¡Ahorras más del 55%!)", highlight: true },
+        { name: "Flux Music Premium (2 Usuarios)", plan: "2 Usuarios", price: "7,99 e / mes (¡Ahorras más del 60%!)", highlight: true }
+      ];
+
+      comparisons.forEach((row, i) => {
+        // Fondo alternativo claro
+        if (row.highlight) {
+          doc.setFillColor(240, 253, 244); // Color menta pastel muy suave
+        } else {
+          doc.setFillColor(i % 2 === 0 ? 255 : 248, i % 2 === 0 ? 255 : 250, i % 2 === 0 ? 255 : 252);
+        }
+        
+        doc.rect(20, tableY, 170, 7.5, "F");
+        
+        // Línea sutil de fila
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.3);
+        doc.line(20, tableY + 7.5, 190, tableY + 7.5);
+
+        // Estilos de texto
+        if (row.highlight) {
+          doc.setFont("helvetica", "bold");
+          doc.setTextColor(22, 163, 74); // Verde oscuro brillante
+        } else {
+          doc.setFont("helvetica", "normal");
+          doc.setTextColor(51, 65, 85);
+        }
+
+        doc.setFontSize(8);
+        doc.text(row.name, 23, tableY + 5);
+        doc.text(row.plan, 93, tableY + 5);
+        doc.text(row.price, 143, tableY + 5);
+
+        tableY += 7.5;
+      });
+
+      // Texto de finalización e información útil
+      tableY += 5;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(15, 23, 42);
+      doc.text("¿Como solicitar la activacion y sincronizacion?", 20, tableY);
+
+      tableY += 5;
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 116, 139);
+      const requestText = "Para formalizar el alta de cualquiera de los planes, simplemente registrate y haz clic en probar gratis. Dado el control estricto de recursos y velocidad de stream, las activaciones de slot e invitaciones se gestionan de forma personalizada.";
+      const splitRequest = doc.splitTextToSize(requestText, 170);
+      splitRequest.forEach((line: string) => {
+        doc.text(line, 20, tableY);
+        tableY += 4.5;
+      });
+
+      // Conclusión en verde al pie
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(30, 215, 96);
+      doc.text("PROYECTO COMPLEMENTARIO DESARROLLADO BAJO ESTANDAR COMERCIAL PREMIUM FY26", 105, 275, { align: "center" });
 
       doc.save("Presentacion_Comercial_Flux_Music.pdf");
     } catch (error) {
@@ -440,9 +744,11 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           <div className="flex items-center gap-4">
             <button
               onClick={downloadPresentation}
-              className="hidden sm:flex items-center justify-center gap-2 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black uppercase text-[10px] tracking-widest px-4 py-2 rounded-full border border-[#1ED760]/20 transition-all shadow-[0_0_15px_rgba(30,215,96,0.1)] hover:shadow-[0_0_20px_rgba(30,215,96,0.2)] active:scale-95"
+              className="flex items-center justify-center gap-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] font-black uppercase text-[9px] sm:text-[10px] tracking-wider sm:tracking-widest px-3 sm:px-4 py-1.5 sm:py-2 rounded-full border border-[#1ED760]/20 transition-all shadow-[0_0_15px_rgba(30,215,96,0.1)] active:scale-95 cursor-pointer shrink-0"
+              title="Descargar Presentación Comercial en PDF"
             >
-              <Download className="w-4 h-4" /> Presentación Comercial
+              <FluxLogoMini className="w-4 h-4 animate-pulse" />
+              <span>PDF Comercial</span>
             </button>
             <button onClick={onClose} className="p-2 hover:bg-white/5 text-slate-400 hover:text-white rounded-full transition-all cursor-pointer">
               <X className="w-5 h-5" />
@@ -635,7 +941,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                     type="text"
                     value={annTitle}
                     onChange={(e) => setAnnTitle(e.target.value)}
-                    placeholder="Ej. Mantenimiento del Sistema o Se ha caído el servidor YouTube API"
+                    placeholder="Ej. Mantenimiento del Sistema o Se ha caído el servidor de transmisión"
                     className="w-full px-4 py-2.5 bg-[#0d0d0f] border border-white/10 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-semibold"
                   />
                 </div>

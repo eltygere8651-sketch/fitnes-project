@@ -43,7 +43,7 @@ const PRESET_AVATARS = [
   { name: "Escucha", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Milo" },
   { name: "Cósmico", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Nova" },
   { name: "Ciborg", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Ciborg" },
-  { name: "Atleta", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Spike" },
+  { name: "Melómano", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Spike" },
   { name: "Fénix", url: "https://api.dicebear.com/7.x/adventurer/svg?seed=Felix" },
 ];
 
@@ -179,12 +179,14 @@ export const UserProfileModal: React.FC<UserProfileModalProps> = ({ onClose }) =
       const isPhotoChanged = photoURL !== (user.photoURL || "");
 
       if (isNameChanged || isPhotoChanged) {
+        // Bypass Firebase Auth photoURL length limits by passing plain text/empty value for large data URLs
+        const authPhotoURL = photoURL && photoURL.startsWith("data:") ? "" : photoURL;
         await updateProfile(user, {
           displayName: nickname.trim(),
-          photoURL: photoURL
+          photoURL: authPhotoURL
         });
         
-        // Also update Firestore users database copy
+        // Also update Firestore users database copy with the full avatar picture
         const userRef = doc(db, "users", user.uid);
         await updateDoc(userRef, {
           displayName: nickname.trim(),

@@ -22,7 +22,7 @@ const STATIC_SYSTEM_NOTICES = [
     title: "⚡ Actualización Flux v1.3.0",
     category: "actualizacion",
     createdAt: new Date("2026-06-07T12:00:00Z"),
-    content: "Hemos lanzado avatares premium y solucionado errores en bucles del reproductor. Ahora la reproducción es fluida y continua para el gimnasio.",
+    content: "Hemos lanzado avatares premium y solucionado errores en bucles del reproductor. Ahora la reproducción es fluida, continua y de la mejor calidad premium.",
     isStatic: true
   },
   {

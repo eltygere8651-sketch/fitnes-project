@@ -64,7 +64,7 @@ export const AuthErrorModal: React.FC = () => {
     description = "No se pudo establecer conexión con los servidores de autenticación de Google/Firebase.";
     solutionSteps = [
       "Asegúrate de estar conectado a Internet.",
-      "Si estás en una red corporativa o gimnasio, verifica que no haya firewalls bloqueando '*.firebaseapp.com'.",
+      "Si estás en una red corporativa o pública con restricciones, verifica que no haya firewalls bloqueando '*.firebaseapp.com'.",
       "Intenta de nuevo en unos minutos."
     ];
   } else {

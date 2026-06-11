@@ -94,13 +94,24 @@ export default async function handler(req: any, res: any) {
   };
 
   try {
-    const explore = await yt.music.getExplore();
+    const explorePromise = yt.music.getExplore().catch(() => null);
+
+    // Explicitly grab the top playlists based on country concurrently (with robust fallbacks)
+    const [explore, top100Res, top100ResAlt, tendenciasRes, tendenciasResAlt, dailyRes, dailyResAlt] = await Promise.all<any>([
+      explorePromise,
+      yt.search(`Top 100 Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top 100 ${countryName}`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top 20 Tendencias ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Tendencias ${countryName}`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Daily Top Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top Canciones ${countryName}`, { type: 'playlist' }).catch(() => ({}))
+    ]);
     
     let trending: any[] = [];
     let dailyTop: any[] = [];
     let trends: any[] = [];
 
-    if (explore.sections) {
+    if (explore && explore.sections) {
       explore.sections.forEach((s: any) => {
         const headerText = (s.header?.title?.text || "").toLowerCase();
         if (!s.contents) return;
@@ -119,10 +130,40 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Explicitly grab the top playlist based on country
-    const top100Res = await yt.search(`Top 100 Playlist ${countryName} Oficial`, { type: 'playlist' });
-    const playlistsArr = top100Res.playlists || top100Res.results || [];
-    const top100Data = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    const playlistsArr = top100Res?.playlists || top100Res?.results || [];
+    let top100Data = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!top100Data || top100Data.length === 0) {
+      const top100AltArr = top100ResAlt?.playlists || top100ResAlt?.results || [];
+      top100Data = top100AltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    const tendenciasArr = tendenciasRes?.playlists || tendenciasRes?.results || [];
+    let top20Tendencias = tendenciasArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!top20Tendencias || top20Tendencias.length === 0) {
+      const tendenciasAltArr = tendenciasResAlt?.playlists || tendenciasResAlt?.results || [];
+      top20Tendencias = tendenciasAltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    // Double fallback to ensure a list is always populated
+    if (!top20Tendencias || top20Tendencias.length === 0) {
+      const fallbackRes: any = await yt.search(`Trends ${countryName}`, { type: 'playlist' }).catch(() => ({}));
+      const fallbackArr = fallbackRes?.playlists || fallbackRes?.results || [];
+      top20Tendencias = fallbackArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    const dailyArr = dailyRes?.playlists || dailyRes?.results || [];
+    let dailyTopPlaylists = dailyArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!dailyTopPlaylists || dailyTopPlaylists.length === 0) {
+      const dailyAltArr = dailyResAlt?.playlists || dailyResAlt?.results || [];
+      dailyTopPlaylists = dailyAltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    // Double fallback to ensure a list is always populated
+    if (!dailyTopPlaylists || dailyTopPlaylists.length === 0) {
+      const fallbackRes: any = await yt.search(`Hits ${countryName}`, { type: 'playlist' }).catch(() => ({}));
+      const fallbackArr = fallbackRes?.playlists || fallbackRes?.results || [];
+      dailyTopPlaylists = fallbackArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
 
     // EMERGENCY FALLBACK: if both trending and top100 are still empty, fetch generic hits
     if (trending.length === 0 && top100Data.length === 0) {
@@ -134,6 +175,8 @@ export default async function handler(req: any, res: any) {
       trending,
       dailyTop,
       top100: top100Data,
+      top20Tendencias,
+      dailyTopPlaylists,
       workout: [],
       focus: [],
       trends, 

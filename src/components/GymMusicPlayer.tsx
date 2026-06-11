@@ -882,7 +882,7 @@ export default function GymMusicPlayer() {
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
   const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("search");
-  const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "afinidad" | "cola">("artwork");
+  const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "cola">("artwork");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
   useEffect(() => {
@@ -3866,16 +3866,6 @@ export default function GymMusicPlayer() {
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
-                            setPlayerTab("afinidad");
-                          }}
-                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1 ${playerTab === "afinidad" ? "bg-emerald-500 text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
-                        >
-                          <Sparkles className="w-2.5 h-2.5" />
-                          <span>Mix Flow</span>
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
                             setPlayerTab("cola");
                           }}
                           className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${playerTab === "cola" ? "bg-white text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
@@ -4053,125 +4043,7 @@ export default function GymMusicPlayer() {
                           </div>
                         )}
 
-                        {playerTab === "afinidad" && (
-                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60  rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left relative z-20">
-                            <div className="flex items-center justify-between mb-2 px-1">
-                              <span className="text-[9px] font-black tracking-widest text-[#1ED760] uppercase block flex items-center gap-1.5 shrink-0">
-                                <Sparkles className="w-3 h-3 text-emerald-400 animate-pulse shrink-0" />
-                                Recomendación Flux Flow AI
-                              </span>
-                              <button
-                                onClick={() => {
-                                  showNotification("Sintonía recalculada con éxito");
-                                }}
-                                className="text-[8.5px] font-black uppercase text-emerald-400 hover:text-white transition-colors border border-emerald-500/10 px-2.5 py-0.5 rounded-full cursor-pointer bg-white/5 hover:bg-emerald-500/10 shrink-0"
-                              >
-                                Refrescar
-                              </button>
-                            </div>
 
-                            {(() => {
-                              const favPlaylist = userPlaylists.find(p => p.ownerId === user?.uid && (p.name.toLowerCase() === 'favoritos' || p.name.toLowerCase() === 'siguiente'));
-                              const favoritesList = favPlaylist?.tracks || [];
-                              const diagnostics = getTasteDiagnostics(favoritesList);
-                              const recs = getMusicRecommendations(ALL_DATABASE_TRACKS, favoritesList);
-
-                              return (
-                                <div className="space-y-3 flex-1 flex flex-col min-h-0">
-                                  {/* Dynamic Profile Bento Card */}
-                                  <div className="bg-white/[0.02] border border-white/5 rounded-xl p-2.5 space-y-2 text-[10.5px] shrink-0">
-                                    <div className="grid grid-cols-2 gap-2">
-                                      <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                                        <p className="text-[7.5px] font-black uppercase tracking-wider text-slate-500">Estilo Dominante</p>
-                                        <p className="font-bold text-white mt-0.5 text-[9.5px] truncate">{diagnostics.dominantStyle}</p>
-                                      </div>
-                                      <div className="bg-black/40 p-2 rounded-lg border border-white/5">
-                                        <p className="text-[7.5px] font-black uppercase tracking-wider text-slate-500">Ritmo Preferido</p>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                          <span className="font-bold text-emerald-400 font-mono text-[9.5px]">{diagnostics.preferredBpm} BPM</span>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Pulse Horizontal Indicator */}
-                                    <div className="w-full bg-black/40 p-2 rounded-lg border border-white/5">
-                                      <p className="text-[7.5px] font-black uppercase tracking-wider text-slate-500 mb-1">Rango de Tempo Activo</p>
-                                      <div className="relative h-1 w-full bg-white/10 rounded-full overflow-hidden">
-                                        <div 
-                                          className="absolute h-full bg-gradient-to-r from-emerald-500 via-teal-400 to-cyan-500 rounded-full"
-                                          style={{ width: `${Math.min(100, Math.max(20, (diagnostics.preferredBpm / 180) * 100))}%` }}
-                                        />
-                                      </div>
-                                      <p className="text-[8px] text-slate-400 mt-1 italic tracking-wide lowercase">{diagnostics.tempoCategory}</p>
-                                    </div>
-
-                                    {/* Top affinity artists list */}
-                                    {diagnostics.topArtists.length > 0 && (
-                                      <div className="flex items-center gap-1.5 flex-wrap">
-                                        <span className="text-[7.5px] font-black uppercase tracking-wider text-slate-500 shrink-0">Artistas Top:</span>
-                                        {diagnostics.topArtists.map((artist, i) => (
-                                          <span key={i} className="px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/25 text-[#1ED760] rounded-md text-[8.5px] font-bold uppercase truncate max-w-[100px]">
-                                            {artist}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    )}
-                                  </div>
-
-                                  {/* Recommendations List */}
-                                  <div className="space-y-1 flex-1 min-h-0 overflow-y-auto premium-scrollbar pr-1">
-                                    <span className="text-[8px] font-black uppercase tracking-widest text-slate-500 px-1 block mb-1">
-                                      Tu Recomendación de Afinidad
-                                    </span>
-                                    {recs.length === 0 ? (
-                                      <p className="text-[10px] text-slate-500 text-center py-4">Escucha más canciones para perfilar tu sintonía.</p>
-                                    ) : (
-                                      recs.map((track, idx) => {
-                                        return (
-                                          <div
-                                            key={`rec_${track.id || idx}_${idx}`}
-                                            onClick={() => {
-                                              expectedPlayingRef.current = true;
-                                              setOverrideCurrentTrack(track);
-                                              setIsPlaying(true);
-                                              showNotification(`Sintonía Flux: Reproduciendo ${track.title}`);
-                                            }}
-                                            className="group/recItem flex items-center justify-between p-1.5 hover:bg-white/[0.04] active:bg-white/[0.08] transition-all rounded-xl cursor-pointer border border-transparent hover:border-white/5 text-[11px] mb-1"
-                                          >
-                                            <div className="flex items-center gap-2 min-w-0 flex-1 pr-2">
-                                              <div className="w-7 h-7 rounded-md bg-white/5 overflow-hidden shrink-0 relative flex items-center justify-center">
-                                                <img src={getTrackImage(track) || "/placeholder.png"} className="w-full h-full object-cover" alt="" />
-                                              </div>
-                                              <div className="min-w-0 flex-1">
-                                                <p className="font-bold text-white group-hover/recItem:text-emerald-400 transition-colors uppercase truncate tracking-wide text-[10px] leading-tight">
-                                                  {track.title}
-                                                </p>
-                                                <p className="text-[8px] font-semibold text-slate-400 group-hover/recItem:text-slate-200 transition-colors uppercase truncate tracking-wider mt-0.5 leading-none">
-                                                  {track.artist} • {track.bpm} BPM
-                                                </p>
-                                                <p className="text-[7.5px] text-slate-500 mt-0.5 lowercase tracking-normal italic leading-none truncate">
-                                                  {track.affinityReason}
-                                                </p>
-                                              </div>
-                                            </div>
-
-                                            {/* Glow Score badge */}
-                                            <div className="flex flex-col items-end shrink-0 pl-1">
-                                              <span className="px-1.5 py-0.5 bg-emerald-500/10 border border-emerald-500/10 text-[#1ED760] rounded-full text-[8.5px] font-black tracking-widest font-mono leading-none">
-                                                {track.affinityScore}%
-                                              </span>
-                                              <span className="text-[6px] font-black uppercase text-slate-500 tracking-wider mt-0.5 leading-none">MATCH</span>
-                                            </div>
-                                          </div>
-                                        );
-                                      })
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })()}
-                          </div>
-                        )}
 
                         {/* Title details & Heart favorite button stacked horizontally */}
                         <div className="flex items-center justify-between w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] px-1 mb-2 sm:mb-4">

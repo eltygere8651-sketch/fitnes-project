@@ -369,12 +369,15 @@ app.get("/api/youtube/explore", async (req, res) => {
     // Load Explore Data
     const explorePromise = yt.music.getExplore().catch(() => null);
 
-    // Explicitly grab the top playlists based on country concurrently
-    const [explore, top100Res, tendenciasRes, dailyRes] = await Promise.all<any>([
+    // Explicitly grab the top playlists based on country concurrently (with robust fallbacks)
+    const [explore, top100Res, top100ResAlt, tendenciasRes, tendenciasResAlt, dailyRes, dailyResAlt] = await Promise.all<any>([
       explorePromise,
       yt.search(`Top 100 Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top 100 ${countryName}`, { type: 'playlist' }).catch(() => ({})),
       yt.search(`Top 20 Tendencias ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
-      yt.search(`Daily Top Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({}))
+      yt.search(`Tendencias ${countryName}`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Daily Top Canciones ${countryName} Oficial`, { type: 'playlist' }).catch(() => ({})),
+      yt.search(`Top Canciones ${countryName}`, { type: 'playlist' }).catch(() => ({}))
     ]);
     
     let trending: any[] = [];
@@ -401,13 +404,39 @@ app.get("/api/youtube/explore", async (req, res) => {
     }
 
     const playlistsArr = top100Res?.playlists || top100Res?.results || [];
-    const top100 = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    let top100 = playlistsArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!top100 || top100.length === 0) {
+      const top100AltArr = top100ResAlt?.playlists || top100ResAlt?.results || [];
+      top100 = top100AltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
 
     const tendenciasArr = tendenciasRes?.playlists || tendenciasRes?.results || [];
-    const top20Tendencias = tendenciasArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    let top20Tendencias = tendenciasArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!top20Tendencias || top20Tendencias.length === 0) {
+      const tendenciasAltArr = tendenciasResAlt?.playlists || tendenciasResAlt?.results || [];
+      top20Tendencias = tendenciasAltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    // Double fallback to ensure a list is always populated
+    if (!top20Tendencias || top20Tendencias.length === 0) {
+      const fallbackRes: any = await yt.search(`Trends ${countryName}`, { type: 'playlist' }).catch(() => ({}));
+      const fallbackArr = fallbackRes?.playlists || fallbackRes?.results || [];
+      top20Tendencias = fallbackArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
 
     const dailyArr = dailyRes?.playlists || dailyRes?.results || [];
-    const dailyTopPlaylists = dailyArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    let dailyTopPlaylists = dailyArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    if (!dailyTopPlaylists || dailyTopPlaylists.length === 0) {
+      const dailyAltArr = dailyResAlt?.playlists || dailyResAlt?.results || [];
+      dailyTopPlaylists = dailyAltArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
+
+    // Double fallback to ensure a list is always populated
+    if (!dailyTopPlaylists || dailyTopPlaylists.length === 0) {
+      const fallbackRes: any = await yt.search(`Hits ${countryName}`, { type: 'playlist' }).catch(() => ({}));
+      const fallbackArr = fallbackRes?.playlists || fallbackRes?.results || [];
+      dailyTopPlaylists = fallbackArr.slice(0, 10).map(parseInnertubeItem).filter(Boolean);
+    }
 
     const data = {
       trending,

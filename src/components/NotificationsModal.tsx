@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.0",
+    title: "✨ Actualización Flux v1.5.0 - Nuevas Playlists y Playlist 'Alborán/De Luna' Activadas",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-11T16:00:00Z"),
+    content: "• ¡Soporte Unificado de Playlists Resolucionado! Corregido el motor híbrido de carga que impedía ver ciertas playlists de YouTube o YouTube Music.\n• Playlist Añadida y Corregida: Integrada perfectamente la lista 'Pablo Alborán and Álvaro De Luna' (PLiomXdAuOA97jjwoT8YXFpbMF4ixQ22n4) con extracción automática de tracks, portadas y metadatos.\n• Solución a fallos de carga en listas vacías o restringidas: La app intentará automáticamente métodos secundarios silenciosos para que no pierdas tu música favorita."
+  },
+  {
     id: "update-v1.4.6",
     title: "✨ Actualización Flux v1.4.6 - Últimos Ajustes del Sistema",
     category: "actualizacion",

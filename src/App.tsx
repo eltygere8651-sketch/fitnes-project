@@ -417,17 +417,17 @@ function AppContent() {
       <AnimatePresence>
         {canShowInstallHelper && (
           <motion.div
-            initial={{ opacity: 0, y: 50 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.9 }}
-            className="fixed bottom-24 sm:bottom-8 left-1/2 -translate-x-1/2 z-[90] px-4 sm:px-0 w-full sm:w-auto flex justify-center"
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.8 }}
+            className="fixed top-20 right-4 z-[90] flex justify-end"
           >
             <button
               onClick={handleInstallPress}
-              className="w-full sm:w-auto bg-[#1ED760] hover:bg-emerald-400 text-black px-6 sm:px-10 py-3 sm:py-4 rounded-full font-black uppercase text-[11px] sm:text-[13px] tracking-widest shadow-[0_15px_40px_rgba(30,215,96,0.4)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-3 animate-bounce shadow-xl"
+              className="bg-[#1ED760] hover:bg-emerald-400 text-black px-3 py-2 sm:px-5 sm:py-2.5 rounded-full font-black uppercase text-[9px] sm:text-[11px] tracking-widest shadow-[0_8px_20px_rgba(30,215,96,0.3)] hover:scale-105 active:scale-95 transition-all cursor-pointer flex items-center justify-center gap-2"
             >
-              <Download className="w-5 h-5 sm:w-6 sm:h-6" />
-              <span>Instalar App 1-Click</span>
+              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              <span>Instalar</span>
             </button>
           </motion.div>
         )}

@@ -518,13 +518,13 @@ app.get("/api/youtube/playlist", async (req, res) => {
           });
         }
       } catch (err: any) {
-        console.warn("[API PL] Standard getPlaylist failed:", err.message);
+        console.log(`[API PL] Standard getPlaylist not available (or private) for ${playlistId}. Checking other endpoints...`);
       }
 
       // Fallback 1: Try YouTube Music Playlist
       if (rawVideos.length === 0) {
         try {
-          console.log(`[API PL] Standard playlist empty or failed. Trying music.getPlaylist for: ${playlistId}`);
+          console.log(`[API PL] Trying music.getPlaylist fallback for: ${playlistId}`);
           const musicPlaylist = await yt.music.getPlaylist(playlistId);
           if (musicPlaylist) {
             playlist = musicPlaylist;
@@ -546,21 +546,21 @@ app.get("/api/youtube/playlist", async (req, res) => {
             }
           }
         } catch (err: any) {
-          console.warn("[API PL] music.getPlaylist also failed:", err.message);
+          console.log(`[API PL] music.getPlaylist not available for ${playlistId}`);
         }
       }
 
       // Fallback 2: Try YouTube Music Album in case it was labeled as a playlist
       if (rawVideos.length === 0) {
         try {
-          console.log(`[API PL] Standard & Music playlist empty. Trying music.getAlbum for: ${playlistId}`);
+          console.log(`[API PL] Trying music.getAlbum fallback for: ${playlistId}`);
           const album = await yt.music.getAlbum(playlistId);
           if (album && album.contents && Array.isArray(album.contents)) {
             playlist = album;
             rawVideos.push(...album.contents);
           }
         } catch (err: any) {
-          console.warn("[API PL] music.getAlbum failed too:", err.message);
+          console.log(`[API PL] music.getAlbum not available for ${playlistId}`);
         }
       }
 
@@ -588,6 +588,8 @@ app.get("/api/youtube/playlist", async (req, res) => {
         let artist = "YouTube Music";
         if (Array.isArray(v.artists) && v.artists.length > 0) {
           artist = v.artists.map((a: any) => a.name).join(", ");
+        } else if (Array.isArray(v.authors) && v.authors.length > 0) {
+          artist = v.authors.map((a: any) => a.name).join(", ");
         } else if (v.author?.name || typeof v.author === 'string') {
           artist = v.author?.name || v.author?.toString();
         } else if (playlist?.author?.name) {

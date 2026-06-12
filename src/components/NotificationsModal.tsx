@@ -18,13 +18,6 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
-    id: "update-v1.6.0",
-    title: "✨ Actualización Flux v1.6.0 - La Necesidad Autónoma: MODO OFFLINE",
-    category: "actualizacion",
-    createdAt: new Date("2026-06-12T10:00:00Z"),
-    content: "• Modo Offline Creado: ¡Integración nativa con modo fuera de línea persistente!\n• Interfaz de Conexión: Nuevo botón de Viaje/Offline añadido sutilmente directamente en tu sección Biblioteca.\n• Carga Predictiva: Tu biblioteca completa y estadísticas ahora cargarán al instante con o sin señal, minimizando de forma definitiva el consumo de tu red.\n• Funcionalidades sin Romperse: Todo el app sigue rindiendo de manera idéntica y de forma impecable sin tocar las configuraciones optimizadas por defecto de la última actualización."
-  },
-  {
     id: "update-v1.5.1",
     title: "✨ Actualización Flux v1.5.1 - Optimización Batería, Bluetooth y Mix Descubrimiento",
     category: "actualizacion",

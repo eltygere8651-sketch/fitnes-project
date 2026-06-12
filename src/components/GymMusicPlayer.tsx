@@ -54,7 +54,6 @@ import {
   User,
   Library,
   FileText,
-  Wifi,
 } from "lucide-react";
 import {
   collection,
@@ -814,11 +813,6 @@ export default function GymMusicPlayer() {
 
   const [currentTrackMeta, setCurrentTrackMeta] = useState<any>(null);
   const [mobileView, setMobileView] = useState<'playlists' | 'player'>('player');
-  const [isOfflineMode, setIsOfflineMode] = useState(() => localStorage.getItem("flux_offline_mode") === "true");
-
-  useEffect(() => {
-    localStorage.setItem("flux_offline_mode", isOfflineMode ? "true" : "false");
-  }, [isOfflineMode]);
 
   const [showLibrary, setShowLibrary] = useState(false);
   const [searchSubTab, setSearchSubTab] = useState<"novedades" | "charts" | "moods">("novedades");
@@ -1197,19 +1191,7 @@ export default function GymMusicPlayer() {
   const currentUrl = currentTrack.url || "";
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
-  useEffect(() => {
-    if (isPlaying && (!navigator.onLine || isOfflineMode)) {
-      showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
-      setIsPlaying(false);
-    }
-  }, [isPlaying, isOfflineMode, navigator.onLine, showNotification]);
-
   const togglePlayback = useCallback(() => {
-    if (!isPlaying && (!navigator.onLine || isOfflineMode)) {
-      showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
-      return;
-    }
-
     const nextPlaying = !isPlaying;
     expectedPlayingRef.current = nextPlaying;
     
@@ -1220,7 +1202,7 @@ export default function GymMusicPlayer() {
     }
     
     setIsPlaying(nextPlaying);
-  }, [isPlaying, showNotification, isOfflineMode]);
+  }, [isPlaying]);
 
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
@@ -3202,11 +3184,6 @@ export default function GymMusicPlayer() {
             progressInterval={5000}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
-              if (!navigator.onLine || isOfflineMode) {
-                 showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
-                 setIsPlaying(false);
-                 return;
-              }
               // Auto-recovery mechanism when experiencing network drops
               if (expectedPlayingRef.current && youtubePlayerRef.current) {
                 setTimeout(() => {
@@ -3448,32 +3425,11 @@ export default function GymMusicPlayer() {
            bg-[#050505]
         `}>
             <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full h-auto">
-                <div className="text-left flex items-center gap-2">
+                <div className="text-left">
                     <h3 className="text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
                         Mi Biblioteca
                     </h3>
                 </div>
-                {accessData?.isValid && (
-                    <button
-                        onClick={() => {
-                            setIsOfflineMode(!isOfflineMode);
-                            if (!isOfflineMode) {
-                                showNotification("Modo Automático Offline Activado");
-                            } else {
-                                showNotification("Modo Online Restaurado");
-                            }
-                        }}
-                        className={`flex items-center gap-1.5 px-2 py-1 rounded-full border text-[7.5px] uppercase font-black tracking-widest transition-all cursor-pointer ${
-                            isOfflineMode 
-                            ? "bg-[#1ED760]/20 border-[#1ED760]/50 text-[#1ED760] shadow-[0_0_10px_rgba(30,215,96,0.3)]" 
-                            : "bg-white/5 border-white/10 text-slate-400 hover:text-white"
-                        }`}
-                        title="Modo Viaje / Offline"
-                    >
-                        {isOfflineMode ? <Download className="w-2.5 h-2.5" /> : <Wifi className="w-2.5 h-2.5" />}
-                        <span>{isOfflineMode ? "Offline" : "Online"}</span>
-                    </button>
-                )}
             </div>
             
             <div className="flex flex-col p-3 md:p-3 gap-2.5 overflow-y-auto scrollbar-none flex-1 min-h-0 w-full items-stretch">

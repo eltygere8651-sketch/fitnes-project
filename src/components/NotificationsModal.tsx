@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.1",
+    title: "✨ Actualización Flux v1.5.1 - Optimización Batería, Bluetooth y Mix Descubrimiento",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-12T03:30:00Z"),
+    content: "• Mix Descubrimiento Mejorado: El algoritmo ahora analiza hasta 6 de tus artistas más escuchados simultáneamente, ofreciendo listas personalizadas mucho más certeras y afines a tus gustos sin depender de uno solo.\n• Ahorro de Datos y Batería: Optimizado de forma revolucionaria el consumo de red en segundo plano reduciendo al extremo la calidad de carga, evitando cortes si la conexión móvil falla.\n• Control Bluetooth en Coches: Reconstruido el sistema Media Session, asegurando que los comandos físicos (volante y coche) para Adelantar y Volver Atrás canciones funcionen siempre impecablemente."
+  },
+  {
     id: "update-v1.5.0",
     title: "✨ Actualización Flux v1.5.0 - Nuevas Playlists y Playlist 'Alborán/De Luna' Activadas",
     category: "actualizacion",

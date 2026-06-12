@@ -60,12 +60,14 @@ app.post("/api/ai/coach", async (req, res) => {
 
 // YouTube Search Cache (Eco-Friendly)
 const searchCache = new Map<string, { data: any, timestamp: number }>();
-const CACHE_TTL = 1000 * 60 * 60; // 1 hour
+const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 
 // YouTube Search Endpoint
 app.get("/api/youtube/search", async (req, res) => {
   const query = req.query.q as string;
   if (!query) return res.status(400).json({ error: "Missing query" });
+
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
 
   const normalizedQuery = query.toLowerCase().trim();
   
@@ -288,12 +290,12 @@ app.get("/api/youtube/search", async (req, res) => {
   }
 });
 
-// Cache for explore endpoint (4 hours)
-let exploreCache: { data: any, timestamp: number } | null = null;
-const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 4; // 4 hours
+// Cache for explore endpoint (per country, eco-friendly)
+const exploreCache = new Map<string, { data: any, timestamp: number }>();
+const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 
 app.get("/api/youtube/explore", async (req, res) => {
-  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Cache-Control', 'public, max-age=86400'); // 24 hours
   const country = (req.query.country as string || "ES").toUpperCase();
   const countryMap: Record<string, string> = {
     "GLOBAL": "Global", "US": "Estados Unidos", "ES": "España", "MX": "México", "AR": "Argentina",
@@ -301,8 +303,9 @@ app.get("/api/youtube/explore", async (req, res) => {
   };
   const countryName = countryMap[country] || "España";
 
-  if (exploreCache && (Date.now() - exploreCache.timestamp < EXPLORE_CACHE_TTL) && (exploreCache as any).country === country) {
-    return res.json(exploreCache.data);
+  const cached = exploreCache.get(country);
+  if (cached && (Date.now() - cached.timestamp < EXPLORE_CACHE_TTL)) {
+    return res.json(cached.data);
   }
 
   if (!yt) {
@@ -451,8 +454,7 @@ app.get("/api/youtube/explore", async (req, res) => {
       party: []
     };
 
-    exploreCache = { data, timestamp: Date.now() } as any;
-    (exploreCache as any).country = country;
+    exploreCache.set(country, { data, timestamp: Date.now() });
     res.json(data);
   } catch (error) {
     console.error("Explore failed:", error);
@@ -462,13 +464,15 @@ app.get("/api/youtube/explore", async (req, res) => {
 
 // Playlist Cache (Eco-Friendly)
 const playlistCache = new Map<string, { data: any, timestamp: number }>();
-const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
+const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
 // YouTube Playlist Tracks Extractor Endpoint
 app.get("/api/youtube/playlist", async (req, res) => {
   const playlistId = req.query.id as string;
   const titleFallback = req.query.title as string;
   if (!playlistId) return res.status(400).json({ error: "Missing playlist ID" });
+
+  res.setHeader('Cache-Control', 'public, max-age=604800'); // 7 days in browser
 
   const cacheKey = playlistId;
   const cached = playlistCache.get(cacheKey);

@@ -66,6 +66,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
   }
 
   const sections = [
+    { title: "✨ Mixes Para Ti", data: exploreData.mixParaTi || [] },
     { title: "Top 100 Playlists", data: exploreData.top100 || [] },
     { title: "Top 20 Tendencias", data: exploreData.top20Tendencias || [] },
     { title: "Daily Top 20", data: exploreData.dailyTopPlaylists || [] },

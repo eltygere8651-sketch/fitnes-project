@@ -79,6 +79,7 @@ import {
   recordTrackSkip, 
   getTasteDiagnostics, 
   getMusicRecommendations, 
+  getPlayHistory,
   TasteDiagnostics, 
   RecommendedTrack 
 } from "../lib/recommendationEngine";
@@ -1083,6 +1084,24 @@ export default function GymMusicPlayer() {
   const wasUnexpectedlyPausedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
 
+  // Network Recovery Effect
+  useEffect(() => {
+    const handleOnline = () => {
+      if (expectedPlayingRef.current && youtubePlayerRef.current) {
+        try {
+          const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+          if (intPlayer && typeof intPlayer.playVideo === "function") {
+             intPlayer.playVideo();
+          } else {
+             youtubePlayerRef.current.seekTo(position / 1000, "seconds");
+          }
+        } catch(e) {}
+      }
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [position]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden && wasUnexpectedlyPausedRef.current) {
@@ -1542,6 +1561,120 @@ export default function GymMusicPlayer() {
           const res = await fetch(`/api/youtube/explore?country=${selectedCountry || 'ES'}`);
           if (res.ok) {
             const data = await res.json();
+            
+            // --- SILENT MIX PARA TI INJECTION ---
+            try {
+              const history = getPlayHistory();
+              const historyList = Object.values(history);
+              if (historyList.length > 2) {
+                // Ensure arrays exist
+                data.mixParaTi = [];
+                
+                // Mix 1: Tus Más Escuchados
+                const topPlayed = [...historyList].sort((a,b) => b.playCount - a.playCount).slice(0, 30);
+                if (topPlayed.length > 0) {
+                   data.mixParaTi.push({
+                      id: "mix_mas_escuchados",
+                      title: "Tus Más Escuchados",
+                      artist: "Historia Flux",
+                      isPlaylist: true,
+                      isLocalMix: true,
+                      thumbnail: topPlayed[0].url ? undefined : `https://i.ytimg.com/vi/${topPlayed[0].trackId}/mqdefault.jpg`,
+                      tracks: topPlayed.map((t, i) => {
+                         let vId = t.trackId;
+                         if (t.url && t.url.includes("v=")) {
+                            vId = t.url.split("v=")[1].split("&")[0];
+                         }
+                         return {
+                            id: `local_his_${i}_${vId}`,
+                            title: t.title,
+                            artist: t.artist,
+                            duration: "0:00",
+                            url: t.url || `https://www.youtube.com/watch?v=${vId}`,
+                            thumbnail: `https://i.ytimg.com/vi/${vId}/mqdefault.jpg`
+                         };
+                      })
+                   });
+                   // Fix thumbnail
+                   const firstTrack = data.mixParaTi[0].tracks[0];
+                   data.mixParaTi[0].thumbnail = firstTrack.thumbnail;
+                }
+
+                // Mix 2: Mix Descubrimiento (Silent YouTube search based on multiple top played artists)
+                const topUniqueArtists: string[] = [];
+                for (const item of topPlayed) {
+                   const artistName = item.artist || item.title?.split("-")[0]?.trim();
+                   if (artistName && artistName !== "Artista" && artistName !== "Flux" && !topUniqueArtists.includes(artistName)) {
+                       topUniqueArtists.push(artistName);
+                       if (topUniqueArtists.length >= 6) break;
+                   }
+                }
+
+                if (topUniqueArtists.length > 0) {
+                   setTimeout(() => {
+                     Promise.all(
+                         topUniqueArtists.map(artist => 
+                             fetch(`/api/youtube/search?q=${encodeURIComponent(artist + " audio")}`)
+                               .then(res => res.ok ? res.json() : [])
+                               .catch(() => []) // Prevent single failures from rejecting all
+                         )
+                     ).then(results => {
+                         const mixedTracks: any[] = [];
+                         const maxLen = Math.max(0, ...results.map(r => Array.isArray(r) ? r.length : 0));
+                         
+                         for (let i = 0; i < maxLen; i++) {
+                             for (let j = 0; j < results.length; j++) {
+                                 const trackList = results[j];
+                                 if (Array.isArray(trackList)) {
+                                     const track = trackList[i];
+                                     if (track && !track.isPlaylist) {
+                                         // Avoid duplicate tracks
+                                         if (!mixedTracks.find(t => t.url === track.url || t.id === track.id)) {
+                                             mixedTracks.push(track);
+                                         }
+                                     }
+                                 }
+                             }
+                             if (mixedTracks.length >= 40) break;
+                         }
+
+                         if (mixedTracks.length > 3) {
+                            setExploreData((prev: any) => {
+                               if (!prev) return prev;
+                               const newPrev = { ...prev };
+                               newPrev.mixParaTi = newPrev.mixParaTi || [];
+                               newPrev.mixParaTi = newPrev.mixParaTi.filter((m: any) => m.id !== "mix_descubrimiento");
+                               
+                               const titleString = topUniqueArtists.slice(0, 3).join(", ") + (topUniqueArtists.length > 3 ? " y más" : "");
+                               
+                               newPrev.mixParaTi.push({
+                                  id: "mix_descubrimiento",
+                                  title: "Mix Descubrimiento",
+                                  artist: "Basado en " + titleString,
+                                  isPlaylist: true,
+                                  isLocalMix: true,
+                                  thumbnail: mixedTracks[0]?.thumbnail || `https://i.ytimg.com/vi/${mixedTracks[0]?.id}/mqdefault.jpg`,
+                                  tracks: mixedTracks.map((t: any, i: number) => ({
+                                     id: `local_rec_${i}_${t.id}`,
+                                     title: t.title,
+                                     artist: t.artist || "Descubrimiento",
+                                     duration: t.duration || "0:00",
+                                     url: t.url || `https://www.youtube.com/watch?v=${t.id}`,
+                                     thumbnail: t.thumbnail || `https://i.ytimg.com/vi/${t.id}/mqdefault.jpg`
+                                  }))
+                               });
+                               return newPrev;
+                            });
+                         }
+                     }).catch(e => console.warn("Discovery Mix Error:", e));
+                   }, 800); // 800ms delay to not block UI thread
+                }
+              }
+            } catch (e) {
+              console.warn("Silent Mix Gen Error:", e);
+            }
+            // -------------------------------------
+
             setExploreData(data);
           } else {
             throw new Error("Explore API failed");
@@ -2132,6 +2265,22 @@ export default function GymMusicPlayer() {
   };
 
   const handleLoadExplorePlaylist = async (item: any) => {
+    if (item.isLocalMix) {
+      setPreviewPlaylist({
+        id: item.id,
+        name: item.title,
+        description: item.artist || "Selección para ti",
+        tracks: item.tracks,
+        thumbnail_url: item.thumbnail,
+        ownerId: "flux",
+        ownerName: "Flux Music",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+      setShowLibrary(true);
+      return;
+    }
+
     if (item.isPlaylist === false) {
       setPreviewPlaylist({
         id: item.id,
@@ -3035,14 +3184,24 @@ export default function GymMusicPlayer() {
             progressInterval={5000}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
-              // Do not show an intrusive UI notification on error, as embedded videos
-              // might fail to load (e.g., deleted or embedding disabled).
-              // Rely on visual state or allow user to skip manually.
+              // Auto-recovery mechanism when experiencing network drops
+              if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                setTimeout(() => {
+                  try {
+                    youtubePlayerRef.current.seekTo(position / 1000, "seconds");
+                    const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                    if (intPlayer && typeof intPlayer.playVideo === "function") {
+                      intPlayer.playVideo();
+                    }
+                  } catch (err) {}
+                }, 2000);
+              }
             }}
             onReady={(player) => {
               // Re-register Media Session and reinforce action handlers to beat YouTube iframe's own initial lock screen registration
               registerMediaSession();
               enforceActionHandlers();
+
               if (initialLoadRef.current) {
                 const savedPos = localStorage.getItem("gym_music_saved_position");
                 if (savedPos) {
@@ -3067,6 +3226,7 @@ export default function GymMusicPlayer() {
             onPlay={() => {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
+               
                // Re-register Media Session and reinforce action handlers to prevent YouTube's iframe from stealing lock screen controls
                registerMediaSession();
                enforceActionHandlers();
@@ -3120,7 +3280,8 @@ export default function GymMusicPlayer() {
                   modestbranding: 1,
                   rel: 0,
                   iv_load_policy: 3,
-                  hl: 'en'
+                  hl: 'en',
+                  vq: 'tiny'
                 } 
               },
               file: { 
@@ -3827,30 +3988,30 @@ export default function GymMusicPlayer() {
 
                 {/* 2. DYNAMIC FULL SCREEN LAYOUT (Shown on Mobile always when expanded, or Desktop when maximized) */}
                 {!isTrackListExpanded && (
-                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1">
+                  <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1 relative pt-12 sm:pt-6">
                     
-                    {/* Integrated Header: Left (Minimize - Absolute), Center (Tabs Switcher) - Perfectly centered Spotify-style layout */}
-                    <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] mx-auto flex items-center justify-center mb-2 sm:mb-3 px-1 select-none shrink-0 relative z-50 mt-1 sm:mt-2.5">
-                      {/* Left: Minimize button - Absolute positioned to stay out of the center's layout flow */}
+                    {/* Global Player Header: Minimize (Left) & Tabs Switcher (Center) decoupled */}
+                    <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 flex items-center justify-between z-50 shrink-0">
+                      {/* Left: Minimize button - Decoupled and easily accessible at the top left */}
                       <button 
                         onClick={() => {
                             window.scrollTo({ top: 0, behavior: 'smooth' });
                             setIsTrackListExpanded(true);
                         }}
                         title="Minimizar reproductor"
-                        className="absolute left-1 sm:left-2 p-1.5 sm:p-2 bg-white/[0.04] border border-white/5 hover:bg-white/10 active:scale-95 rounded-full transition-all text-slate-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0 z-10"
+                        className="p-2 sm:p-2.5 bg-white/[0.04] backdrop-blur-md border border-white/5 hover:bg-white/10 active:scale-95 rounded-full transition-all text-slate-300 hover:text-white shadow-xl cursor-pointer"
                       >
-                        <ChevronDown className="w-5 h-5 sm:w-6 h-6" />
+                        <ChevronDown className="w-6 h-6 sm:w-7 sm:h-7" />
                       </button>
 
-                      {/* Center: Tabs Switcher - Centered perfectly relative to the artwork width */}
-                      <div className="w-full max-w-[270px] sm:max-w-[400px] flex items-center bg-white/[0.04]  border border-white/5 rounded-full p-0.5 tracking-wider select-none relative">
+                      {/* Center: Tabs Switcher - Centered perfectly */}
+                      <div className="w-full max-w-[270px] sm:max-w-[400px] flex items-center bg-[#121214] border border-white/10 rounded-full p-1 tracking-wider select-none shadow-2xl absolute left-1/2 -translate-x-1/2 top-0 sm:top-1 sm:relative sm:left-auto sm:translate-x-0">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
                             setPlayerTab("artwork");
                           }}
-                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "artwork" ? "bg-white text-black shadow-md font-extrabold" : "text-slate-400 hover:text-white"}`}
+                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "artwork" ? "bg-white text-black shadow-md font-extrabold" : "text-slate-400 hover:text-white"}`}
                         >
                           Carátula
                         </button>
@@ -3859,7 +4020,7 @@ export default function GymMusicPlayer() {
                             e.stopPropagation();
                             setPlayerTab("siguiente");
                           }}
-                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "siguiente" ? "bg-[#1ED760] text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
+                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "siguiente" ? "bg-[#1ED760] text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
                         >
                           Siguiente
                         </button>
@@ -3868,20 +4029,23 @@ export default function GymMusicPlayer() {
                             e.stopPropagation();
                             setPlayerTab("cola");
                           }}
-                          className={`flex-1 text-[9px] sm:text-[9.5px] font-black uppercase tracking-widest py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${playerTab === "cola" ? "bg-white text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
+                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${playerTab === "cola" ? "bg-white text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
                         >
                           <span>Cola</span>
                           {trackQueue.length > 0 && (
-                            <span className={`text-[8.5px] px-1.5 py-[0.5px] rounded-full font-sans font-bold ${playerTab === "cola" ? "bg-black text-white" : "bg-[#1ED760] text-black"}`}>
+                            <span className={`text-[8.5px] px-1.5 py-[0.5px] rounded-full font-sans font-black ${playerTab === "cola" ? "bg-black text-white" : "bg-[#1ED760] text-black"}`}>
                               {trackQueue.length}
                             </span>
                           )}
                         </button>
                       </div>
+
+                      {/* Right spacer for strict flex centering on desktop */}
+                      <div className="hidden sm:block w-11"></div>
                     </div>
 
                     {/* Artwork & Title centrally stacked */}
-                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-1 sm:mt-2">
+                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-12 sm:mt-8">
                       <div 
                         className="flex flex-col items-center justify-center w-full flex-1 min-h-0"
                       >

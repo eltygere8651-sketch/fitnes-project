@@ -4252,7 +4252,7 @@ export default function GymMusicPlayer() {
               </div>
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-0 sm:p-0 premium-scrollbar relative">
+                <div className="flex-1 overflow-y-auto p-0 sm:p-0 pb-[120px] sm:pb-0 premium-scrollbar relative">
                   {trackListTab === "search" ? (
                     <div className="space-y-1">
                       {/* Search results view */}
@@ -5013,56 +5013,59 @@ export default function GymMusicPlayer() {
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
       {currentTrack && isTrackListExpanded && (
         <div 
-          className="md:hidden fixed bottom-[66px] left-2.5 right-2.5 z-[55]"
+          className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]"
         >
           <div 
             onClick={() => {
               setMobileView("player");
               setIsTrackListExpanded(false);
             }}
-            className="flex items-center gap-3 p-2 rounded-2xl bg-[#16161a]/95  border border-white/10 shadow-[0_8px_32px_rgba(0,0,0,0.7)] active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
+            className="flex items-center gap-2.5 px-3 py-2 rounded-lg bg-[#0e0e11]/98 backdrop-blur-md border border-white/5 shadow-[0_8px_32px_rgba(0,0,0,0.8)] active:scale-[0.98] transition-transform cursor-pointer relative overflow-hidden"
           >
             {/* Progress Bar background */}
-            <div className="absolute bottom-0 left-0 right-0 h-[2.5px] bg-white/[0.08]">
+            <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-white/[0.05]">
               <div 
-                className="h-full bg-emerald-400 transition-all duration-300"
+                className="h-full bg-white transition-all duration-300"
                 style={{ width: `${duration > 0 ? (position / duration) * 100 : 0}%` }}
               />
             </div>
             
             {/* Artwork */}
-            <div className="relative w-10 h-10 shrink-0 rounded-xl overflow-hidden border border-white/10 shadow-md">
+            <div className="relative w-10 h-10 shrink-0 rounded-md overflow-hidden bg-[#1a1a20]">
               <img src={displayArtwork} className="w-full h-full object-cover" alt="" />
             </div>
             
             {/* Metadata info */}
-            <div className="flex flex-col min-w-0 flex-1 text-left">
-              <h4 className="text-[12px] font-black text-white truncate uppercase tracking-tight">{displayTitle}</h4>
-              <p className="text-[9.5px] font-semibold text-emerald-400 mt-0.5 uppercase tracking-wider truncate pb-1">{displayArtist}</p>
+            <div className="flex flex-col min-w-0 flex-1 text-left pb-0.5">
+              <h4 className="text-[12.5px] font-bold text-white truncate tracking-tight">{displayTitle}</h4>
+              <p className="text-[10px] font-semibold text-slate-400 mt-0.5 tracking-wide truncate flex items-center gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full bg-white/30 inline-block"></span>
+                {displayArtist}
+              </p>
             </div>
             
             {/* Actions: Heart & Play/Pause */}
-            <div className="flex items-center gap-2.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
               <button 
                 onClick={(e) => handleToggleFavorite(currentTrack, e)} 
-                className="p-1 text-slate-400 hover:text-pink-500 transition-colors"
+                className="p-2 text-slate-300 hover:text-white transition-colors"
                 title="Añadir a Favoritos"
               >
-                <Heart className={`w-4.5 h-4.5 transition-colors ${
+                <Heart className={`w-4 h-4 transition-colors ${
                   userPlaylists.find(p => p.ownerId === user?.uid && (p.name.toLowerCase() === 'favoritos' || p.name.toLowerCase() === 'siguiente'))
-                    ?.tracks.some(t => (currentTrack.id && t.id === currentTrack.id) || (currentTrack.url && t.url === currentTrack.url)) ? 'fill-pink-500 text-pink-500' : ''
+                    ?.tracks.some(t => (currentTrack.id && t.id === currentTrack.id) || (currentTrack.url && t.url === currentTrack.url)) ? 'fill-[#1ED760] text-[#1ED760]' : ''
                 }`} />
               </button>
 
               <button 
                 onClick={togglePlayback}
-                className="w-9 h-9 rounded-full bg-white text-black flex items-center justify-center shadow-lg active:scale-90 transition-transform cursor-pointer font-black"
+                className="p-2 text-white active:scale-90 transition-transform cursor-pointer"
                 title="Reproducir/Pausar"
               >
                 {isPlaying ? (
-                  <Pause className="w-4 h-4 fill-current text-black" />
+                  <Pause className="w-5 h-5 fill-current" />
                 ) : (
-                  <Play className="w-4 h-4 fill-current text-black ml-0.5" />
+                  <Play className="w-5 h-5 fill-current ml-0.5" />
                 )}
               </button>
             </div>
@@ -5377,7 +5380,7 @@ export default function GymMusicPlayer() {
 
                 {/* 2) Playlist Tracks Detail Pane (Interactive Playlist Previewing) */}
                 {previewPlaylist && (
-                  <div className="flex-1 flex flex-col min-h-0 bg-[#070708] border-l border-white/5 relative overflow-hidden">
+                  <div className="flex-1 flex flex-col min-h-0 bg-[#070708] border-l border-white/5 relative overflow-y-auto premium-scrollbar touch-pan-y pb-[120px] sm:pb-0">
                     {/* Header glass panel */}
                     <div className="p-5 sm:p-7 bg-gradient-to-b from-white/[0.02] to-transparent border-b border-white/5 shrink-0 flex flex-col sm:flex-row items-center gap-5 relative">
                       {/* Back button for mobile */}
@@ -5498,8 +5501,8 @@ export default function GymMusicPlayer() {
                       </div>
                     </div>
 
-                    {/* Tracks scrollable container */}
-                    <div className="flex-1 overflow-y-auto px-2 py-3 sm:px-6 pb-24 premium-scrollbar touch-pan-y">
+                    {/* Tracks container */}
+                    <div className="flex-1 px-2 py-3 sm:px-6">
                       {previewPlaylist.tracks.length === 0 ? (
                         <div className="h-40 flex flex-col items-center justify-center text-slate-500">
                           <Music className="w-8 h-8 opacity-40 mb-2" />

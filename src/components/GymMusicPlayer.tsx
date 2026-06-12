@@ -1197,7 +1197,19 @@ export default function GymMusicPlayer() {
   const currentUrl = currentTrack.url || "";
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
+  useEffect(() => {
+    if (isPlaying && (!navigator.onLine || isOfflineMode)) {
+      showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
+      setIsPlaying(false);
+    }
+  }, [isPlaying, isOfflineMode, navigator.onLine, showNotification]);
+
   const togglePlayback = useCallback(() => {
+    if (!isPlaying && (!navigator.onLine || isOfflineMode)) {
+      showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
+      return;
+    }
+
     const nextPlaying = !isPlaying;
     expectedPlayingRef.current = nextPlaying;
     
@@ -1208,7 +1220,7 @@ export default function GymMusicPlayer() {
     }
     
     setIsPlaying(nextPlaying);
-  }, [isPlaying]);
+  }, [isPlaying, showNotification, isOfflineMode]);
 
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
@@ -3190,6 +3202,11 @@ export default function GymMusicPlayer() {
             progressInterval={5000}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
+              if (!navigator.onLine || isOfflineMode) {
+                 showNotification("La pista no está lista para Modo Viaje. Para reproducir canales sin conexión, debes adquirirlos y descargar la caché musical con Flux Premium.");
+                 setIsPlaying(false);
+                 return;
+              }
               // Auto-recovery mechanism when experiencing network drops
               if (expectedPlayingRef.current && youtubePlayerRef.current) {
                 setTimeout(() => {

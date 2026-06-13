@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.2",
+    title: "✨ Actualización Flux v1.5.2 - Recuperación y Control Bluetooth",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-13T09:20:00Z"),
+    content: "• Sistema de Recuperación de Contraseña: Se integró una recuperación de acceso de forma premium. Si has olvidado tu contraseña, usa el botón de recuperación fluido (¡No olvides revisar tu carpeta de correo no deseado/spam!).\n• Control Bluetooth Extremo en Coches: Mejorada radicalmente la respuesta inmediata al cambiar de pista desde el vehículo, logrando mayor fluidez sin incrementar ni un 1% el consumo de batería del móvil."
+  },
+  {
     id: "update-v1.5.1",
     title: "✨ Actualización Flux v1.5.1 - Optimización Batería, Bluetooth y Mix Descubrimiento",
     category: "actualizacion",

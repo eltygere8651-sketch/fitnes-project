@@ -3135,6 +3135,7 @@ export default function GymMusicPlayer() {
     runSafeguard();
 
     // Low-frequency lightweight check every 1500ms to guarantee action lock re-association
+    // This is vital for maintaining fluid car bluetooth skip control when YouTube iframe hijacks.
     const interval = setInterval(runSafeguard, 1500);
 
     return () => clearInterval(interval);

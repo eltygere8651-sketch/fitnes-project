@@ -1,12 +1,12 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
-import { loginWithGoogle, loginWithEmail, signupWithEmail } from "../lib/firebase";
+import { loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword } from "../lib/firebase";
 import { X, LogIn, Mail, Lock, Shield, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
 export const AuthModal: React.FC = () => {
   const { isAuthModalOpen, setAuthModalOpen } = useFirebase();
-  const [authType, setAuthType] = useState<"login" | "signup">("login");
+  const [authType, setAuthType] = useState<"login" | "signup" | "reset">("login");
   const [email, setEmail] = useState(() => localStorage.getItem("gym_music_saved_email") || "");
   const [password, setPassword] = useState(() => localStorage.getItem("gym_music_saved_password") || "");
   const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("gym_music_remember_login") === "true");
@@ -49,6 +49,31 @@ export const AuthModal: React.FC = () => {
 
   const handleEmailAction = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (authType === "reset") {
+      if (!email.trim()) {
+        setErrorMsg("Por favor, introduce tu correo electrónico.");
+        return;
+      }
+      setIsLoading(true);
+      setErrorMsg(null);
+      setSuccessMsg(null);
+      try {
+        await resetPassword(email.trim());
+        setSuccessMsg("Enlace de recuperación enviado. Si no lo visualizas, revisa la carpeta de correo no deseado.");
+        setPassword("");
+        if (typeof localStorage !== "undefined") {
+           localStorage.removeItem("gym_music_saved_password");
+        }
+        setTimeout(() => setAuthType("login"), 4500);
+      } catch (err: any) {
+        setErrorMsg(err?.message || "Error al enviar el correo de recuperación.");
+      } finally {
+        setIsLoading(false);
+      }
+      return;
+    }
+
     if (!email.trim() || !password.trim() || (authType === "signup" && !nickname.trim())) {
       setErrorMsg("Por favor, rellena todos los campos.");
       return;
@@ -59,12 +84,15 @@ export const AuthModal: React.FC = () => {
     setSuccessMsg(null);
 
     try {
+      const cleanEmail = email.trim();
+      const cleanPassword = password.trim();
+
       if (authType === "login") {
-        await loginWithEmail(email.trim(), password);
+        await loginWithEmail(cleanEmail, cleanPassword);
         setSuccessMsg("¡Sesión iniciada con éxito! Iniciando...");
         if (rememberMe) {
-          localStorage.setItem("gym_music_saved_email", email.trim());
-          localStorage.setItem("gym_music_saved_password", password);
+          localStorage.setItem("gym_music_saved_email", cleanEmail);
+          localStorage.setItem("gym_music_saved_password", cleanPassword);
           localStorage.setItem("gym_music_remember_login", "true");
         } else {
           localStorage.removeItem("gym_music_saved_email");
@@ -72,7 +100,7 @@ export const AuthModal: React.FC = () => {
           localStorage.setItem("gym_music_remember_login", "false");
         }
       } else {
-        await signupWithEmail(email.trim(), password, nickname.trim());
+        await signupWithEmail(cleanEmail, cleanPassword, nickname.trim());
         setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito! Iniciando...");
       }
 
@@ -81,7 +109,7 @@ export const AuthModal: React.FC = () => {
         window.location.reload();
       }, 1200);
     } catch (err: any) {
-      console.error("Unified Auth error:", err);
+      console.warn("Unified Auth error:", err.code || err.message);
       const code = err?.code || "";
       if (
         code === "auth/user-not-found" || 
@@ -249,45 +277,75 @@ export const AuthModal: React.FC = () => {
               </div>
 
               {/* Input for Password */}
-              <div className="space-y-1">
-                <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block pl-1">
-                  Contraseña
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
-                    <Lock className="w-4 h-4" />
+              {authType !== "reset" && (
+                <div className="space-y-1">
+                  <label className="text-[9px] font-black tracking-widest text-slate-400 uppercase block pl-1">
+                    Contraseña
+                  </label>
+                  <div className="relative">
+                    <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-500">
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <input
+                      type={showPassword ? "text" : "password"}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-10 pr-10 py-3 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
+                      required={authType !== "reset"}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white transition-all cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
                   </div>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full pl-10 pr-10 py-3 bg-[#121214] border border-white/5 rounded-xl text-xs text-white placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-[#1ED760]/50 focus:border-[#1ED760] transition-all font-medium"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-500 hover:text-white transition-all cursor-pointer"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
                 </div>
-              </div>
+              )}
               
               {/* Remember Login Checkbox */}
               {authType === "login" && (
-                <div className="flex items-center gap-2 mt-2">
-                  <input
-                    type="checkbox"
-                    id="rememberMe"
-                    checked={rememberMe}
-                    onChange={(e) => setRememberMe(e.target.checked)}
-                    className="w-3.5 h-3.5 rounded border-slate-600 bg-[#121214] text-[#1ED760] focus:ring-[#1ED760]/50 accent-[#1ED760] cursor-pointer"
-                  />
-                  <label htmlFor="rememberMe" className="text-[10px] uppercase font-bold text-slate-400 tracking-wider cursor-pointer select-none pb-[1px]">
-                    Recordar acceso
-                  </label>
+                <div className="flex items-center justify-between mt-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      id="rememberMe"
+                      checked={rememberMe}
+                      onChange={(e) => setRememberMe(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-600 bg-[#121214] text-[#1ED760] focus:ring-[#1ED760]/50 accent-[#1ED760] cursor-pointer"
+                    />
+                    <label htmlFor="rememberMe" className="text-[10px] uppercase font-bold text-slate-400 tracking-wider cursor-pointer select-none pb-[1px]">
+                      Recordar acceso
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthType("reset");
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-[10px] uppercase font-bold text-[#1ED760] hover:text-white transition-colors cursor-pointer tracking-wider"
+                  >
+                    ¿Olvidaste tu contraseña?
+                  </button>
+                </div>
+              )}
+              {authType === "reset" && (
+                <div className="flex justify-center mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthType("login");
+                      setErrorMsg(null);
+                      setSuccessMsg(null);
+                    }}
+                    className="text-[10px] uppercase font-bold text-slate-400 hover:text-white transition-colors cursor-pointer tracking-wider"
+                  >
+                    Volver a iniciar sesión
+                  </button>
                 </div>
               )}
 
@@ -303,6 +361,11 @@ export const AuthModal: React.FC = () => {
                   <>
                     <LogIn className="w-4 h-4 text-black" />
                     <span>Iniciar Sesión</span>
+                  </>
+                ) : authType === "reset" ? (
+                  <>
+                    <Mail className="w-4 h-4 text-black" />
+                    <span>Enviar correo de recuperación</span>
                   </>
                 ) : (
                   <>

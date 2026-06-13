@@ -9,7 +9,8 @@ import {
   signInWithEmailAndPassword, 
   createUserWithEmailAndPassword,
   signInAnonymously,
-  updateProfile
+  updateProfile,
+  sendPasswordResetEmail
 } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -42,7 +43,7 @@ export const loginWithGoogle = async () => {
       try {
         await signInWithRedirect(auth, googleProvider);
       } catch (redirectError: any) {
-        console.error("Redirect login selection failed:", redirectError);
+        console.warn("Redirect login selection failed:", redirectError.code || redirectError.message);
         if (onAuthErrorCallback) {
           onAuthErrorCallback(redirectError);
         }
@@ -56,7 +57,7 @@ export const loginWithEmail = async (email: string, pass: string) => {
     const cred = await signInWithEmailAndPassword(auth, email, pass);
     return cred.user;
   } catch (error: any) {
-    console.error("Email login failed:", error);
+    console.warn("Email login failed:", error.code || error.message);
     if (onAuthErrorCallback) {
       onAuthErrorCallback(error);
     }
@@ -74,7 +75,19 @@ export const signupWithEmail = async (email: string, pass: string, nickname?: st
     });
     return cred.user;
   } catch (error: any) {
-    console.error("Email registration failed:", error);
+    console.warn("Email registration failed:", error.code || error.message);
+    if (onAuthErrorCallback) {
+      onAuthErrorCallback(error);
+    }
+    throw error;
+  }
+};
+
+export const resetPassword = async (email: string) => {
+  try {
+    await sendPasswordResetEmail(auth, email);
+  } catch (error: any) {
+    console.warn("Password reset error:", error.code || error.message);
     if (onAuthErrorCallback) {
       onAuthErrorCallback(error);
     }
@@ -93,7 +106,7 @@ getRedirectResult(auth)
     }
   })
   .catch((error) => {
-    console.error("Redirect error on load:", error);
+    console.warn("Redirect error on load:", error.code || error.message);
     if (onAuthErrorCallback) {
       onAuthErrorCallback(error);
     }

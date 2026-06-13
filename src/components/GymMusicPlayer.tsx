@@ -3122,23 +3122,13 @@ export default function GymMusicPlayer() {
   }, [registerMediaSession]);
 
   // Periodic background safeguard to protect and recover hijacked Media Session action handlers.
-  // Runs extremely efficiently, preserving battery and fully respecting Eco Mode guidelines,
-  // but guaranteeing that steering wheel/car bluetooth next/prev skip buttons remain active.
+  // Runs extremely efficiently natively via audio timeupdate, preserving battery and fully respecting Eco Mode guidelines,
+  // guaranteeing that steering wheel/car bluetooth next/prev skip buttons remain active.
   useEffect(() => {
     if (!("mediaSession" in navigator)) return;
 
-    const runSafeguard = () => {
-      enforceActionHandlers();
-    };
-
-    // Run immediately when state changes
-    runSafeguard();
-
-    // Low-frequency lightweight check every 1500ms to guarantee action lock re-association
-    // This is vital for maintaining fluid car bluetooth skip control when YouTube iframe hijacks.
-    const interval = setInterval(runSafeguard, 1500);
-
-    return () => clearInterval(interval);
+    // Run once immediately when state changes
+    enforceActionHandlers();
   }, [enforceActionHandlers, currentTrackIndex, isPlaying]);
 
   useEffect(() => {
@@ -3175,6 +3165,15 @@ export default function GymMusicPlayer() {
           src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
           loop
           playsInline
+          onTimeUpdate={() => {
+            const now = Date.now();
+            if (now - lastSessionSyncTimeRef.current > 2000) {
+              lastSessionSyncTimeRef.current = now;
+              if (expectedPlayingRef.current) {
+                enforceActionHandlers();
+              }
+            }
+          }}
         />
         {currentUrl && (
           <ReactPlayer

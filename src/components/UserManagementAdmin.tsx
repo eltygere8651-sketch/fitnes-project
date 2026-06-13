@@ -579,7 +579,15 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     try {
       setLoadingRequests(true);
       const snap = await getDocs(collection(db, "trial_requests"));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() as any }));
+      
+      // Sort newly arrived requests (pending) first, then by descending chronological order
+      list.sort((a, b) => {
+        if (a.status === "pending" && b.status !== "pending") return -1;
+        if (a.status !== "pending" && b.status === "pending") return 1;
+        return (b.createdAt || 0) - (a.createdAt || 0);
+      });
+      
       setRequests(list);
     } catch (e) {
       console.error("Error loaded trial requests:", e);

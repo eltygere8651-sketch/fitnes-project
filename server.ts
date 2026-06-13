@@ -1018,7 +1018,40 @@ app.post("/api/support/telegram", async (req, res) => {
   }
 });
 
-// Fallback to fetch metadata or check
+// Telegram Trial Request Endpoint
+app.post("/api/support/telegram-trial", async (req, res) => {
+  const { userEmail, userName } = req.body;
+  try {
+    const config = await getTelegramConfig();
+    if (!config || !config.botToken || !config.chatId) {
+      return res.status(503).json({ error: "El soporte por Telegram no está configurado en este momento" });
+    }
+
+    const title = `🎁 *Nueva Solicitud de Prueba de 7 Días* 🎁`;
+    const text = `${title}\n\n👤 *Usuario:* ${userName || 'Socio Premium'}\n📧 *Email:* ${userEmail || 'Sin email'}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
+
+    const tgRes = await fetch(`https://api.telegram.org/bot${config.botToken}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: config.chatId,
+        text: text,
+        parse_mode: "Markdown"
+      })
+    });
+
+    if (!tgRes.ok) {
+      console.error("Error from Telegram trial message API:", await tgRes.text());
+      return res.status(502).json({ error: "No se pudo entregar el mensaje al bot de Telegram" });
+    }
+
+    return res.json({ success: true });
+  } catch (err) {
+    console.error("Telegram trial API error:", err);
+    return res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
 
 
 // Output raw audio stream removed due to bot blocks

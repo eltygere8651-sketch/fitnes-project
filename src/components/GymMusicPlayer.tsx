@@ -676,6 +676,20 @@ export default function GymMusicPlayer() {
         createdAt: Date.now()
       });
       
+      // Notify Admin via Telegram
+      try {
+        await fetch("/api/support/telegram-trial", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            userEmail: user.email,
+            userName: user.displayName
+          })
+        });
+      } catch (e) {
+        console.error("Failed to notify admin via telegram:", e);
+      }
+      
       setTrialRequestStatus("sent");
       setTrialRequestMsg("¡Solicitud enviada! El administrador ha sido notificado y la aprobará manualmente pronto.");
       setIsCheckingTrialRequest(false);
@@ -3000,50 +3014,49 @@ export default function GymMusicPlayer() {
     durationRef.current = duration;
   }, [duration]);
 
+  const sessionHandlersRef = useRef<Record<string, any>>({});
+
   const enforceActionHandlers = useCallback(() => {
     if (!("mediaSession" in navigator)) return;
 
-    // Define handlers that use the latest state via handlersRef to avoid stale closures
-    const playHandler = () => {
-      expectedPlayingRef.current = true;
-      handlersRef.current.setIsPlaying(true);
-      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
-      if (youtubePlayerRef.current) {
-        try {
-          const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-          if (intPlayer && typeof intPlayer.playVideo === "function") {
-            intPlayer.playVideo();
-          } else if (intPlayer && typeof intPlayer.play === "function") {
-            intPlayer.play();
-          }
-        } catch (e) {}
-      }
-    };
-    const pauseHandler = () => {
-      expectedPlayingRef.current = false;
-      handlersRef.current.setIsPlaying(false);
-      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
-      if (youtubePlayerRef.current) {
-        try {
-          const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-          if (intPlayer && typeof intPlayer.pauseVideo === "function") {
-            intPlayer.pauseVideo();
-          } else if (intPlayer && typeof intPlayer.pause === "function") {
-            intPlayer.pause();
-          }
-        } catch (e) {}
-      }
-    };
-    const nextHandler = () => handlersRef.current.handleNext();
-    const prevHandler = () => handlersRef.current.handlePrev();
-
-    // Register handlers - always register both next and prev to ensure they show up on iOS/Bluetooth/Car
-    const actions: [MediaSessionAction, () => void][] = [
-      ["play", playHandler],
-      ["pause", pauseHandler],
-      ["previoustrack", prevHandler],
-      ["nexttrack", nextHandler],
-      ["seekforward", () => {
+    if (!sessionHandlersRef.current.playHandler) {
+      // Define handlers that use the latest state via handlersRef to avoid stale closures, but keep references stable!
+      sessionHandlersRef.current.playHandler = () => {
+        expectedPlayingRef.current = true;
+        handlersRef.current.setIsPlaying(true);
+        if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
+        if (youtubePlayerRef.current) {
+          try {
+            const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+            if (intPlayer && typeof intPlayer.playVideo === "function") {
+              intPlayer.playVideo();
+            } else if (intPlayer && typeof intPlayer.play === "function") {
+              intPlayer.play();
+            }
+          } catch (e) {}
+        }
+      };
+      
+      sessionHandlersRef.current.pauseHandler = () => {
+        expectedPlayingRef.current = false;
+        handlersRef.current.setIsPlaying(false);
+        if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
+        if (youtubePlayerRef.current) {
+          try {
+            const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+            if (intPlayer && typeof intPlayer.pauseVideo === "function") {
+              intPlayer.pauseVideo();
+            } else if (intPlayer && typeof intPlayer.pause === "function") {
+              intPlayer.pause();
+            }
+          } catch (e) {}
+        }
+      };
+      
+      sessionHandlersRef.current.nextHandler = () => handlersRef.current.handleNext();
+      sessionHandlersRef.current.prevHandler = () => handlersRef.current.handlePrev();
+      
+      sessionHandlersRef.current.seekforwardHandler = () => {
         if (youtubePlayerRef.current) {
           const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
           const target = currentSec + 10;
@@ -3056,8 +3069,9 @@ export default function GymMusicPlayer() {
             });
           } catch(e){}
         }
-      }],
-      ["seekbackward", () => {
+      };
+      
+      sessionHandlersRef.current.seekbackwardHandler = () => {
         if (youtubePlayerRef.current) {
           const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
           const target = Math.max(0, currentSec - 10);
@@ -3070,7 +3084,30 @@ export default function GymMusicPlayer() {
             });
           } catch(e){}
         }
-      }],
+      };
+
+      sessionHandlersRef.current.seektoHandler = (details: any) => {
+        if (details.seekTime !== undefined && youtubePlayerRef.current) {
+          youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
+          try {
+            navigator.mediaSession.setPositionState({
+              duration: (durationRef.current || 0) / 1000,
+              playbackRate: 1,
+              position: details.seekTime,
+            });
+          } catch(e){}
+        }
+      };
+    }
+
+    // Register handlers - always register both next and prev to ensure they show up on iOS/Bluetooth/Car
+    const actions: [MediaSessionAction, () => void][] = [
+      ["play", sessionHandlersRef.current.playHandler],
+      ["pause", sessionHandlersRef.current.pauseHandler],
+      ["previoustrack", sessionHandlersRef.current.prevHandler],
+      ["nexttrack", sessionHandlersRef.current.nextHandler],
+      ["seekforward", sessionHandlersRef.current.seekforwardHandler],
+      ["seekbackward", sessionHandlersRef.current.seekbackwardHandler],
     ];
 
     actions.forEach(([action, handler]) => {
@@ -3083,18 +3120,7 @@ export default function GymMusicPlayer() {
 
     // Add SeekTo Support
     try {
-      navigator.mediaSession.setActionHandler("seekto", (details) => {
-        if (details.seekTime !== undefined && youtubePlayerRef.current) {
-          youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
-          try {
-            navigator.mediaSession.setPositionState({
-              duration: (durationRef.current || 0) / 1000,
-              playbackRate: 1,
-              position: details.seekTime,
-            });
-          } catch(e){}
-        }
-      });
+      navigator.mediaSession.setActionHandler("seekto", sessionHandlersRef.current.seektoHandler);
     } catch (e) {}
   }, []);
 

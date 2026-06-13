@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.3",
+    title: "✨ Actualización Flux v1.5.3 - Panel Admin & Telegram Inteligente",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-13T16:30:00Z"),
+    content: "• Notificaciones Push vía Telegram: Ahora el administrador recibe alertas inmediatas a través de Telegram cuando hay un nuevo registro de prueba de 7 días. ¡Cero fricción para gestionar aprobaciones!\n• Panel Admin Optimizado: Las nuevas peticiones de prueba aparecen ordenadas automáticamente al principio de la lista, ahorrándote la necesidad de buscar. Todo más fluido e intuitivo."
+  },
+  {
     id: "update-v1.5.2",
     title: "✨ Actualización Flux v1.5.2 - Recuperación y Control Bluetooth",
     category: "actualizacion",

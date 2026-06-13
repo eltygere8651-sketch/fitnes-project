@@ -10,6 +10,7 @@ export interface UserAccessData {
   isValid: boolean;
   daysRemaining: number;
   maxUsers: number;
+  activeSessionId?: string | null;
 }
 
 interface FirebaseContextType {
@@ -110,7 +111,8 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
               plan: planType,
               isValid,
               daysRemaining,
-              maxUsers: allowedUsers
+              maxUsers: allowedUsers,
+              activeSessionId: data.activeSessionId || null
             });
           }
         }, (err) => {

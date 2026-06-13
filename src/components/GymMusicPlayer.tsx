@@ -842,6 +842,42 @@ export default function GymMusicPlayer() {
     return saved ? JSON.parse(saved) : {};
   });
   const [showTracks, setShowTracks] = useState(true);
+  // --- Single Session Enforcer ---
+  const myDeviceIdRef = useRef<string>("");
+  const [sessionHijacked, setSessionHijacked] = useState(false);
+
+  useEffect(() => {
+    let initial = localStorage.getItem("flux_device_id");
+    if (!initial) {
+      initial = Math.random().toString(36).substring(2) + Date.now().toString(36);
+      localStorage.setItem("flux_device_id", initial);
+    }
+    myDeviceIdRef.current = initial;
+  }, []);
+
+  useEffect(() => {
+    if (isPlaying && user && accessData && accessData.maxUsers === 1 && !isAdmin) {
+      if (accessData.activeSessionId !== myDeviceIdRef.current) {
+         import("firebase/firestore").then(({ doc, updateDoc }) => {
+            import("../lib/firebase").then(({ db }) => {
+               updateDoc(doc(db, "users", user.uid), { activeSessionId: myDeviceIdRef.current }).catch(() => {});
+            });
+         });
+      }
+    }
+  }, [isPlaying, user, accessData?.maxUsers, accessData?.activeSessionId, isAdmin]);
+
+  useEffect(() => {
+    if (user && accessData && accessData.maxUsers === 1 && !isAdmin) {
+      if (accessData.activeSessionId && accessData.activeSessionId !== myDeviceIdRef.current) {
+        if (isPlaying) {
+          setIsPlaying(false);
+          setSessionHijacked(true);
+        }
+      }
+    }
+  }, [accessData?.activeSessionId, isPlaying, user, accessData?.maxUsers, isAdmin]);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [youtubeResults, setYoutubeResults] = useState<any[]>([]);
   const [isSearchingYT, setIsSearchingYT] = useState(false);
@@ -6696,6 +6732,44 @@ export default function GymMusicPlayer() {
 
       {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
       {isProfileModalOpen && <UserProfileModal onClose={() => setIsProfileModalOpen(false)} />}
+
+      <AnimatePresence>
+        {sessionHijacked && (
+          <motion.div
+            initial={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            animate={{ opacity: 1, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            exit={{ opacity: 0, backdropFilter: isEcoMode ? "none" : "blur(8px)" }}
+            className="fixed inset-0 z-[99999] flex items-center justify-center p-4 sm:p-6 bg-black/90"
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 30, scale: 0.95 }}
+              className="w-full max-w-sm bg-[#121212] border border-[#1ED760]/30 rounded-3xl p-6 sm:p-8 shadow-[0_24px_60px_rgba(30,215,96,0.2)] flex flex-col items-center text-center relative overflow-hidden"
+            >
+              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-48 h-32 bg-[#1ED760]/20 blur-[50px] pointer-events-none rounded-full" />
+              
+              <div className="w-16 h-16 bg-black rounded-full border border-white/10 flex items-center justify-center mb-5 relative z-10">
+                <Headphones className="w-8 h-8 text-[#1ED760]" />
+              </div>
+              
+              <h2 className="text-xl font-black text-white uppercase tracking-tight mb-2 relative z-10">
+                Reproducción Pausada
+              </h2>
+              <p className="text-sm text-slate-400 font-medium mb-6 relative z-10 leading-relaxed">
+                Tu cuenta está activa en otro dispositivo. Solo se permite 1 usuario simultáneo en tu plan actual.
+              </p>
+              
+              <button
+                onClick={() => setSessionHijacked(false)}
+                className="w-full bg-[#1ED760] hover:bg-[#1fdf64] text-black py-3.5 rounded-full font-black uppercase text-xs tracking-widest shadow-[0_10px_30px_rgba(30,215,96,0.3)] hover:scale-[1.02] active:scale-[0.98] transition-all cursor-pointer relative z-10"
+              >
+                Entendido
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {((!user && !authLoading) || (accessData && !accessData.isValid)) && (
         <div className="absolute inset-0 z-[99999] bg-gradient-to-b from-[#090b0a] via-[#040504] to-[#000]  flex flex-col items-center justify-center p-4 sm:p-8 text-center overscroll-none select-none overflow-y-auto">

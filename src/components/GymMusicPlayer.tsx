@@ -1281,8 +1281,7 @@ export default function GymMusicPlayer() {
 
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current) {
-        fallbackSilentAudioRef.current.pause();
+    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -1359,8 +1358,7 @@ export default function GymMusicPlayer() {
   const handlePrev = useCallback(() => {
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current) {
-        fallbackSilentAudioRef.current.pause();
+    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -3357,9 +3355,7 @@ export default function GymMusicPlayer() {
                // To guarantee we steal the Media Session lock back from the YouTube iframe (which fixes Bluetooth Next/Prev in cars)
                // We must briefly assert our audio track.
                const stealLock = () => {
-                 if (fallbackSilentAudioRef.current && expectedPlayingRef.current) {
-                   // Ensure it's not paused, and force a seek to ensure the OS re-evaluates the active audio session
-                   fallbackSilentAudioRef.current.pause();
+                 if (fallbackSilentAudioRef.current && expectedPlayingRef.current && fallbackSilentAudioRef.current.paused) {
                    fallbackSilentAudioRef.current.play().catch(() => {});
                  }
                  enforceActionHandlers();
@@ -3368,10 +3364,8 @@ export default function GymMusicPlayer() {
                stealLock();
                registerMediaSession();
                
-               setTimeout(stealLock, 200);
-               setTimeout(stealLock, 700);
-               setTimeout(stealLock, 1500);
-               setTimeout(stealLock, 3000);
+               setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 500);
+               setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 2000);
             }}
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {

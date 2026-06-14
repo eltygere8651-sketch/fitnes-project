@@ -1282,11 +1282,8 @@ export default function GymMusicPlayer() {
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current) {
-        if (fallbackSilentAudioRef.current.paused) {
-            fallbackSilentAudioRef.current.play().catch(() => {});
-        } else {
-            fallbackSilentAudioRef.current.currentTime = 0;
-        }
+        fallbackSilentAudioRef.current.pause();
+        fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
     // Record skip in taste engine
@@ -1363,11 +1360,8 @@ export default function GymMusicPlayer() {
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current) {
-        if (fallbackSilentAudioRef.current.paused) {
-            fallbackSilentAudioRef.current.play().catch(() => {});
-        } else {
-            fallbackSilentAudioRef.current.currentTime = 0;
-        }
+        fallbackSilentAudioRef.current.pause();
+        fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
     // Try to instantly update media session for fast car-screen response
@@ -3365,11 +3359,8 @@ export default function GymMusicPlayer() {
                const stealLock = () => {
                  if (fallbackSilentAudioRef.current && expectedPlayingRef.current) {
                    // Ensure it's not paused, and force a seek to ensure the OS re-evaluates the active audio session
-                   if (fallbackSilentAudioRef.current.paused) {
-                     fallbackSilentAudioRef.current.play().catch(() => {});
-                   } else {
-                     fallbackSilentAudioRef.current.currentTime = 0;
-                   }
+                   fallbackSilentAudioRef.current.pause();
+                   fallbackSilentAudioRef.current.play().catch(() => {});
                  }
                  enforceActionHandlers();
                };

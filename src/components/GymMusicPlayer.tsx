@@ -678,12 +678,16 @@ export default function GymMusicPlayer() {
       
       // Notify Admin via Telegram
       try {
+        const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
+        const _tgData = _tgDoc.data();
         await fetch("/api/support/telegram-trial", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userEmail: user.email,
-            userName: user.displayName
+            userName: user.displayName,
+            botTokenOverride: _tgData?.botToken,
+            chatIdOverride: _tgData?.chatId
           })
         });
       } catch (e) {
@@ -1134,6 +1138,27 @@ export default function GymMusicPlayer() {
   const wasUnexpectedlyPausedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
 
+  // Hardware Media Keys fallback listener (Handles Bluetooth steering wheel events that translate to DOM keydowns)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if user is typing in an input
+      if (document.activeElement?.tagName === "INPUT" || document.activeElement?.tagName === "TEXTAREA") return;
+      
+      if (e.key === "MediaTrackNext") {
+        e.preventDefault();
+        handlersRef.current.handleNext();
+      } else if (e.key === "MediaTrackPrevious") {
+        e.preventDefault();
+        handlersRef.current.handlePrev();
+      } else if (e.key === "MediaPlayPause") {
+        e.preventDefault();
+        handlersRef.current.togglePlayback();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Network Recovery Effect
   useEffect(() => {
     const handleOnline = () => {
@@ -1256,11 +1281,26 @@ export default function GymMusicPlayer() {
 
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
+    if (fallbackSilentAudioRef.current) {
+        if (fallbackSilentAudioRef.current.paused) {
+            fallbackSilentAudioRef.current.play().catch(() => {});
+        } else {
+            fallbackSilentAudioRef.current.currentTime = 0;
+        }
+    }
 
     // Record skip in taste engine
     const activeTrack = overrideCurrentTrack || displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
     if (activeTrack) {
+      if ('mediaSession' in navigator) {
+         try {
+           navigator.mediaSession.metadata = new MediaMetadata({
+             title: activeTrack.title || "Saltando...",
+             artist: activeTrack.artist || "Flux",
+             artwork: [{ src: activeTrack.thumbnail_url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: "512x512", type: "image/jpeg" }]
+           });
+         } catch(e) {}
+      }
       recordTrackSkip(activeTrack);
     }
 
@@ -1322,7 +1362,27 @@ export default function GymMusicPlayer() {
   const handlePrev = useCallback(() => {
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
+    if (fallbackSilentAudioRef.current) {
+        if (fallbackSilentAudioRef.current.paused) {
+            fallbackSilentAudioRef.current.play().catch(() => {});
+        } else {
+            fallbackSilentAudioRef.current.currentTime = 0;
+        }
+    }
+
+    // Try to instantly update media session for fast car-screen response
+    const activeTrack = displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
+    if (activeTrack) {
+      if ('mediaSession' in navigator) {
+         try {
+           navigator.mediaSession.metadata = new MediaMetadata({
+             title: activeTrack.title || "Saltando...",
+             artist: activeTrack.artist || "Flux Premium",
+             artwork: [{ src: activeTrack.thumbnail_url || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17", sizes: "512x512", type: "image/jpeg" }]
+           });
+         } catch(e) {}
+      }
+    }
 
     if (isShuffle) {
       const tracksList = displayTracks;
@@ -3233,6 +3293,17 @@ export default function GymMusicPlayer() {
               lastSessionSyncTimeRef.current = now;
               if (expectedPlayingRef.current) {
                 enforceActionHandlers();
+                // Crucial fix: Periodically reset position state to lock out the iframe from stealing
+                if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
+                  try {
+                    const actualSeconds = youtubePlayerRef.current?.getCurrentTime() || (position / 1000);
+                    navigator.mediaSession.setPositionState({
+                      duration: (durationRef.current || 0) / 1000,
+                      playbackRate: 1,
+                      position: actualSeconds,
+                    });
+                  } catch(e) {}
+                }
               }
             }
           }}
@@ -3289,15 +3360,27 @@ export default function GymMusicPlayer() {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
                
-               // Re-register Media Session and reinforce action handlers to prevent YouTube's iframe from stealing lock screen controls
+               // To guarantee we steal the Media Session lock back from the YouTube iframe (which fixes Bluetooth Next/Prev in cars)
+               // We must briefly assert our audio track.
+               const stealLock = () => {
+                 if (fallbackSilentAudioRef.current && expectedPlayingRef.current) {
+                   // Ensure it's not paused, and force a seek to ensure the OS re-evaluates the active audio session
+                   if (fallbackSilentAudioRef.current.paused) {
+                     fallbackSilentAudioRef.current.play().catch(() => {});
+                   } else {
+                     fallbackSilentAudioRef.current.currentTime = 0;
+                   }
+                 }
+                 enforceActionHandlers();
+               };
+               
+               stealLock();
                registerMediaSession();
-               enforceActionHandlers();
-               // Robust cascade timeout reinforcement to override async post-play iframe action-registrations
-               setTimeout(() => enforceActionHandlers(), 150);
-               setTimeout(() => enforceActionHandlers(), 450);
-               setTimeout(() => enforceActionHandlers(), 900);
-               setTimeout(() => enforceActionHandlers(), 1800);
-               setTimeout(() => enforceActionHandlers(), 3000);
+               
+               setTimeout(stealLock, 200);
+               setTimeout(stealLock, 700);
+               setTimeout(stealLock, 1500);
+               setTimeout(stealLock, 3000);
             }}
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
@@ -4053,21 +4136,24 @@ export default function GymMusicPlayer() {
                   <div className="flex flex-col gap-1 sm:gap-1.5 items-center justify-start w-full max-w-2xl mx-auto h-full flex-1 relative pt-12 sm:pt-6">
                     
                     {/* Global Player Header: Minimize (Left) & Tabs Switcher (Center) decoupled */}
-                    <div className="absolute top-2 left-2 right-2 sm:top-4 sm:left-4 sm:right-4 flex items-center justify-between z-50 shrink-0">
+                    <div className="absolute top-3 left-3 right-3 sm:top-4 sm:left-4 sm:right-4 grid grid-cols-[3rem_1fr_3rem] sm:grid-cols-[3.5rem_1fr_3.5rem] items-center z-50 shrink-0 gap-2">
                       {/* Left: Minimize button - Decoupled and easily accessible at the top left */}
-                      <button 
-                        onClick={() => {
-                            window.scrollTo({ top: 0, behavior: 'smooth' });
-                            setIsTrackListExpanded(true);
-                        }}
-                        title="Minimizar reproductor"
-                        className="p-2 sm:p-2.5 bg-white/[0.04] backdrop-blur-md border border-white/5 hover:bg-white/10 active:scale-95 rounded-full transition-all text-slate-300 hover:text-white shadow-xl cursor-pointer"
-                      >
-                        <ChevronDown className="w-6 h-6 sm:w-7 sm:h-7" />
-                      </button>
+                      <div className="flex items-center justify-start">
+                        <button 
+                          onClick={() => {
+                              window.scrollTo({ top: 0, behavior: 'smooth' });
+                              setIsTrackListExpanded(true);
+                          }}
+                          title="Minimizar reproductor"
+                          className="flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-black/40 backdrop-blur-md border border-white/10 hover:bg-white/20 active:scale-95 rounded-full transition-all text-white shadow-xl cursor-pointer"
+                        >
+                          <ChevronDown className="w-6 h-6 sm:w-7 sm:h-7" />
+                        </button>
+                      </div>
 
                       {/* Center: Tabs Switcher - Centered perfectly */}
-                      <div className="w-full max-w-[270px] sm:max-w-[400px] flex items-center bg-[#121214] border border-white/10 rounded-full p-1 tracking-wider select-none shadow-2xl absolute left-1/2 -translate-x-1/2 top-0 sm:top-1 sm:relative sm:left-auto sm:translate-x-0">
+                      <div className="flex items-center justify-center w-full min-w-0">
+                        <div className="w-full max-w-[260px] sm:max-w-[400px] flex items-center bg-[#121214]/90 border border-white/10 rounded-full p-1 tracking-wider select-none shadow-2xl">
                         <button 
                           onClick={(e) => {
                             e.stopPropagation();
@@ -4100,10 +4186,11 @@ export default function GymMusicPlayer() {
                             </span>
                           )}
                         </button>
+                        </div>
                       </div>
-
-                      {/* Right spacer for strict flex centering on desktop */}
-                      <div className="hidden sm:block w-11"></div>
+                      
+                      {/* Right Placeholder to balance CSS Grid */}
+                      <div />
                     </div>
 
                     {/* Artwork & Title centrally stacked */}

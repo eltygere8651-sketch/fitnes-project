@@ -1343,6 +1343,17 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           </>
           )}
         </div>
+        
+        {/* Mobile Fixed Close Button */}
+        <div className="sm:hidden flex shrink-0 p-3 bg-[#0a0a0c] border-t border-white/5 mt-auto">
+          <button 
+            onClick={onClose}
+            className="w-full py-2.5 bg-gradient-to-r from-purple-500/10 to-pink-500/10 hover:from-purple-500/20 hover:to-pink-500/20 text-slate-300 hover:text-white font-black uppercase tracking-[0.15em] text-[10px] rounded-lg border border-white/5 flex items-center justify-center gap-2 transition-all cursor-pointer shadow-[0_0_15px_rgba(168,85,247,0.05)]"
+          >
+            <X className="w-4 h-4 text-purple-400" />
+            Cerrar Panel
+          </button>
+        </div>
       </div>
     </div>
   );

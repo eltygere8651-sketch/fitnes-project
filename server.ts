@@ -1020,9 +1020,9 @@ app.post("/api/support/telegram", async (req, res) => {
 
 // Telegram Trial Request Endpoint
 app.post("/api/support/telegram-trial", async (req, res) => {
-  const { userEmail, userName } = req.body;
+  const { userEmail, userName, botTokenOverride, chatIdOverride } = req.body;
   try {
-    const config = await getTelegramConfig();
+    const config = (botTokenOverride && chatIdOverride) ? { botToken: botTokenOverride, chatId: chatIdOverride } : await getTelegramConfig();
     if (!config || !config.botToken || !config.chatId) {
       return res.status(503).json({ error: "El soporte por Telegram no está configurado en este momento" });
     }

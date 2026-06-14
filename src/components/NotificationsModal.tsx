@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.4",
+    title: "✨ Actualización Flux v1.5.4 - Mejoras UI y Seguridad Multidispositivo",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Prevención de Multiconexión: Implementado un sistema estricto de control de reproducciones simultáneas. Si tu cuenta cambia de dispositivo, se pausará automáticamente para garantizar el protocolo de cuenta única.\n• Correcciones de Botones: Ajuste premium al botón de cierre móvil y centrado absoluto del botón minimizar visor en Android.\n• Reparaciones de Telegram y Bluetooth: Refuerzo integral al sistema de MediaSession para coches y alertas push conectadas al asistente directo de Telegram administrativo."
+  },
+  {
     id: "update-v1.5.3",
     title: "✨ Actualización Flux v1.5.3 - Panel Admin & Telegram Inteligente",
     category: "actualizacion",

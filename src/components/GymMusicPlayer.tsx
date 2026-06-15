@@ -1137,6 +1137,10 @@ export default function GymMusicPlayer() {
   const lastPosSaveRef = useRef(0);
   const wasUnexpectedlyPausedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
+  
+  // Intelligent gapless playback (SponsorBlock Integration)
+  const sponsorBlockSegmentsRef = useRef<{start: number, end: number, actionType: string}[]>([]);
+  const skipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hardware Media Keys fallback listener (Handles Bluetooth steering wheel events that translate to DOM keydowns)
   useEffect(() => {
@@ -1265,6 +1269,34 @@ export default function GymMusicPlayer() {
   
   const currentUrl = currentTrack.url || "";
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
+
+  useEffect(() => {
+    if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
+    skipTimeoutRef.current = null;
+    sponsorBlockSegmentsRef.current = [];
+    
+    if (currentTrack?.url) {
+      const match = currentTrack.url.match(/(?:v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+      const videoId = match ? match[1] : null;
+      if (videoId) {
+        fetch(`https://sponsor.ajay.app/api/skipSegments?videoID=${videoId}&categories=["music_offtopic"]`)
+          .then(res => {
+            if (res.ok) return res.json();
+            return [];
+          })
+          .then(data => {
+            if (Array.isArray(data)) {
+              sponsorBlockSegmentsRef.current = data.map((s: any) => ({
+                start: s.segment[0],
+                end: s.segment[1],
+                actionType: s.actionType
+              }));
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [currentTrack?.url]);
 
   const togglePlayback = useCallback(() => {
     const nextPlaying = !isPlaying;
@@ -3392,6 +3424,42 @@ export default function GymMusicPlayer() {
             onProgress={(state) => {
               if (document.visibilityState === 'visible') {
                 setPosition(state.playedSeconds * 1000);
+              }
+              
+              // Intelligent gapless logic: checking for silences/outros/intros using crowdsourced segments
+              const played = state.playedSeconds;
+              const durationCurrent = durationRef.current / 1000;
+              const segments = sponsorBlockSegmentsRef.current;
+              
+              if (segments && segments.length > 0 && youtubePlayerRef.current) {
+                if (skipTimeoutRef.current) {
+                  clearTimeout(skipTimeoutRef.current);
+                  skipTimeoutRef.current = null;
+                }
+                
+                const activeSegment = segments.find(seg => played >= seg.start && played < seg.end);
+                if (activeSegment) {
+                   if (durationCurrent > 0 && activeSegment.end >= durationCurrent - 3) {
+                     handleNextRef.current(); 
+                   } else {
+                     youtubePlayerRef.current.seekTo(activeSegment.end, 'seconds');
+                   }
+                } else {
+                   const maxSkipWindowSeconds = (youtubePlayerRef.current?.props?.progressInterval || 5000) / 1000;
+                   const nextSegment = segments.find(seg => seg.start > played && seg.start <= played + maxSkipWindowSeconds);
+                   if (nextSegment) {
+                      const msUntilSkip = Math.max(0, (nextSegment.start - played) * 1000);
+                      skipTimeoutRef.current = setTimeout(() => {
+                        if (isPlayingRef.current) {
+                           if (durationCurrent > 0 && nextSegment.end >= durationCurrent - 3) {
+                             handleNextRef.current();
+                           } else {
+                             youtubePlayerRef.current?.seekTo(nextSegment.end, 'seconds');
+                           }
+                        }
+                      }, msUntilSkip);
+                   }
+                }
               }
             }}
             onDuration={(dur) => {

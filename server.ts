@@ -58,6 +58,18 @@ app.post("/api/ai/coach", async (req, res) => {
   res.json({ reply: "Siente el ritmo. La música está lista." });
 });
 
+// Fallback APIs (Invidious / Piped) for anti-block shielding (Plan B)
+const INVIDIOUS_INSTANCES = [
+  "https://vid.puffyan.us",
+  "https://invidious.jing.rocks",
+  "https://inv.tux.pizza"
+];
+const PIPED_INSTANCES = [
+  "https://pipedapi.kavin.rocks",
+  "https://pipedapi.tokhmi.xyz", 
+  "https://pipedapi.smnz.de"
+];
+
 // YouTube Search Cache (Eco-Friendly)
 const searchCache = new Map<string, { data: any, timestamp: number }>();
 const CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
@@ -285,8 +297,55 @@ app.get("/api/youtube/search", async (req, res) => {
     
     res.json(combined);
   } catch (error) {
-    console.error("YouTube search error:", error);
-    res.status(500).json({ error: "Internal YouTube search error" });
+    console.warn("YouTube search error (Innertube failed, likely blocked IP). Initiating Plan B (Piped API Fallback)...", error);
+    
+    // Ant-block fallback: Piped API
+    try {
+      for (const instance of PIPED_INSTANCES) {
+        try {
+          const pRes = await fetch(`${instance}/search?q=${encodeURIComponent(query)}&filter=all`);
+          if (pRes.ok) {
+            const pData = await pRes.json() as any;
+            const combined: any[] = [];
+            (pData.items || []).forEach((item: any) => {
+              if (item.type === "stream") {
+                combined.push({
+                  id: item.url.replace("/watch?v=", ""),
+                  title: item.title,
+                  artist: item.uploaderName || "Piped User",
+                  duration: item.duration > 0 ? `${Math.floor(item.duration/60)}:${String(item.duration%60).padStart(2, '0')}` : "N/A",
+                  url: `https://www.youtube.com${item.url}`,
+                  thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.url.replace("/watch?v=", "")}/mqdefault.jpg`,
+                  isPlaylist: false,
+                  subType: item.title.toLowerCase().includes("mix") ? "mix" : "cancion"
+                });
+              } else if (item.type === "playlist") {
+                combined.push({
+                   id: item.url.replace("/playlist?list=", ""),
+                   title: item.title,
+                   artist: item.uploaderName || "Piped User",
+                   duration: item.videos > 0 ? `${item.videos} videos` : "Playlist",
+                   url: `https://www.youtube.com${item.url}`,
+                   thumbnail: item.thumbnail || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=300",
+                   isPlaylist: true,
+                   subType: "playlist"
+                });
+              }
+            });
+            if (combined.length > 0) {
+              searchCache.set(normalizedQuery, { data: combined, timestamp: Date.now() }); // Cache fallback results
+              return res.json(combined);
+            }
+          }
+        } catch (e) {
+          // ignore instance fail
+        }
+      }
+    } catch(fallbackErr) {
+       console.error("All fallbacks failed.");
+    }
+    
+    res.status(500).json({ error: "Internal YouTube search error (and fallbacks failed)" });
   }
 });
 
@@ -457,8 +516,52 @@ app.get("/api/youtube/explore", async (req, res) => {
     exploreCache.set(country, { data, timestamp: Date.now() });
     res.json(data);
   } catch (error) {
-    console.error("Explore failed:", error);
-    res.status(500).json({ error: "Internal error" });
+    console.warn("Explore failed (likely blocked IP). Initiating Plan B (Piped API Fallback)...", error);
+    
+    try {
+      for (const instance of PIPED_INSTANCES) {
+        try {
+           const pRes = await fetch(`${instance}/trending?region=${country}`);
+           if (pRes.ok) {
+              const pData = await pRes.json() as any;
+              const trends: any[] = [];
+              (pData || []).forEach((item: any) => {
+                 if (item.type === "stream") {
+                    trends.push({
+                      id: item.url.replace("/watch?v=", ""),
+                      title: item.title,
+                      artist: item.uploaderName || "Piped User",
+                      duration: item.duration > 0 ? `${Math.floor(item.duration/60)}:${String(item.duration%60).padStart(2, '0')}` : "N/A",
+                      url: `https://www.youtube.com${item.url}`,
+                      thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.url.replace("/watch?v=", "")}/mqdefault.jpg`,
+                      isPlaylist: false,
+                      subType: item.title.toLowerCase().includes("mix") ? "mix" : "cancion"
+                    });
+                 }
+              });
+              
+              if (trends.length > 0) {
+                 const data = {
+                    trending: trends.slice(0, 10),
+                    dailyTop: trends.slice(10, 20),
+                    top100: trends.slice(20, 30),
+                    top20Tendencias: trends.slice(30, 40),
+                    dailyTopPlaylists: trends.slice(40, 50),
+                    workout: [], focus: [], trends: trends.slice(50, 60), latin: [], party: []
+                 };
+                 exploreCache.set(country, { data, timestamp: Date.now() });
+                 return res.json(data);
+              }
+           }
+        } catch(e) {
+           // ignore instance fail
+        }
+      }
+    } catch(fetchErr) {
+       console.error("Explore fallback failed.");
+    }
+    
+    res.status(500).json({ error: "Internal error (and fallbacks failed)" });
   }
 });
 
@@ -631,8 +734,41 @@ app.get("/api/youtube/playlist", async (req, res) => {
     playlistCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
     res.json(tracks);
   } catch (err) {
-    console.error("Error fetching playlist tracks:", err);
-    res.status(500).json({ error: "Internal error fetching playlist" });
+    console.warn("Error fetching playlist tracks: (likely blocked IP). Initiating Plan B (Piped API Fallback)...", err);
+    
+    try {
+      for (const instance of PIPED_INSTANCES) {
+        try {
+          const pRes = await fetch(`${instance}/playlists/${playlistId}`);
+          if (pRes.ok) {
+            const pData = await pRes.json() as any;
+            const tracks: any[] = [];
+            (pData.relatedStreams || []).forEach((item: any) => {
+              if (item.url) {
+                 tracks.push({
+                   id: item.url.replace("/watch?v=", ""),
+                   title: item.title,
+                   artist: item.uploaderName || "Piped User",
+                   duration: item.duration > 0 ? `${Math.floor(item.duration/60)}:${String(item.duration%60).padStart(2, '0')}` : "N/A",
+                   url: `https://www.youtube.com${item.url}`,
+                   thumbnail: item.thumbnail || `https://i.ytimg.com/vi/${item.url.replace("/watch?v=", "")}/mqdefault.jpg`
+                 });
+              }
+            });
+            if (tracks.length > 0) {
+              playlistCache.set(cacheKey, { data: tracks, timestamp: Date.now() });
+              return res.json(tracks);
+            }
+          }
+        } catch(e) {
+          // ignore instance
+        }
+      }
+    } catch(fetchErr) {
+       console.error("Playlist fallback failed.");
+    }
+    
+    res.status(500).json({ error: "Internal error fetching playlist (and fallbacks failed)" });
   }
 });
 

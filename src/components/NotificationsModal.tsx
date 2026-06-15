@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.6",
+    title: "✨ Actualización Flux v1.5.6 - Correcciones de Seguridad y Estabilidad",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-15T14:30:00Z"),
+    content: "• Estabilidad Continua: Hemos implementado mejoras internas en nuestra infraestructura de red para prevenir interrupciones inesperadas. Este ajuste optimiza la recepción de datos para asegurar que la reproducción se mantenga siempre fluida bajo cualquier circunstancia.\n• Despliegue Silencioso y Eficiente: Estas correcciones y optimizaciones de seguridad se ejecutan íntegramente en los servidores en la nube de Flux, garantizando un 0% de impacto en el consumo de batería o rendimiento de tu dispositivo."
+  },
+  {
     id: "update-v1.5.5",
     title: "✨ Actualización Flux v1.5.5 - Optimización de Cuotas y Salto de Silencios Inteligente",
     category: "actualizacion",

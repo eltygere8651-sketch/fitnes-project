@@ -1125,6 +1125,7 @@ export default function GymMusicPlayer() {
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
   const wasUnexpectedlyPausedRef = useRef(false);
+  const lastPauseCounterTimeRef = useRef<number>(0);
   const playlistsLoadedInitiallyRef = useRef(false);
   
   // Intelligent gapless playback (SponsorBlock Integration)
@@ -3388,11 +3389,31 @@ export default function GymMusicPlayer() {
             }}
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
-                  // The iframe paused itself natively due to lock screen / background throttling.
                   wasUnexpectedlyPausedRef.current = true;
-                  // REMOVED: immediate counter react-player pause which triggers iOS anti-abuse freeze.
-                  // We update UI state to false so it correctly reflects the OS suspended state,
-                  // allowing the user to simply tap 'Play' on their lock screen or car bluetooth to safely resume.
+                  
+                  // Restore background continuation correctly, but heavily throttle it 
+                  // to prevent iOS browser freezing ("se bloquea") while keeping audio session alive.
+                  const now = Date.now();
+                  if (now - lastPauseCounterTimeRef.current > 2000) {
+                     lastPauseCounterTimeRef.current = now;
+                     setTimeout(() => {
+                       if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                         try {
+                           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                           if (intPlayer && typeof intPlayer.unMute === "function") {
+                             intPlayer.unMute();
+                           }
+                           if (intPlayer && typeof intPlayer.playVideo === "function") {
+                             intPlayer.playVideo();
+                           } else if (intPlayer && typeof intPlayer.play === "function") {
+                             intPlayer.play();
+                           }
+                         } catch(e) {}
+                       }
+                     }, 200);
+                  }
+                  
+                  return; // Crucial: skip updating UI to paused so silent audio continues natively 
                }
                setIsPlaying(false);
             }}

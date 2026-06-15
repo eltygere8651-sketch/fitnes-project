@@ -1066,21 +1066,9 @@ export default function GymMusicPlayer() {
           }
         }
       } else if (document.hidden) {
-        // iOS Safari aggressively pauses iframes in the background. 
-        // We try to trigger play exactly when it hides to counter the system pause.
-        if (isPlaying && youtubePlayerRef.current) {
-           try {
-              const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-              if (intPlayer && typeof intPlayer.playVideo === "function") {
-                // Staggered triggers to circumvent browser freeze state
-                setTimeout(() => intPlayer.playVideo(), 50);
-                setTimeout(() => intPlayer.playVideo(), 150);
-              } else if (intPlayer && typeof intPlayer.play === "function") {
-                setTimeout(() => intPlayer.play(), 50);
-                setTimeout(() => intPlayer.play(), 150);
-              }
-           } catch(e) {}
-        }
+        // Removed aggressive staggered triggers: Trying to force intPlayer.playVideo() 50ms after user presses power button 
+        // triggers mobile browser anti-abuse heuristics, causing the tab to crash ("se bloquea") and consume heavy battery.
+        // We let the native MediaSession handle background continuation safely.
       }
     };
 
@@ -3311,7 +3299,8 @@ export default function GymMusicPlayer() {
           playsInline
           onTimeUpdate={() => {
             const now = Date.now();
-            if (now - lastSessionSyncTimeRef.current > 2000) {
+            const interval = document.visibilityState === 'visible' ? 3000 : 15000;
+            if (now - lastSessionSyncTimeRef.current > interval) {
               lastSessionSyncTimeRef.current = now;
               if (expectedPlayingRef.current) {
                 enforceActionHandlers();
@@ -3399,22 +3388,11 @@ export default function GymMusicPlayer() {
             }}
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
+                  // The iframe paused itself natively due to lock screen / background throttling.
                   wasUnexpectedlyPausedRef.current = true;
-                  // Immediately counter react-player pause if in background
-                  setTimeout(() => {
-                    if (expectedPlayingRef.current && youtubePlayerRef.current) {
-                      try {
-                        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                        if (intPlayer && typeof intPlayer.playVideo === "function") {
-                          intPlayer.playVideo();
-                        } else if (intPlayer && typeof intPlayer.play === "function") {
-                          intPlayer.play();
-                        }
-                      } catch(e) {}
-                    }
-                  }, 150);
-                  // Don't update isPlaying state to false so UI doesn't visually pause
-                  return;
+                  // REMOVED: immediate counter react-player pause which triggers iOS anti-abuse freeze.
+                  // We update UI state to false so it correctly reflects the OS suspended state,
+                  // allowing the user to simply tap 'Play' on their lock screen or car bluetooth to safely resume.
                }
                setIsPlaying(false);
             }}

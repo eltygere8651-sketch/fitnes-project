@@ -70,6 +70,7 @@ import {
   getDoc,
   where,
   setDoc,
+  limit,
 } from "firebase/firestore";
 import { db, loginWithGoogle, logout } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
@@ -1455,14 +1456,28 @@ export default function GymMusicPlayer() {
     }
   }, [currentTrack, currentUrl]);
 
-  // Sync with Firestore (Spotify-like: fetch all playlists so users can explore/play them)
-  useEffect(() => {
-    const q = query(collectionGroup(db, "playlists"), orderBy("createdAt", "desc"));
+  const communityDocsRef = useRef<any[]>([]);
+  const userDocsRef = useRef<any[]>([]);
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      // Background auto-cleanup of Martina's playlist (keep only up to 80 tracks, removing any extras added by mistake)
+  // Sync with Firestore (Optimized: fetch global lists statically with limit, and user lists in real-time)
+  useEffect(() => {
+    let unsubscribeUser = () => {};
+
+    const processMergedDocs = () => {
+      // Unir documentos, dando prioridad a las versiones del usuario
+      const combined = new Map();
+      communityDocsRef.current.forEach(doc => combined.set(doc.id, doc));
+      userDocsRef.current.forEach(doc => combined.set(doc.id, doc));
+      const mergedDocs = Array.from(combined.values());
+
+      mergedDocs.sort((a, b) => {
+        const tA = a.data().createdAt?.toMillis?.() || 0;
+        const tB = b.data().createdAt?.toMillis?.() || 0;
+        return tB - tA;
+      });
+
       if (isAdmin) {
-        snapshot.docs.forEach((playlistDoc) => {
+        mergedDocs.forEach((playlistDoc) => {
           const data = playlistDoc.data();
           const name = data.name || "";
           if (name.toLowerCase().includes("martina")) {
@@ -1473,17 +1488,13 @@ export default function GymMusicPlayer() {
               updateDoc(playlistDoc.ref, {
                 tracks: pruned,
                 updatedAt: serverTimestamp()
-              }).then(() => {
-                console.log("Successfully pruned Martina's playlist down to the first 80 tracks.");
-              }).catch(e => {
-                console.error("Failed to auto-prune Martina's playlist:", e);
-              });
+              }).catch(e => console.error(e));
             }
           }
         });
       }
 
-      const folders = snapshot.docs.map((doc) => {
+      const folders = mergedDocs.map((doc) => {
         const data = doc.data();
         let ownerId = data.ownerId;
         
@@ -1495,7 +1506,6 @@ export default function GymMusicPlayer() {
           }
         }
 
-        // Clean any SoundCloud tracks from the playlist tracks array
         const rawTracks = data.tracks || [];
         const cleanedTracks = rawTracks.filter((track: any) => {
           const url = track.url || "";
@@ -1507,10 +1517,9 @@ export default function GymMusicPlayer() {
           "Oliver Wright", "Isabella Santos", "Kaito Tanaka", "Emma Laurent", "Julian Vane",
           "Nina Petrova", "Leo Moretti", "Zara Khalid", "Hugo Becker", "Maya Lindholm"
         ];
-        const nameIndex = doc.id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % realNames.length;
+        const nameIndex = doc.id.split('').reduce((acc: number, char: string) => acc + char.charCodeAt(0), 0) % realNames.length;
         const fakeOwnerName = realNames[nameIndex];
         
-        // Check if content is from Admin
         const isAdminContent = data.ownerId === "ho82788278" || data.adminSecret === "ho82788278" || data.ownerName?.toLowerCase() === "administrador" || data.ownerName === "eltygere8651" || data.ownerName?.toLowerCase() === "adoni";
 
         return {
@@ -1529,28 +1538,15 @@ export default function GymMusicPlayer() {
       })
       .sort((a: any, b: any) => (b.isAdminContent ? 1 : 0) - (a.isAdminContent ? 1 : 0))
       .filter((pl: any, index: number, self: any[]) => {
-        // Si la playlist pertenece al usuario actual, siempre la mostramos (incluso si está vacía para que pueda verla y añadir canciones)
         if (user && pl.ownerId === user.uid) return true;
-        // Otras listas de la comunidad deben tener al menos una canción para ser visibles públicamente
         if (!pl.tracks || pl.tracks.length === 0) return false;
-        // Due to sorting, the first occurrence of a name will be from Admin if it exists
         return self.findIndex(t => t.name === pl.name) === index;
       })
       .filter((pl: any) => {
-        // Keep Martina Cumple playlist no matter what
         const isMartina = pl.name?.toLowerCase().includes("martina");
         if (isMartina) return true;
-
-        // Otherwise filter out SoundCloud playlists
-        const isSoundCloud = 
-          pl.name?.toLowerCase().includes("soundcloud") ||
-          pl.description?.toLowerCase().includes("soundcloud") ||
-          pl.genre?.toLowerCase().includes("soundcloud");
-          
+        const isSoundCloud = pl.name?.toLowerCase().includes("soundcloud") || pl.description?.toLowerCase().includes("soundcloud") || pl.genre?.toLowerCase().includes("soundcloud");
         if (isSoundCloud) return false;
-
-        // If it was created from a soundcloud import or had no youtube tracks, check
-        // but let's allow other personal custom playlists
         return true;
       }) as any as MusicPlaylist[];
 
@@ -1562,39 +1558,24 @@ export default function GymMusicPlayer() {
 
       setUserPlaylists(sortedFolders);
       
-      if (!playlistsLoadedInitiallyRef.current) {
+      if (!playlistsLoadedInitiallyRef.current && folders.length > 0) {
         const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
         const lastPlayedPlId = localStorage.getItem("gym_music_last_played_playlist_id");
         
-        if (folders.length > 0) {
-          let foundSelected = null;
-          let foundPlaying = null;
-          
-          if (savedPlaylistId) {
-            foundSelected = folders.find((f) => f.id === savedPlaylistId);
-          }
-          if (lastPlayedPlId) {
-            foundPlaying = folders.find((f) => f.id === lastPlayedPlId);
-          }
-          
-          // Always default to Explorar upon entry
-          setSelectedPlaylist(null);
-          setTrackListTab("search");
-          setIsTrackListExpanded(true);
-          setMobileView("player");
-          
-          if (foundPlaying) {
-            setPlayingPlaylist(foundPlaying);
-          } else if (foundSelected) {
-            setPlayingPlaylist(foundSelected);
-          } else {
-            setPlayingPlaylist(null);
-          }
-        }
+        let foundSelected = savedPlaylistId ? folders.find((f) => f.id === savedPlaylistId) : null;
+        let foundPlaying = lastPlayedPlId ? folders.find((f) => f.id === lastPlayedPlId) : null;
+        
+        setSelectedPlaylist(null);
+        setTrackListTab("search");
+        setIsTrackListExpanded(true);
+        setMobileView("player");
+        
+        if (foundPlaying) setPlayingPlaylist(foundPlaying);
+        else if (foundSelected) setPlayingPlaylist(foundSelected);
+        else setPlayingPlaylist(null);
+        
         playlistsLoadedInitiallyRef.current = true;
-      } else {
-        // En actualizaciones de snapshot posteriores, utilizamos los refs para acceder al 
-        // estado exacto actual (evitando usar closures sucias/state old) y prevenir saltos.
+      } else if (playlistsLoadedInitiallyRef.current) {
         const currentSelected = selectedPlaylistRef.current;
         const currentPlaying = playingPlaylistRef.current;
         const currentTrackIdx = currentTrackIndexRef.current;
@@ -1605,9 +1586,7 @@ export default function GymMusicPlayer() {
             const tracksSame = currentSelected.tracks?.length === updatedSelected.tracks?.length && 
                                currentSelected.tracks?.every((t:any, i:number) => (t.id && t.id === updatedSelected.tracks[i]?.id) || (t.url && t.url === updatedSelected.tracks[i]?.url));
             const metadataSame = currentSelected.name === updatedSelected.name && currentSelected.thumbnail_url === updatedSelected.thumbnail_url;
-            if (!tracksSame || !metadataSame) {
-              setSelectedPlaylist(updatedSelected);
-            }
+            if (!tracksSame || !metadataSame) setSelectedPlaylist(updatedSelected);
           }
         }
 
@@ -1633,16 +1612,11 @@ export default function GymMusicPlayer() {
                  
                  if (!isSameAtCurrent) {
                     const newIdx = updatedPlaying.tracks.findIndex((t: any) => 
-                      (playingTrack.id && t.id === playingTrack.id) || 
-                      (playingTrack.url && t.url === playingTrack.url)
+                      (playingTrack.id && t.id === playingTrack.id) || (playingTrack.url && t.url === playingTrack.url)
                     );
-                    
                     if (newIdx !== -1) {
-                      console.log(`[Snapshot Sync] Adjusting currentTrackIndex from ${currentTrackIdx} to ${newIdx} to keep playing "${playingTrack.title}"`);
                       setCurrentTrackIndex(newIdx);
                     } else {
-                      // It was deleted from the currently playing playlist. Override so it keeps playing seamlessly.
-                      console.log(`[Snapshot Sync] Track "${playingTrack.title}" removed from playlist. Kept playing via override.`);
                       setOverrideCurrentTrack(playingTrack);
                     }
                  }
@@ -1651,8 +1625,32 @@ export default function GymMusicPlayer() {
           }
         }
       }
-    });
-    return () => unsubscribe();
+    };
+
+    const fetchCommunity = async () => {
+      try {
+        const qComm = query(collectionGroup(db, "playlists"), orderBy("createdAt", "desc"), limit(50));
+        const snap = await getDocs(qComm);
+        communityDocsRef.current = snap.docs;
+        processMergedDocs();
+      } catch (e) {
+        console.error("Error fetching community playlists", e);
+      }
+    };
+    fetchCommunity();
+
+    if (user) {
+      const qUser = query(collection(db, "users", user.uid, "playlists"), orderBy("createdAt", "desc"));
+      unsubscribeUser = onSnapshot(qUser, (snap) => {
+        userDocsRef.current = snap.docs;
+        processMergedDocs();
+      });
+    } else {
+      userDocsRef.current = [];
+      processMergedDocs();
+    }
+
+    return () => unsubscribeUser();
   }, [user, isAdmin]);
 
   useEffect(() => {

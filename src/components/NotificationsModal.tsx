@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.5",
+    title: "✨ Actualización Flux v1.5.5 - Optimización de Cuotas y Salto de Silencios Inteligente",
+    category: "actualizacion",
+    createdAt: new Date("2026-06-15T12:00:00Z"),
+    content: "• Salto de Silencios Inteligente Integrado: Se implementó de manera transparente la tecnología colaborativa SponsorBlock, que detecta silencios absolutos, videoclips intermedios o ruido de fondo, asegurando que la canción conecte fluidamente al terminar.\n• Reconfiguración de Lectura Global Gratuita: Optimizada la sincronización de Novedades y la base global mediante lectura limitada (Top 50 Novedades), logrando que el consumo de carga sea 10 veces más económico y eficiente, protegiendo totalmente la viabilidad gratuita sin renunciar a tu velocidad de respuesta."
+  },
+  {
     id: "update-v1.5.4",
     title: "✨ Actualización Flux v1.5.4 - Mejoras UI y Seguridad Multidispositivo",
     category: "actualizacion",

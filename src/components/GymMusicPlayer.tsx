@@ -1066,9 +1066,21 @@ export default function GymMusicPlayer() {
           }
         }
       } else if (document.hidden) {
-        // Removed aggressive staggered triggers: Trying to force intPlayer.playVideo() 50ms after user presses power button 
-        // triggers mobile browser anti-abuse heuristics, causing the tab to crash ("se bloquea") and consume heavy battery.
-        // We let the native MediaSession handle background continuation safely.
+        // iOS Safari aggressively pauses iframes in the background. 
+        // We try to trigger play exactly when it hides to counter the system pause.
+        if (isPlaying && youtubePlayerRef.current) {
+           try {
+              const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+              if (intPlayer && typeof intPlayer.playVideo === "function") {
+                // Staggered triggers to circumvent browser freeze state
+                setTimeout(() => intPlayer.playVideo(), 50);
+                setTimeout(() => intPlayer.playVideo(), 150);
+              } else if (intPlayer && typeof intPlayer.play === "function") {
+                setTimeout(() => intPlayer.play(), 50);
+                setTimeout(() => intPlayer.play(), 150);
+              }
+           } catch(e) {}
+        }
       }
     };
 
@@ -1125,7 +1137,6 @@ export default function GymMusicPlayer() {
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
   const wasUnexpectedlyPausedRef = useRef(false);
-  const lastPauseCounterTimeRef = useRef<number>(0);
   const playlistsLoadedInitiallyRef = useRef(false);
   
   // Intelligent gapless playback (SponsorBlock Integration)
@@ -3300,8 +3311,7 @@ export default function GymMusicPlayer() {
           playsInline
           onTimeUpdate={() => {
             const now = Date.now();
-            const interval = document.visibilityState === 'visible' ? 3000 : 15000;
-            if (now - lastSessionSyncTimeRef.current > interval) {
+            if (now - lastSessionSyncTimeRef.current > 2000) {
               lastSessionSyncTimeRef.current = now;
               if (expectedPlayingRef.current) {
                 enforceActionHandlers();
@@ -3390,30 +3400,21 @@ export default function GymMusicPlayer() {
             onPause={() => {
                if (expectedPlayingRef.current && document.hidden) {
                   wasUnexpectedlyPausedRef.current = true;
-                  
-                  // Restore background continuation correctly, but heavily throttle it 
-                  // to prevent iOS browser freezing ("se bloquea") while keeping audio session alive.
-                  const now = Date.now();
-                  if (now - lastPauseCounterTimeRef.current > 2000) {
-                     lastPauseCounterTimeRef.current = now;
-                     setTimeout(() => {
-                       if (expectedPlayingRef.current && youtubePlayerRef.current) {
-                         try {
-                           const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                           if (intPlayer && typeof intPlayer.unMute === "function") {
-                             intPlayer.unMute();
-                           }
-                           if (intPlayer && typeof intPlayer.playVideo === "function") {
-                             intPlayer.playVideo();
-                           } else if (intPlayer && typeof intPlayer.play === "function") {
-                             intPlayer.play();
-                           }
-                         } catch(e) {}
-                       }
-                     }, 200);
-                  }
-                  
-                  return; // Crucial: skip updating UI to paused so silent audio continues natively 
+                  // Immediately counter react-player pause if in background
+                  setTimeout(() => {
+                    if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                      try {
+                        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                        if (intPlayer && typeof intPlayer.playVideo === "function") {
+                          intPlayer.playVideo();
+                        } else if (intPlayer && typeof intPlayer.play === "function") {
+                          intPlayer.play();
+                        }
+                      } catch(e) {}
+                    }
+                  }, 150);
+                  // Don't update isPlaying state to false so UI doesn't visually pause
+                  return;
                }
                setIsPlaying(false);
             }}

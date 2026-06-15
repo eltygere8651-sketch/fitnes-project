@@ -8,6 +8,16 @@ import dotenv from "dotenv";
 import admin from "firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
+import cors from "cors";
+import rateLimit from "express-rate-limit";
+
+// Global Error Handlers to prevent production crashes
+process.on('uncaughtException', (err) => {
+  console.error('Critical: Uncaught Exception:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Critical: Unhandled Rejection at:', promise, 'reason:', reason);
+});
 
 // Suppress excessive youtubei.js parser warnings that trigger AI Studio error bounds
 const originalWarn = console.warn;
@@ -27,7 +37,25 @@ console.error = (...args) => {
 dotenv.config();
 
 const app = express();
+
+// Trust proxy if we are behind Vercel or other reverse proxies
+app.set('trust proxy', 1);
+
 app.use(express.json());
+app.use(cors()); // Allow cross-origin requests securely
+
+// Define basic rate limiter (protecting from DDoS/Spam)
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "Demasiadas peticiones temporales, por favor intenta en unos minutos." }
+});
+
+// Apply rate limiter specifically to the YouTube-related endpoints
+app.use('/api/youtube', apiLimiter);
+app.use('/api/oembed', apiLimiter);
 
 const PORT = 3000;
 

@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.7",
+    title: "✨ Actualización Flux v1.5.7 - Bloqueo de Pantalla Premium en Brave (iOS/Android)",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Compatibilidad Extrema Móvil: Hemos logrado que la app siga reproduciendo la música con total fluidez y el volumen reactivado aún con la pantalla bloqueada desde navegadores restrictivos como Brave en iOS (iPhone) y Android.\n• Consumo Mínimo de Batería al 100%: Esta gran optimización interna se ha llevado a cabo de manera excepcionalmente eficiente manteniendo un consumo inigualable para que tu batería permanezca cuidada y no se sobrecargue."
+  },
+  {
     id: "update-v1.5.6",
     title: "✨ Actualización Flux v1.5.6 - Correcciones de Seguridad y Estabilidad",
     category: "actualizacion",

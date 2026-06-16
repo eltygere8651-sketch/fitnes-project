@@ -1082,10 +1082,22 @@ export default function GymMusicPlayer() {
           if (youtubePlayerRef.current) {
             try {
               const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-              if (intPlayer && typeof intPlayer.playVideo === "function") {
-                intPlayer.playVideo();
-              } else if (intPlayer && typeof intPlayer.play === "function") {
-                intPlayer.play();
+              if (intPlayer && typeof intPlayer.getPlayerState === "function") {
+                const state = intPlayer.getPlayerState();
+                // Only force play if not already playing (1) or buffering (3)
+                if (state !== 1 && state !== 3) {
+                  if (typeof intPlayer.playVideo === "function") {
+                    intPlayer.playVideo();
+                  } else if (typeof intPlayer.play === "function") {
+                    intPlayer.play();
+                  }
+                }
+              } else {
+                if (intPlayer && typeof intPlayer.playVideo === "function") {
+                  intPlayer.playVideo();
+                } else if (intPlayer && typeof intPlayer.play === "function") {
+                  intPlayer.play();
+                }
               }
             } catch (err) {
               console.warn("Resync player error:", err);
@@ -3139,16 +3151,9 @@ export default function GymMusicPlayer() {
     }
   }, [position, duration, isPlaying, currentTrackIndex]);
 
-  // Ensure fallback silent audio track is in sync to preserve active audio session
-  useEffect(() => {
-    if (fallbackSilentAudioRef.current) {
-      if (isPlaying) {
-        fallbackSilentAudioRef.current.play().catch(() => {});
-      } else {
-        fallbackSilentAudioRef.current.pause();
-      }
-    }
-  }, [isPlaying]);
+  // Removed generic `isPlaying` sync for fallback audio. 
+  // We now orchestrate the silent audio track manually:
+  // It only plays during transitions or pausing to hold the background audio lock.
 
   const durationRef = useRef(duration);
   useEffect(() => {
@@ -3342,22 +3347,6 @@ export default function GymMusicPlayer() {
           playsInline
           onTimeUpdate={() => {
             const now = Date.now();
-            
-            // Ultra-aggressive Watchdog for iOS lock screen pauses
-            if (expectedPlayingRef.current && youtubePlayerRef.current) {
-              try {
-                const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                if (intPlayer && typeof intPlayer.getPlayerState === "function") {
-                  const state = intPlayer.getPlayerState();
-                  // 2 = paused, -1 = unstarted / suspended
-                  if (state === 2 || state === -1) {
-                    if (typeof intPlayer.unMute === "function") intPlayer.unMute();
-                    if (typeof intPlayer.playVideo === "function") intPlayer.playVideo();
-                    wasUnexpectedlyPausedRef.current = false;
-                  }
-                }
-              } catch(e) {}
-            }
 
             if (now - lastSessionSyncTimeRef.current > 2000) {
               lastSessionSyncTimeRef.current = now;
@@ -3417,6 +3406,10 @@ export default function GymMusicPlayer() {
               }
             }}
             onBuffer={() => {
+              // Play silent audio to hold the iOS background session while buffering
+              if (expectedPlayingRef.current && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                fallbackSilentAudioRef.current.play().catch(() => {});
+              }
               // Safeguard action handlers when playback buffers to prevent iframe override
               enforceActionHandlers();
               setTimeout(() => enforceActionHandlers(), 150);
@@ -3430,16 +3423,13 @@ export default function GymMusicPlayer() {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
                
-               // To guarantee we steal the Media Session lock back from the YouTube iframe (which fixes Bluetooth Next/Prev in cars)
-               // We must briefly assert our audio track.
-               const stealLock = () => {
-                 if (fallbackSilentAudioRef.current && expectedPlayingRef.current && fallbackSilentAudioRef.current.paused) {
-                   fallbackSilentAudioRef.current.play().catch(() => {});
-                 }
-                 enforceActionHandlers();
-               };
-               
-               stealLock();
+               // Crucial iOS backgrounding fix: The YouTube iframe must be the ONLY
+               // playing media element when the screen locks, otherwise the audio will cut.
+               if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.paused) {
+                 fallbackSilentAudioRef.current.pause();
+               }
+
+               enforceActionHandlers();
                registerMediaSession();
 
                // Crucial iOS fix: Ensure it doesn't get muted by Safari's autoplay policies when playing
@@ -3464,6 +3454,12 @@ export default function GymMusicPlayer() {
                // If we expect to be playing, never let the iframe stay paused
                if (expectedPlayingRef.current) {
                   wasUnexpectedlyPausedRef.current = true;
+                  
+                  // Grab the iOS background audio session lock back immediately
+                  if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                    fallbackSilentAudioRef.current.play().catch(() => {});
+                  }
+
                   // Immediately counter react-player pause 
                   setTimeout(() => {
                     if (expectedPlayingRef.current && youtubePlayerRef.current) {
@@ -3490,7 +3486,12 @@ export default function GymMusicPlayer() {
                }
                setIsPlaying(false);
             }}
-            onEnded={() => handleNext()}
+            onEnded={() => {
+              if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                fallbackSilentAudioRef.current.play().catch(() => {});
+              }
+              handleNext();
+            }}
             onProgress={(state) => {
               if (document.visibilityState === 'visible') {
                 setPosition(state.playedSeconds * 1000);

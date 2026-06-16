@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useFirebase } from "./FirebaseProvider";
-import { loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword } from "../lib/firebase";
+import { loginWithGoogle, loginWithEmail, signupWithEmail, resetPassword, db } from "../lib/firebase";
+import { doc, getDoc, setDoc } from "firebase/firestore";
 import { X, LogIn, Mail, Lock, Shield, Check, AlertCircle, Eye, EyeOff, UserPlus } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -100,7 +101,43 @@ export const AuthModal: React.FC = () => {
           localStorage.setItem("gym_music_remember_login", "false");
         }
       } else {
-        await signupWithEmail(cleanEmail, cleanPassword, nickname.trim());
+        const userCred = await signupWithEmail(cleanEmail, cleanPassword, nickname.trim());
+        setSuccessMsg("¡Cuenta creada con éxito! Solicitando acceso de prueba...");
+        
+        try {
+          // Send automatic trial request directly to backend
+          let fp = localStorage.getItem("flux_device_token");
+          if (!fp) {
+             fp = "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
+             localStorage.setItem("flux_device_token", fp);
+          }
+          
+          await setDoc(doc(db, "trial_requests", userCred.uid), {
+            uid: userCred.uid,
+            email: cleanEmail,
+            displayName: nickname.trim() || cleanEmail,
+            fingerprint: fp,
+            ip: "Auto_Signup",
+            status: "pending",
+            createdAt: Date.now()
+          });
+
+          const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
+          const _tgData = _tgDoc.data();
+          await fetch("/api/support/telegram-trial", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              userEmail: cleanEmail,
+              userName: nickname.trim() || cleanEmail,
+              botTokenOverride: _tgData?.botToken,
+              chatIdOverride: _tgData?.chatId
+            })
+          });
+        } catch(e) {
+          console.warn("Could not auto-request trial:", e);
+        }
+
         setSuccessMsg("¡Cuenta creada y sesión iniciada con éxito! Iniciando...");
       }
 

@@ -556,10 +556,17 @@ export default function GymMusicPlayer() {
   const [trialRequestMsg, setTrialRequestMsg] = useState<string | null>(null);
 
   const getBrowserFingerprint = () => {
+    let token = localStorage.getItem("flux_device_token");
+    if (!token) {
+      // Create a stable local device ID since Brave/Safari can randomize or block canvas fingerprinting
+      token = "dev_" + Date.now().toString(36) + "_" + Math.random().toString(36).substring(2);
+      localStorage.setItem("flux_device_token", token);
+    }
+
     try {
       const canvas = document.createElement("canvas");
       const ctx = canvas.getContext("2d");
-      if (!ctx) return "standard_device_fp";
+      if (!ctx) return token;
       ctx.textBaseline = "top";
       ctx.font = "14px 'Arial'";
       ctx.textBaseline = "alphabetic";
@@ -575,9 +582,9 @@ export default function GymMusicPlayer() {
         hash = (hash << 5) - hash + res.charCodeAt(i);
         hash |= 0;
       }
-      return "fp_" + Math.abs(hash).toString(36);
+      return "fp_" + Math.abs(hash).toString(36) + "_" + token;
     } catch (e) {
-      return "fp_fallback_" + navigator.userAgent.replace(/[^a-zA-Z0-9]/g, "");
+      return token;
     }
   };
 
@@ -761,6 +768,26 @@ export default function GymMusicPlayer() {
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showNicknameModal, setShowNicknameModal] = useState(false);
   const [nicknameInput, setNicknameInput] = useState("");
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === 'accepted') {
+        setDeferredPrompt(null);
+      }
+    }
+  };
   
   useEffect(() => {
     if (user && !authLoading) {
@@ -3315,6 +3342,23 @@ export default function GymMusicPlayer() {
           playsInline
           onTimeUpdate={() => {
             const now = Date.now();
+            
+            // Ultra-aggressive Watchdog for iOS lock screen pauses
+            if (expectedPlayingRef.current && youtubePlayerRef.current) {
+              try {
+                const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                if (intPlayer && typeof intPlayer.getPlayerState === "function") {
+                  const state = intPlayer.getPlayerState();
+                  // 2 = paused, -1 = unstarted / suspended
+                  if (state === 2 || state === -1) {
+                    if (typeof intPlayer.unMute === "function") intPlayer.unMute();
+                    if (typeof intPlayer.playVideo === "function") intPlayer.playVideo();
+                    wasUnexpectedlyPausedRef.current = false;
+                  }
+                }
+              } catch(e) {}
+            }
+
             if (now - lastSessionSyncTimeRef.current > 2000) {
               lastSessionSyncTimeRef.current = now;
               if (expectedPlayingRef.current) {
@@ -3417,9 +3461,10 @@ export default function GymMusicPlayer() {
                setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 2000);
             }}
             onPause={() => {
-               if (expectedPlayingRef.current && document.hidden) {
+               // If we expect to be playing, never let the iframe stay paused
+               if (expectedPlayingRef.current) {
                   wasUnexpectedlyPausedRef.current = true;
-                  // Immediately counter react-player pause if in background
+                  // Immediately counter react-player pause 
                   setTimeout(() => {
                     if (expectedPlayingRef.current && youtubePlayerRef.current) {
                       try {
@@ -3439,8 +3484,8 @@ export default function GymMusicPlayer() {
                         }
                       } catch(e) {}
                     }
-                  }, 150);
-                  // Don't update isPlaying state to false so UI doesn't visually pause
+                  }, 50);
+                  // Extremely important: do NOT set isPlaying(false). This caused the audio to stop on iOS.
                   return;
                }
                setIsPlaying(false);
@@ -3997,6 +4042,19 @@ export default function GymMusicPlayer() {
                         >
                           <Shield className="w-4 h-4 text-[#1ED760]" />
                           <span>Panel de Admin</span>
+                        </button>
+                      )}
+
+                      {deferredPrompt && (
+                        <button
+                          onClick={() => {
+                            handleInstallClick();
+                            setIsMembershipDropdownOpen(false);
+                          }}
+                          className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-yellow-400 hover:text-yellow-300 hover:bg-yellow-400/10 transition-colors cursor-pointer text-[11px] font-bold"
+                        >
+                          <Download className="w-4 h-4 text-yellow-400" />
+                          <span>Instalar App en el Móvil</span>
                         </button>
                       )}
 

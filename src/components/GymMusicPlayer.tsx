@@ -3076,10 +3076,10 @@ export default function GymMusicPlayer() {
     "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 
   // USE STABLE HANDLERS FOR MEDIA SESSION TO PREVENT LOCK SCREEN LAG/RE-REGISTRATION ISSUES
-  const handlersRef = useRef({ togglePlayback, handleNext, handlePrev, setIsPlaying });
+  const handlersRef = useRef({ togglePlayback, handleNext, handlePrev, setIsPlaying, volume });
   useEffect(() => {
-    handlersRef.current = { togglePlayback, handleNext, handlePrev, setIsPlaying };
-  }, [togglePlayback, handleNext, handlePrev, setIsPlaying]);
+    handlersRef.current = { togglePlayback, handleNext, handlePrev, setIsPlaying, volume };
+  }, [togglePlayback, handleNext, handlePrev, setIsPlaying, volume]);
 
   // Sync Position State with Lock Screen - THROTTLED ECO OPTIMAL
   const lastSyncTrackRef = useRef<number>(-1);
@@ -3142,10 +3142,18 @@ export default function GymMusicPlayer() {
         if (youtubePlayerRef.current) {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-            if (intPlayer && typeof intPlayer.playVideo === "function") {
-              intPlayer.playVideo();
-            } else if (intPlayer && typeof intPlayer.play === "function") {
-              intPlayer.play();
+            if (intPlayer) {
+              if (typeof intPlayer.unMute === "function") {
+                intPlayer.unMute();
+              }
+              if (typeof intPlayer.setVolume === "function") {
+                intPlayer.setVolume(handlersRef.current.volume || 100);
+              }
+              if (typeof intPlayer.playVideo === "function") {
+                intPlayer.playVideo();
+              } else if (typeof intPlayer.play === "function") {
+                intPlayer.play();
+              }
             }
           } catch (e) {}
         }
@@ -3389,6 +3397,21 @@ export default function GymMusicPlayer() {
                
                stealLock();
                registerMediaSession();
+
+               // Crucial iOS fix: Ensure it doesn't get muted by Safari's autoplay policies when playing
+               try {
+                 if (youtubePlayerRef.current) {
+                   const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                   if (intPlayer) {
+                     if (typeof intPlayer.unMute === "function") {
+                       intPlayer.unMute();
+                     }
+                     if (typeof intPlayer.setVolume === "function") {
+                       intPlayer.setVolume(handlersRef.current.volume || 100);
+                     }
+                   }
+                 }
+               } catch (e) {}
                
                setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 500);
                setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 2000);
@@ -3401,10 +3424,18 @@ export default function GymMusicPlayer() {
                     if (expectedPlayingRef.current && youtubePlayerRef.current) {
                       try {
                         const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                        if (intPlayer && typeof intPlayer.playVideo === "function") {
-                          intPlayer.playVideo();
-                        } else if (intPlayer && typeof intPlayer.play === "function") {
-                          intPlayer.play();
+                        if (intPlayer) {
+                          if (typeof intPlayer.unMute === "function") {
+                            intPlayer.unMute();
+                          }
+                          if (typeof intPlayer.setVolume === "function") {
+                            intPlayer.setVolume(handlersRef.current.volume || 100);
+                          }
+                          if (typeof intPlayer.playVideo === "function") {
+                            intPlayer.playVideo();
+                          } else if (typeof intPlayer.play === "function") {
+                            intPlayer.play();
+                          }
                         }
                       } catch(e) {}
                     }

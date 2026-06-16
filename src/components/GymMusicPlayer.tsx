@@ -1066,21 +1066,10 @@ export default function GymMusicPlayer() {
           }
         }
       } else if (document.hidden) {
-        // iOS Safari aggressively pauses iframes in the background. 
-        // We try to trigger play exactly when it hides to counter the system pause.
-        if (isPlaying && youtubePlayerRef.current) {
-           try {
-              const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-              if (intPlayer && typeof intPlayer.playVideo === "function") {
-                // Staggered triggers to circumvent browser freeze state
-                setTimeout(() => intPlayer.playVideo(), 50);
-                setTimeout(() => intPlayer.playVideo(), 150);
-              } else if (intPlayer && typeof intPlayer.play === "function") {
-                setTimeout(() => intPlayer.play(), 50);
-                setTimeout(() => intPlayer.play(), 150);
-              }
-           } catch(e) {}
-        }
+        // We removed the forced setTimeout playVideo loop because it triggers iOS/Safari's 
+        // background media execution restrictions and mutes the iframe while keeping UI "playing".
+        // Instead, the silent audio tag will sustain the Web Audio context session,
+        // and if it does get paused by iOS, the MediaSession API (lock screen) handles resumption.
       }
     };
 
@@ -2903,11 +2892,22 @@ export default function GymMusicPlayer() {
       return;
     }
 
-    const trackExists = favPlaylist.tracks.some(t => {
-      if (track.id && t.id === track.id) return true;
-      if (track.url && t.url === track.url) return true;
+    const getVid = (u?: string) => {
+      if (!u) return null;
+      const m = u.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
+      return m ? m[1] : null;
+    };
+    
+    const isMatch = (t1: any, t2: any) => {
+      if (t1.id && t2.id && t1.id === t2.id) return true;
+      if (t1.url && t2.url && t1.url === t2.url) return true;
+      const v1 = getVid(t1.url);
+      const v2 = getVid(t2.url);
+      if (v1 && v2 && v1 === v2) return true;
       return false;
-    });
+    };
+
+    const trackExists = favPlaylist.tracks.some(t => isMatch(t, track));
 
     try {
       // Use stored path if available, otherwise fallback to standard user path
@@ -2917,11 +2917,7 @@ export default function GymMusicPlayer() {
         
       if (trackExists) {
         // Filter out by both ID and URL for robustness
-        const updatedTracks = favPlaylist.tracks.filter(t => {
-          const matchId = track.id && t.id === track.id;
-          const matchUrl = track.url && t.url === track.url;
-          return !matchId && !matchUrl;
-        });
+        const updatedTracks = favPlaylist.tracks.filter(t => !isMatch(t, track));
         
         await updateDoc(plRef, {
           tracks: updatedTracks,

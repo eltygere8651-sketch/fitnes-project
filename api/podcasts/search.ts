@@ -1,5 +1,5 @@
 const podcastCache = new Map<string, { data: any, timestamp: number }>();
-const PODCAST_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
+const PODCAST_CACHE_TTL = 1000 * 60 * 15; // 15 minutes
 
 export default async function handler(req: any, res: any) {
   // Add CORS headers for Vercel
@@ -7,6 +7,9 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
   res.setHeader('Access-Control-Allow-Headers', 'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version');
+
+  // Add Cache-Control for Vercel Edge caching to keep costs zero
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -26,7 +29,7 @@ export default async function handler(req: any, res: any) {
       media: 'podcast',
       term: searchTerm,
       country: 'MX', // To ensure Spanish language podcasts are prioritized
-      limit: '30'
+      limit: '50'
     });
     const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`);
     if (!response.ok) {

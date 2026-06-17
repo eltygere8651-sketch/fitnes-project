@@ -91,9 +91,10 @@ const rssParser = new Parser();
 
 // Podcasts Cache
 const podcastCache = new Map<string, { data: any, timestamp: number }>();
-const PODCAST_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
+const PODCAST_CACHE_TTL = 1000 * 60 * 15; // 15 minutes
 
 app.get("/api/podcasts/search", async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   const term = (req.query.term as string) || "fitness, self improvement, gym";
   
   const cacheKey = term.toLowerCase().trim();
@@ -108,7 +109,7 @@ app.get("/api/podcasts/search", async (req, res) => {
       media: 'podcast',
       term: searchTerm,
       country: 'MX', // To ensure Spanish language podcasts are prioritized
-      limit: '30'
+      limit: '50'
     });
     const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`);
     if (!response.ok) {
@@ -137,6 +138,7 @@ app.get("/api/podcasts/search", async (req, res) => {
 const podcastEpisodesCache = new Map<string, { data: any, timestamp: number }>();
 
 app.get("/api/podcasts/episodes", async (req, res) => {
+  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
   const feedUrl = req.query.feedUrl as string;
   if (!feedUrl) return res.status(400).json({ error: "feedUrl is required" });
 
@@ -147,7 +149,7 @@ app.get("/api/podcasts/episodes", async (req, res) => {
 
   try {
     const feed = await rssParser.parseURL(feedUrl);
-    const episodes = (feed.items || []).slice(0, 30).map((item) => ({
+    const episodes = (feed.items || []).slice(0, 100).map((item) => ({
       id: item.guid || item.id || item.link,
       title: item.title,
       description: item.contentSnippet || item.itunes?.subtitle || "",

@@ -239,12 +239,6 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                 <Heart className="w-4 h-4" /> Favoritos
               </button>
             </div>
-            
-            {activeTab === "explore" && (
-              <p className="text-sm md:text-base text-slate-400 font-medium">
-                Explora miles de podcasts gratuitos sin anuncios para acompañar tu rutina.
-              </p>
-            )}
           </div>
 
           {activeTab === "explore" && (

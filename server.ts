@@ -86,6 +86,85 @@ app.post("/api/ai/coach", async (req, res) => {
   res.json({ reply: "Siente el ritmo. La música está lista." });
 });
 
+import Parser from "rss-parser";
+const rssParser = new Parser();
+
+// Podcasts Cache
+const podcastCache = new Map<string, { data: any, timestamp: number }>();
+const PODCAST_CACHE_TTL = 1000 * 60 * 60 * 12; // 12 hours
+
+app.get("/api/podcasts/search", async (req, res) => {
+  const term = (req.query.term as string) || "fitness, self improvement, gym";
+  
+  const cacheKey = term.toLowerCase().trim();
+  const cached = podcastCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < PODCAST_CACHE_TTL)) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const searchTerm = term.toLowerCase().includes('español') ? term : `${term} español`;
+    const query = new URLSearchParams({
+      media: 'podcast',
+      term: searchTerm,
+      country: 'MX', // To ensure Spanish language podcasts are prioritized
+      limit: '30'
+    });
+    const response = await fetch(`https://itunes.apple.com/search?${query.toString()}`);
+    if (!response.ok) {
+      throw new Error(`iTunes API Error: ${response.status}`);
+    }
+    const data = await response.json();
+    
+    const podcasts = (data.results || []).map((p: any) => ({
+      id: p.collectionId,
+      name: p.collectionName,
+      artist: p.artistName,
+      imageUrl: p.artworkUrl600 || p.artworkUrl100,
+      feedUrl: p.feedUrl,
+      genres: p.genres || []
+    }));
+
+    podcastCache.set(cacheKey, { data: podcasts, timestamp: Date.now() });
+    res.json(podcasts);
+  } catch (error) {
+    console.error("Podcast Fetch Error:", error);
+    res.status(500).json({ error: "No se pudieron obtener los podcasts." });
+  }
+});
+
+// Cache for Podcast Episodes
+const podcastEpisodesCache = new Map<string, { data: any, timestamp: number }>();
+
+app.get("/api/podcasts/episodes", async (req, res) => {
+  const feedUrl = req.query.feedUrl as string;
+  if (!feedUrl) return res.status(400).json({ error: "feedUrl is required" });
+
+  const cached = podcastEpisodesCache.get(feedUrl);
+  if (cached && (Date.now() - cached.timestamp < PODCAST_CACHE_TTL)) {
+    return res.json(cached.data);
+  }
+
+  try {
+    const feed = await rssParser.parseURL(feedUrl);
+    const episodes = (feed.items || []).slice(0, 30).map((item) => ({
+      id: item.guid || item.id || item.link,
+      title: item.title,
+      description: item.contentSnippet || item.itunes?.subtitle || "",
+      audioUrl: item.enclosure?.url,
+      duration: item.itunes?.duration,
+      pubDate: item.pubDate,
+      imageUrl: item.itunes?.image || feed.image?.url
+    })).filter(ep => ep.audioUrl); // Only include episodes with playable audio
+    
+    podcastEpisodesCache.set(feedUrl, { data: episodes, timestamp: Date.now() });
+    res.json(episodes);
+  } catch (error) {
+    console.error("RSS Parsing Error:", error);
+    res.status(500).json({ error: "No se pudieron obtener los episodios del podcast." });
+  }
+});
+
 // Fallback APIs (Invidious / Piped) for anti-block shielding (Plan B)
 const INVIDIOUS_INSTANCES = [
   "https://vid.puffyan.us",

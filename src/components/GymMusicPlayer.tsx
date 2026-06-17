@@ -21,7 +21,7 @@ import {
   Edit2,
   Trash2,
   X,
-  Loader2, Bug,
+  Loader2, Bug, Radio,
   Send,
   MessageSquare,
   Shuffle,
@@ -54,6 +54,7 @@ import {
   User,
   Library,
   FileText,
+  Tv,
 } from "lucide-react";
 import {
   collection,
@@ -86,6 +87,7 @@ import {
 } from "../lib/recommendationEngine";
 import { UserManagementAdmin } from "./UserManagementAdmin";
 import { ExploreView } from "./ExploreView";
+import { PodcastView } from "./PodcastView";
 import { UserProfileModal } from "./UserProfileModal";
 
 const COVER_THEMES = [
@@ -964,7 +966,7 @@ export default function GymMusicPlayer() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
-  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue">("search");
+  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue" | "entertainment">("search");
   const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "cola">("artwork");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
@@ -3590,6 +3592,32 @@ export default function GymMusicPlayer() {
         </button>
         <button
           onClick={() => {
+            setSearchQuery("");
+            setYoutubeResults([]);
+            setPreviewPlaylist(null);
+            setTrackListTab("entertainment");
+            setIsTrackListExpanded(true);
+            setShowLibrary(false);
+            setIsSidebarExpanded(false);
+            if (window.innerWidth < 768) {
+              setMobileView("player");
+            }
+          }}
+          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start flex items-center justify-center ${
+            trackListTab === "entertainment" && !showLibrary && !isSidebarExpanded && (window.innerWidth >= 768 || mobileView === "player")
+              ? "bg-purple-500 text-white border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+              : "bg-white/5 border-white/10 text-white hover:bg-white/10"
+          }`}
+        >
+          Podcasts
+          {Date.now() < new Date("2026-06-18T17:16:26Z").getTime() && (
+            <span className="absolute -top-1.5 -right-1 px-1 py-[1px] bg-rose-500 text-white text-[7px] font-black uppercase tracking-widest rounded shadow-lg rotate-[8deg] animate-pulse">
+              Nuevo
+            </span>
+          )}
+        </button>
+        <button
+          onClick={() => {
             if (window.innerWidth < 768) {
               setShowLibrary(false);
               if (mobileView === "playlists") {
@@ -4288,56 +4316,20 @@ export default function GymMusicPlayer() {
                         </button>
                       </div>
 
-                      {/* Center: Tabs Switcher - Centered perfectly */}
-                      <div className="flex items-center justify-center w-full min-w-0">
-                        <div className="w-full max-w-[260px] sm:max-w-[400px] flex items-center bg-[#121214]/90 border border-white/10 rounded-full p-1 tracking-wider select-none shadow-2xl">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPlayerTab("artwork");
-                          }}
-                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "artwork" ? "bg-white text-black shadow-md font-extrabold" : "text-slate-400 hover:text-white"}`}
-                        >
-                          Carátula
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPlayerTab("siguiente");
-                          }}
-                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-2 rounded-full transition-all cursor-pointer ${playerTab === "siguiente" ? "bg-[#1ED760] text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
-                        >
-                          Siguiente
-                        </button>
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setPlayerTab("cola");
-                          }}
-                          className={`flex-1 text-[9px] sm:text-[10px] font-black uppercase tracking-widest py-1.5 px-1 rounded-full transition-all cursor-pointer flex items-center justify-center gap-1.5 ${playerTab === "cola" ? "bg-white text-black font-extrabold shadow-md" : "text-slate-400 hover:text-white"}`}
-                        >
-                          <span>Cola</span>
-                          {trackQueue.length > 0 && (
-                            <span className={`text-[8.5px] px-1.5 py-[0.5px] rounded-full font-sans font-black ${playerTab === "cola" ? "bg-black text-white" : "bg-[#1ED760] text-black"}`}>
-                              {trackQueue.length}
-                            </span>
-                          )}
-                        </button>
-                        </div>
-                      </div>
+                      {/* Center: Removed Tabs Switcher to adhere to 'clean interface' request */}
+                      <div className="flex items-center justify-center w-full min-w-0" />
                       
                       {/* Right Placeholder to balance CSS Grid */}
                       <div />
                     </div>
 
                     {/* Artwork & Title centrally stacked */}
-                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-12 sm:mt-8">
+                    <div className="flex w-full min-w-0 relative flex-col items-center flex-1 justify-center mt-6 sm:mt-8">
                       <div 
                         className="flex flex-col items-center justify-center w-full flex-1 min-h-0"
                       >
 
-                        {/* Contents according to tab */}
-                        {playerTab === "artwork" && (
+                        {/* Contents according to tab (Forced Artwork always) */}
                           <div className="relative shrink-0 flex items-center justify-center min-h-0 flex-1 w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto">
                             <AnimatePresence>
                               {isPlaying && !isEcoMode && (
@@ -4358,142 +4350,6 @@ export default function GymMusicPlayer() {
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
                             </div>
                           </div>
-                        )}
-
-                        {playerTab === "siguiente" && (
-                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60  rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
-                            <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase mb-2 px-1">
-                              A continuación • {playingPlaylist?.name || "Lista actual"}
-                            </span>
-                            <div className="flex flex-col gap-1 flex-1">
-                              {displayTracks.map((track, idx) => {
-                                const isActive = !overrideCurrentTrack && currentTrackIndex === idx;
-                                return (
-                                  <div
-                                    key={`player_tab_siguiente_${track.id || idx}_${idx}`}
-                                    onClick={() => {
-                                      setOverrideCurrentTrack(null);
-                                      if (isActive) {
-                                        expectedPlayingRef.current = !isPlaying;
-                                        setIsPlaying(!isPlaying);
-                                      } else {
-                                        expectedPlayingRef.current = true;
-                                        setCurrentTrackIndex(idx);
-                                        setIsPlaying(true);
-                                      }
-                                    }}
-                                    className={`group/item flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-pointer ${
-                                      isActive 
-                                        ? `bg-white/[0.08] text-white border-l-2 border-emerald-500 shadow-sm ${!isEcoMode ? "animate-pulse" : ""}` 
-                                        : "hover:bg-white/[0.04] text-slate-300 hover:text-white"
-                                    }`}
-                                  >
-                                    <div className="w-5 shrink-0 flex items-center justify-center text-[10px] font-bold text-slate-500 font-mono">
-                                      {isActive && isPlaying ? (
-                                        <div className="flex gap-[2px] items-end h-[10px]">
-                                          {[...Array(3)].map((_, i) => (
-                                            <div
-                                              key={i}
-                                              className={`w-[1.5px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
-                                              style={{ height: "10px", transformOrigin: "bottom" }}
-                                            />
-                                          ))}
-                                        </div>
-                                      ) : (
-                                        idx + 1
-                                      )}
-                                    </div>
-                                    <div className="w-7 h-7 bg-white/5 rounded-md overflow-hidden shrink-0">
-                                      <img src={getTrackImage(track) || "/placeholder.png"} className="w-full h-full object-cover" alt="" />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className={`text-[11px] font-bold uppercase tracking-wide truncate ${isActive ? "text-emerald-400 font-extrabold" : "text-white"}`}>
-                                        {track.title}
-                                      </p>
-                                      <p className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-wider mt-0.5">
-                                        {track.artist || "Unknown Artist"}
-                                      </p>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {playerTab === "cola" && (
-                          <div className="w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] max-h-[35vh] sm:max-h-[45vh] lg:max-h-[50vh] aspect-square mb-2.5 sm:mb-4 mx-auto bg-[#0a0a0b]/60  rounded-2xl border border-white/5 p-3 overflow-y-auto premium-scrollbar flex flex-col text-left">
-                            <div className="flex items-center justify-between mb-2 px-1">
-                              <span className="text-[9px] font-black tracking-widest text-[#1ED760]/80 uppercase block">
-                                Cola de Reproducción • {trackQueue.length} Canciones
-                              </span>
-                              {trackQueue.length > 0 && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTrackQueue([]);
-                                    showNotification("Cola vaciada con éxito");
-                                  }}
-                                  className="text-[9px] font-black uppercase text-red-400 hover:text-red-300 transition-colors bg-red-500/10 hover:bg-red-500/20 px-2 py-0.5 rounded cursor-pointer"
-                                >
-                                  Vaciar
-                                </button>
-                              )}
-                            </div>
-                            <div className="flex flex-col gap-1 flex-1">
-                              {trackQueue.length === 0 ? (
-                                <div className="flex flex-col items-center justify-center p-8 text-center text-slate-500 h-full">
-                                  <ListMusic className="w-8 h-8 opacity-40 mb-2 text-slate-600 block" />
-                                  <p className="text-[11px] font-bold uppercase tracking-wider">No hay canciones en cola</p>
-                                  <p className="text-[9px] mt-1 tracking-wide normal-case text-slate-600">Puedes añadir canciones con el botón (+) en la biblioteca o explorador.</p>
-                                </div>
-                              ) : (
-                                trackQueue.map((track, idx) => {
-                                  return (
-                                    <div
-                                      key={`player_tab_cola_${track.id || idx}_${idx}`}
-                                      className="group/item flex items-center gap-2.5 p-1.5 rounded-xl transition-all cursor-default hover:bg-white/[0.04]"
-                                    >
-                                      <div className="w-5 shrink-0 text-center text-[10px] font-bold text-slate-500 font-mono">
-                                        {idx + 1}
-                                      </div>
-                                      <div className="w-7 h-7 bg-white/5 rounded-md overflow-hidden shrink-0">
-                                        <img src={getTrackImage(track) || "/placeholder.png"} className="w-full h-full object-cover" alt="" />
-                                      </div>
-                                      <div className="flex-1 min-w-0" onClick={() => {
-                                        expectedPlayingRef.current = true;
-                                        setOverrideCurrentTrack(track);
-                                        setIsPlaying(true);
-                                        setTrackQueue(prev => prev.filter((_, i) => i !== idx));
-                                        showNotification(`Reproduciendo de la cola: ${track.title}`);
-                                      }}>
-                                        <p className="text-[11px] font-bold uppercase tracking-wide truncate text-white hover:text-emerald-400 cursor-pointer">
-                                          {track.title}
-                                        </p>
-                                        <p className="text-[9px] font-medium text-slate-500 truncate uppercase tracking-wider mt-0.5">
-                                          {track.artist || "Unknown Artist"}
-                                        </p>
-                                      </div>
-                                      <button
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setTrackQueue(prev => prev.filter((_, i) => i !== idx));
-                                          showNotification(`Quitada de la cola: ${track.title}`);
-                                        }}
-                                        className="p-1 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
-                                        title="Quitar"
-                                      >
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </div>
-                                  );
-                                })
-                              )}
-                            </div>
-                          </div>
-                        )}
-
-
 
                         {/* Title details & Heart favorite button stacked horizontally */}
                         <div className="flex items-center justify-between w-full max-w-[260px] sm:max-w-[380px] lg:max-w-[460px] px-1 mb-2 sm:mb-4">
@@ -4637,8 +4493,10 @@ export default function GymMusicPlayer() {
           </div>
 
           {/* BELOW LAYOUT: PERMANENT TRACK LIST */}
-          {selectedPlaylist || trackListTab === "search" ? (
+          {selectedPlaylist || trackListTab === "search" || trackListTab === "entertainment" ? (
             <div className={`flex flex-col min-h-0 bg-black/40 flex-1 border-t border-white/5 shadow-[0_-10px_30px_rgba(0,0,0,0.4)] relative z-20 overflow-hidden transform-gpu ${!isTrackListExpanded && (selectedPlaylist || isPlaying || overrideCurrentTrack) ? 'hidden' : 'flex'}`}>
+              
+              {trackListTab !== "entertainment" && (
               <div 
                 className="w-full relative px-3 py-1.5 sm:px-4 sm:py-2 border-b border-white/5 flex flex-col shrink-0 bg-[#080809]/40"
               >
@@ -4657,7 +4515,7 @@ export default function GymMusicPlayer() {
                         <input
                           type="text"
                           placeholder={
-                            trackListTab === "playlist" ? `Buscar en ${selectedPlaylist.name || "playlist"}...` :
+                            trackListTab === "playlist" ? `Buscar en ${selectedPlaylist?.name || "playlist"}...` :
                             trackListTab === "queue" ? "¿Qué hay en la cola?" :
                             "¿Qué te apetece escuchar?..."
                           }
@@ -4700,10 +4558,30 @@ export default function GymMusicPlayer() {
                   </div>
                 </div>
               </div>
+              )}
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
                 <div className="flex-1 overflow-y-auto p-0 sm:p-0 pb-[120px] sm:pb-0 premium-scrollbar relative">
-                  {trackListTab === "search" ? (
+                  {trackListTab === "entertainment" ? (
+                    <PodcastView 
+                      isVisible={true}
+                      pauseBackgroundMusic={() => {
+                        setIsPlaying(false);
+                        expectedPlayingRef.current = false;
+                        if (youtubePlayerRef.current) {
+                          try {
+                            const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                            if (intPlayer && typeof intPlayer.pauseVideo === "function") {
+                              intPlayer.pauseVideo();
+                            }
+                          } catch (e) {}
+                        }
+                        if (fallbackSilentAudioRef.current) {
+                          fallbackSilentAudioRef.current.pause();
+                        }
+                      }}
+                    />
+                  ) : trackListTab === "search" ? (
                     <div className="space-y-1">
                       {/* Search results view */}
 
@@ -5543,6 +5421,33 @@ export default function GymMusicPlayer() {
         >
           <Compass className="w-5 h-5" />
           <span className="text-[8px] font-black uppercase tracking-widest">Explorar</span>
+        </button>
+
+        {/* Podcasts */}
+        <button 
+          onClick={() => {
+             setSelectedPlaylist(null);
+             setTrackListTab("entertainment");
+             setIsTrackListExpanded(true);
+             setMobileView("player");
+             setShowLibrary(false);
+             window.scrollTo({ top: 0, behavior: 'smooth' });
+          }}
+          className={`flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all relative ${
+            mobileView === "player" && trackListTab === "entertainment" && !selectedPlaylist && !showLibrary
+              ? "text-emerald-500 font-bold" 
+              : "text-slate-500 hover:text-emerald-400"
+          }`}
+        >
+          <div className="relative">
+            <Radio className="w-5 h-5" />
+            {Date.now() < new Date("2026-06-18T17:16:26Z").getTime() && (
+              <span className="absolute -top-1.5 -right-2 px-1 py-[1px] bg-rose-500 text-white text-[6px] font-black uppercase tracking-widest rounded rotate-[12deg] shadow-[0_0_8px_rgba(244,63,94,0.6)] z-10 animate-pulse">
+                Nuevo
+              </span>
+            )}
+          </div>
+          <span className="text-[8px] font-black uppercase tracking-widest mt-0.5">Podcasts</span>
         </button>
 
         {/* Comunidad (Second Position) */}

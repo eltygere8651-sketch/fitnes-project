@@ -123,7 +123,8 @@ app.get("/api/podcasts/search", async (req, res) => {
       artist: p.artistName,
       imageUrl: p.artworkUrl600 || p.artworkUrl100,
       feedUrl: p.feedUrl,
-      genres: p.genres || []
+      genres: p.genres || [],
+      episodeCount: p.trackCount || 0
     }));
 
     podcastCache.set(cacheKey, { data: podcasts, timestamp: Date.now() });

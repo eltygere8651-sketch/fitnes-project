@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Mic, Search, Play, Pause, Loader2, ChevronLeft, ChevronDown, Headphones, Radio, Heart, Bookmark, Library, Clock } from 'lucide-react';
+import { Mic, Search, Play, Pause, Loader2, ChevronLeft, ChevronDown, Headphones, Radio, Heart, Bookmark, Library, Clock, CheckCircle } from 'lucide-react';
 
 interface Podcast {
   id: number;
@@ -8,6 +8,7 @@ interface Podcast {
   imageUrl: string;
   feedUrl: string;
   genres: string[];
+  episodeCount?: number;
 }
 
 interface Episode {
@@ -53,6 +54,50 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
   const [savedPodcasts, setSavedPodcasts] = useState<Podcast[]>([]);
   const [likedEpisodes, setLikedEpisodes] = useState<LikedEpisode[]>([]);
   const [episodeProgress, setEpisodeProgress] = useState<Record<string, number>>({});
+  const [completedEpisodes, setCompletedEpisodes] = useState<string[]>([]);
+
+  const [audioCurrentTime, setAudioCurrentTime] = useState(0);
+  const [audioDuration, setAudioDuration] = useState(0);
+
+  const formatTime = (seconds: number) => {
+    if (!seconds || isNaN(seconds)) return "0:00";
+    const m = Math.floor(seconds / 60);
+    const s = Math.floor(seconds % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  const getDurationSeconds = (durationStr?: string | number) => {
+    if (!durationStr) return 0;
+    let totalSeconds = 0;
+    if (typeof durationStr === 'number') {
+      totalSeconds = durationStr;
+    } else if (typeof durationStr === 'string') {
+       if (durationStr.includes(':')) {
+           const parts = durationStr.split(':').map(Number);
+           if (parts.length === 3) {
+               totalSeconds = parts[0] * 3600 + parts[1] * 60 + parts[2];
+           } else if (parts.length === 2) {
+               totalSeconds = parts[0] * 60 + parts[1];
+           }
+       } else {
+           totalSeconds = parseInt(durationStr, 10);
+       }
+    }
+    return isNaN(totalSeconds) ? 0 : totalSeconds;
+  };
+
+  const formatDuration = (durationStr?: string | number) => {
+    const totalSeconds = getDurationSeconds(durationStr);
+    if (totalSeconds <= 0) return durationStr || "";
+    
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    
+    if (h > 0) {
+      return `${h} h ${m} min`;
+    }
+    return `${m} min`;
+  };
 
   // Audio player state
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
@@ -76,6 +121,9 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
       
       const ep = localStorage.getItem("gymapp_podcast_progress");
       if (ep) setEpisodeProgress(JSON.parse(ep));
+
+      const ce = localStorage.getItem("gymapp_podcast_completed");
+      if (ce) setCompletedEpisodes(JSON.parse(ce));
     } catch(e) {}
 
     // Ensure we have an audio element
@@ -88,6 +136,9 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
       let lastSave = 0;
       audio.addEventListener('timeupdate', () => {
         const current = audio.currentTime;
+        const duration = audio.duration || 0;
+        setAudioCurrentTime(current);
+        setAudioDuration(duration);
         if (current - lastSave > 5) {
           lastSave = current;
           const currentEpId = audioRef.current?.getAttribute('data-episode-id');
@@ -97,8 +148,23 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                 localStorage.setItem("gymapp_podcast_progress", JSON.stringify(updated));
                 return updated;
              });
+
+             // Auto-mark as completed if > 90% of actual audio duration
+             if (duration > 0 && current >= duration * 0.9) {
+                setCompletedEpisodes(prevce => {
+                  if (!prevce.includes(currentEpId)) {
+                    const updated = [...prevce, currentEpId];
+                    localStorage.setItem("gymapp_podcast_completed", JSON.stringify(updated));
+                    return updated;
+                  }
+                  return prevce;
+                });
+             }
           }
         }
+      });
+      audio.addEventListener('loadedmetadata', () => {
+        setAudioDuration(audio.duration || 0);
       });
 
       audioRef.current = audio;
@@ -142,7 +208,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
       const res = await fetch(`/api/podcasts/episodes?feedUrl=${encodeURIComponent(podcast.feedUrl)}`);
       if (!res.ok) throw new Error("Error obteniendo los episodios");
       const data = await res.json();
-      setEpisodes(data);
+      setEpisodes(Array.isArray(data) ? data.slice().reverse() : []);
     } catch (err: any) {
       setError("No pudimos cargar los episodios.");
     } finally {
@@ -202,6 +268,20 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
          updated = [{ episode, podcastContext: pctx, likedAt: Date.now() }, ...prev];
       }
       localStorage.setItem("gymapp_podcast_liked", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const toggleEpisodeCompleted = (episodeId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCompletedEpisodes(prev => {
+      let updated;
+      if (prev.includes(episodeId)) {
+        updated = prev.filter(id => id !== episodeId);
+      } else {
+        updated = [...prev, episodeId];
+      }
+      localStorage.setItem("gymapp_podcast_completed", JSON.stringify(updated));
       return updated;
     });
   };
@@ -304,12 +384,19 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                         >
                           <Bookmark className={`w-3 h-3 ${isSaved ? "fill-current" : ""}`} />
                         </button>
-                        <img
-                          src={podcast.imageUrl}
-                          alt={podcast.name}
-                          className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
-                          loading="lazy"
-                        />
+                        <div className="relative">
+                          <img
+                            src={podcast.imageUrl}
+                            alt={podcast.name}
+                            className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
+                            loading="lazy"
+                          />
+                          {!!podcast.episodeCount && (
+                            <span className="absolute bottom-5 right-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-300 pointer-events-none group-hover:scale-[1.02] transition-transform">
+                              {podcast.episodeCount} ePs.
+                            </span>
+                          )}
+                        </div>
                         <h3 className="font-bold text-white text-sm line-clamp-2 leading-tight mb-1 group-hover:text-emerald-400 transition-colors">
                           {podcast.name}
                         </h3>
@@ -346,12 +433,19 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                       >
                         <Bookmark className={`w-3 h-3 ${isSaved ? "fill-current" : ""}`} />
                       </button>
-                      <img
-                        src={podcast.imageUrl}
-                        alt={podcast.name}
-                        className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
-                        loading="lazy"
-                      />
+                      <div className="relative">
+                        <img
+                          src={podcast.imageUrl}
+                          alt={podcast.name}
+                          className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
+                          loading="lazy"
+                        />
+                        {!!podcast.episodeCount && (
+                          <span className="absolute bottom-5 right-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-300 pointer-events-none group-hover:scale-[1.02] transition-transform">
+                            {podcast.episodeCount} ePs.
+                          </span>
+                        )}
+                      </div>
                       <h3 className="font-bold text-white text-sm line-clamp-2 leading-tight mb-1 group-hover:text-emerald-400 transition-colors">
                         {podcast.name}
                       </h3>
@@ -377,13 +471,17 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                     const isThisPlaying = currentEpisode?.id === episode.id && isPlaying;
                     const progress = episodeProgress[episode.id];
                     const isLiked = true;
+                    const durationSeconds = getDurationSeconds(episode.duration);
+                    const isFinished = completedEpisodes.includes(episode.id) || (progress > 0 && durationSeconds > 0 && progress >= durationSeconds * 0.9);
                     return (
                       <div
                         key={episode.id}
                         className={`flex flex-col gap-2 p-3 md:p-4 rounded-2xl border transition-all ${
                           currentEpisode?.id === episode.id 
                             ? "bg-emerald-500/10 border-emerald-500/30" 
-                            : "bg-[#0b0b0d] border-transparent hover:border-white/5"
+                            : isFinished
+                              ? "bg-[#0b0b0d]/50 border-transparent hover:border-emerald-500/20 opacity-60 hover:opacity-100"
+                              : "bg-[#0b0b0d] border-transparent hover:border-white/5"
                         }`}
                       >
                         <div className="flex items-center gap-3">
@@ -411,16 +509,25 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                             <p className="text-slate-400 text-xs mb-1 line-clamp-1">{podcastContext.name}</p>
                             <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                                {episode.pubDate && <span>{new Date(episode.pubDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}</span>}
-                               {episode.duration && <span>• {episode.duration}</span>}
-                               {progress > 0 && <span className="text-emerald-500 flex items-center gap-1"><Clock className="w-3 h-3"/></span>}
+                               {episode.duration && <span>• {formatDuration(episode.duration)}</span>}
+                               {progress > 0 && !isFinished && <span className="text-emerald-500 flex items-center gap-1"><Clock className="w-3 h-3"/></span>}
                             </div>
                           </div>
-                          <button
-                            onClick={(e) => toggleLikeEpisode(episode, podcastContext, e)}
-                            className={`p-2.5 rounded-full transition-all shrink-0 ${isLiked ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-white"}`}
-                          >
-                            <Heart className={`w-5 h-5 ${isLiked ? "fill-current" : ""}`} />
-                          </button>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={(e) => toggleEpisodeCompleted(episode.id, e)}
+                              className={`p-2.5 rounded-full transition-all shrink-0 ${isFinished ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-emerald-400"}`}
+                              title={isFinished ? "Marcar como no escuchado" : "Marcar como escuchado"}
+                            >
+                              <CheckCircle className={`w-5 h-5 ${isFinished ? "fill-current" : ""}`} />
+                            </button>
+                            <button
+                              onClick={(e) => toggleLikeEpisode(episode, podcastContext, e)}
+                              className={`p-2.5 rounded-full transition-all shrink-0 ${isLiked ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-white"}`}
+                            >
+                              <Heart className={`w-5 h-5 ${isLiked ? "fill-current" : ""}`} />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center justify-between mt-1">
                             <p className="text-slate-400 text-xs line-clamp-2 md:line-clamp-1 flex-1 pr-3" dangerouslySetInnerHTML={{ __html: episode.description }} />
@@ -466,6 +573,9 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
               <h2 className="text-lg md:text-3xl font-black text-white mb-0.5 md:mb-2 line-clamp-2 leading-tight">{selectedPodcast.name}</h2>
               <p className="text-emerald-400 font-bold text-xs md:text-base mb-2 md:mb-4 line-clamp-1">{selectedPodcast.artist}</p>
               <div className="hidden sm:flex flex-wrap items-center gap-2 justify-start">
+                <span className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-semibold text-emerald-400">
+                  {episodes.length} episodios
+                </span>
                 {selectedPodcast.genres.slice(0, 3).map(g => (
                   <span key={g} className="px-3 py-1 bg-white/5 border border-white/10 rounded-lg text-xs font-semibold text-slate-300">
                     {g}
@@ -501,10 +611,14 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
              <p className="text-red-400 text-center py-10 font-bold">{error}</p>
           ) : (
             <div className="flex flex-col gap-2">
-              {episodes.map(episode => {
+              {episodes.map((episode, index) => {
                 const isThisPlaying = currentEpisode?.id === episode.id && isPlaying;
                 const progress = episodeProgress[episode.id];
                 const isLiked = likedEpisodes.some(l => l.episode.id === episode.id);
+                // Episodes are now sorted oldest to newest (1, 2, 3...)
+                const episodeNumber = index + 1;
+                const durationSeconds = getDurationSeconds(episode.duration);
+                const isFinished = completedEpisodes.includes(episode.id) || (progress > 0 && durationSeconds > 0 && progress >= durationSeconds * 0.9);
 
                 return (
                   <div
@@ -512,10 +626,15 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                     className={`flex flex-col gap-2 p-3 md:p-4 rounded-2xl border transition-all ${
                       currentEpisode?.id === episode.id 
                         ? "bg-emerald-500/10 border-emerald-500/30" 
-                        : "bg-[#0b0b0d] border-transparent hover:border-white/5"
+                        : isFinished
+                          ? "bg-[#0b0b0d]/50 border-transparent hover:border-emerald-500/20 opacity-60 hover:opacity-100"
+                          : "bg-[#0b0b0d] border-transparent hover:border-white/5"
                     }`}
                   >
                     <div className="flex items-center gap-3">
+                      <div className="text-slate-500 font-black text-lg w-6 text-center shrink-0 hidden sm:block">
+                        {episodeNumber}
+                      </div>
                       <div className="relative shrink-0 cursor-pointer" onClick={() => playEpisode(episode, selectedPodcast)}>
                         <img 
                           src={episode.imageUrl || selectedPodcast.imageUrl} 
@@ -532,6 +651,9 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                               <Play className="w-6 h-6 text-white ml-1" />
                            </div>
                         )}
+                        <span className="absolute -top-2 -left-2 bg-slate-800 text-slate-300 font-black text-[10px] w-5 h-5 rounded-full flex items-center justify-center border border-slate-700 sm:hidden">
+                          {episodeNumber}
+                        </span>
                       </div>
                       <div className="flex-1 min-w-0 cursor-pointer" onClick={() => playEpisode(episode, selectedPodcast)}>
                         <h4 className={`font-bold text-[13px] md:text-sm leading-tight line-clamp-2 mb-1 ${currentEpisode?.id === episode.id ? "text-emerald-400" : "text-white"}`}>
@@ -539,16 +661,25 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                         </h4>
                         <div className="flex items-center gap-2 text-[10px] md:text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                            {episode.pubDate && <span>{new Date(episode.pubDate).toLocaleDateString(undefined, {month: 'short', day: 'numeric', year: 'numeric'})}</span>}
-                           {episode.duration && <span>• {episode.duration}</span>}
-                           {progress > 0 && <span className="text-emerald-500 flex items-center gap-1"><Clock className="w-3 h-3"/></span>}
+                           {episode.duration && <span>• {formatDuration(episode.duration)}</span>}
+                           {progress > 0 && !isFinished && <span className="text-emerald-500 flex items-center gap-1"><Clock className="w-3 h-3"/></span>}
                         </div>
                       </div>
-                      <button
-                        onClick={(e) => toggleLikeEpisode(episode, selectedPodcast, e)}
-                        className={`p-2.5 rounded-full transition-all shrink-0 ${isLiked ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-white"}`}
-                      >
-                        <Heart className={`w-5 h-5 ${isLiked ? "fill-current" : ""}`} />
-                      </button>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={(e) => toggleEpisodeCompleted(episode.id, e)}
+                          className={`p-2.5 rounded-full transition-all shrink-0 ${isFinished ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-emerald-400"}`}
+                          title={isFinished ? "Marcar como no escuchado" : "Marcar como escuchado"}
+                        >
+                          <CheckCircle className={`w-5 h-5 ${isFinished ? "fill-current" : ""}`} />
+                        </button>
+                        <button
+                          onClick={(e) => toggleLikeEpisode(episode, selectedPodcast, e)}
+                          className={`p-2.5 rounded-full transition-all shrink-0 ${isLiked ? "text-emerald-400 bg-emerald-500/10" : "text-slate-500 hover:text-white"}`}
+                        >
+                          <Heart className={`w-5 h-5 ${isLiked ? "fill-current" : ""}`} />
+                        </button>
+                      </div>
                     </div>
                     <div className="flex items-center justify-between mt-1">
                         <p className="text-slate-400 text-xs line-clamp-2 md:line-clamp-1 flex-1 pr-3" dangerouslySetInnerHTML={{ __html: episode.description }} />
@@ -573,23 +704,42 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
 
       {/* Mini Player Fixed at bottom inside this view */}
       {currentEpisode && (
-        <div className="fixed bottom-[65px] md:bottom-0 left-1.5 md:left-[240px] right-1.5 md:right-[320px] lg:right-[380px] bg-[#111113]/95 backdrop-blur-md border border-emerald-500/30 md:border-x-0 md:border-b-0 md:border-t p-3 md:p-4 flex items-center gap-3 md:gap-4 z-[55] rounded-2xl md:rounded-none shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-          {currentEpisode.imageUrl && (
-            <img src={currentEpisode.imageUrl} className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover shadow-lg shrink-0" alt="" />
-          )}
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] md:text-xs font-bold text-emerald-400 uppercase tracking-widest mb-0.5">Escuchando Ahora</p>
-            <p className="text-white font-bold text-xs md:text-sm truncate">{currentEpisode.title}</p>
+        <div className="fixed bottom-[65px] md:bottom-0 left-1.5 md:left-[240px] right-1.5 md:right-[320px] lg:right-[380px] bg-[#111113]/95 backdrop-blur-md border border-emerald-500/30 md:border-x-0 md:border-b-0 md:border-t p-3 md:p-4 flex flex-col gap-2 z-[55] rounded-2xl md:rounded-none shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
+          <div className="flex justify-between items-center w-full gap-2 text-xs font-bold text-slate-400">
+            <span>{formatTime(audioCurrentTime)}</span>
+            <input 
+               type="range" 
+               min="0" 
+               max={audioDuration || 100} 
+               value={audioCurrentTime} 
+               onChange={(e) => {
+                 if (audioRef.current) {
+                   audioRef.current.currentTime = Number(e.target.value);
+                   setAudioCurrentTime(Number(e.target.value));
+                 }
+               }}
+               className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 cursor-pointer"
+            />
+            <span>{formatTime(audioDuration - audioCurrentTime)}</span>
           </div>
-          <button
-            onClick={() => {
-              if (isPlaying) audioRef.current?.pause();
-              else audioRef.current?.play();
-            }}
-            className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 hover:bg-emerald-400 rounded-full flex items-center justify-center text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)] shrink-0"
-          >
-            {isPlaying ? <Pause className="w-5 h-5 md:w-6 md:h-6" /> : <Play className="w-5 h-5 md:w-6 md:h-6 ml-1" />}
-          </button>
+          <div className="flex items-center gap-3 md:gap-4 w-full">
+            {currentEpisode.imageUrl && (
+              <img src={currentEpisode.imageUrl} className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover shadow-lg shrink-0" alt="" />
+            )}
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] md:text-xs font-bold text-emerald-400 uppercase tracking-widest mb-0.5">Escuchando Ahora</p>
+              <p className="text-white font-bold text-xs md:text-sm truncate">{currentEpisode.title}</p>
+            </div>
+            <button
+              onClick={() => {
+                if (isPlaying) audioRef.current?.pause();
+                else audioRef.current?.play();
+              }}
+              className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 hover:bg-emerald-400 rounded-full flex items-center justify-center text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)] shrink-0"
+            >
+              {isPlaying ? <Pause className="w-5 h-5 md:w-6 md:h-6" /> : <Play className="w-5 h-5 md:w-6 md:h-6 ml-1" />}
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { flushSync } from "react-dom";
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
@@ -548,6 +547,41 @@ const getTrackImage = (track?: MusicTrack): string | null => {
   }
   return null;
 };
+
+// Generate a 10-second true silent WAV blob to prevent CPU overload from 0s looping
+// Keeps iOS background lock without excessive CPU usage or network calls
+const createSilentAudioBlobURL = (): string => {
+  if (typeof window === "undefined") return "";
+  const sampleRate = 8000;
+  const duration = 10;
+  const numSamples = sampleRate * duration;
+  const buffer = new ArrayBuffer(44 + numSamples);
+  const view = new DataView(buffer);
+  
+  const writeString = (offset: number, string: string) => {
+    for (let i = 0; i < string.length; i++) {
+        view.setUint8(offset + i, string.charCodeAt(i));
+    }
+  };
+  
+  writeString(0, 'RIFF');
+  view.setUint32(4, 36 + numSamples, true);
+  writeString(8, 'WAVE');
+  writeString(12, 'fmt ');
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, sampleRate, true);
+  view.setUint32(28, sampleRate, true);
+  view.setUint16(32, 1, true);
+  view.setUint16(34, 8, true);
+  writeString(36, 'data');
+  view.setUint32(40, numSamples, true);
+  
+  return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
+};
+
+const silentAudioBlobSrc = createSilentAudioBlobURL();
 
 export default function GymMusicPlayer() {
   const isIOS = typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
@@ -3222,14 +3256,10 @@ export default function GymMusicPlayer() {
       };
       
       sessionHandlersRef.current.nextHandler = () => {
-        flushSync(() => {
-          handlersRef.current.handleNext();
-        });
+        handlersRef.current.handleNext();
       };
       sessionHandlersRef.current.prevHandler = () => {
-        flushSync(() => {
-          handlersRef.current.handlePrev();
-        });
+        handlersRef.current.handlePrev();
       };
       
       sessionHandlersRef.current.seekforwardHandler = () => {
@@ -3364,7 +3394,7 @@ export default function GymMusicPlayer() {
       <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
         <audio
           ref={fallbackSilentAudioRef}
-          src="data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA"
+          src={silentAudioBlobSrc}
           loop
           playsInline
           onTimeUpdate={() => {
@@ -3445,10 +3475,9 @@ export default function GymMusicPlayer() {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
                
-               // Crucial iOS backgrounding fix: The YouTube iframe must be the ONLY
-               // playing media element when the screen locks, otherwise the audio will cut.
-               if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.paused) {
-                 fallbackSilentAudioRef.current.pause();
+               // iOS Media Session fix: Parent must continue playing silent audio to retain MediaSession controls over the iframe
+               if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                 fallbackSilentAudioRef.current.play().catch(() => {});
                }
 
                enforceActionHandlers();
@@ -3522,9 +3551,7 @@ export default function GymMusicPlayer() {
               if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                 fallbackSilentAudioRef.current.play().catch(() => {});
               }
-              flushSync(() => {
-                handleNext();
-              });
+              handleNext();
             }}
             onProgress={(state) => {
               if (document.visibilityState === 'visible') {
@@ -3545,7 +3572,7 @@ export default function GymMusicPlayer() {
                 const activeSegment = segments.find(seg => played >= seg.start && played < seg.end);
                 if (activeSegment) {
                    if (durationCurrent > 0 && activeSegment.end >= durationCurrent - 3) {
-                     flushSync(() => { handleNextRef.current(); });
+                     handleNextRef.current();
                    } else {
                      youtubePlayerRef.current.seekTo(activeSegment.end, 'seconds');
                    }
@@ -3557,7 +3584,7 @@ export default function GymMusicPlayer() {
                       skipTimeoutRef.current = setTimeout(() => {
                         if (isPlayingRef.current) {
                            if (durationCurrent > 0 && nextSegment.end >= durationCurrent - 3) {
-                             flushSync(() => { handleNextRef.current(); });
+                             handleNextRef.current();
                            } else {
                              youtubePlayerRef.current?.seekTo(nextSegment.end, 'seconds');
                            }

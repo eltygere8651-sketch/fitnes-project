@@ -3425,10 +3425,12 @@ export default function GymMusicPlayer() {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
                
-               // Crucial iOS backgrounding fix: The YouTube iframe must be the ONLY
-               // playing media element when the screen locks, otherwise the audio will cut.
-               if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.paused) {
-                 fallbackSilentAudioRef.current.pause();
+               // Crucial backgrounding fix: We MUST keep the fallback invisible audio playing
+               // even while the YouTube iframe plays. This first-party <audio> tells iOS/Android
+               // to keep our JavaScript thread alive when the screen is locked, which prevents
+               // the background YouTube iframe from being suspended automatically.
+               if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                 fallbackSilentAudioRef.current.play().catch(() => {});
                }
 
                enforceActionHandlers();

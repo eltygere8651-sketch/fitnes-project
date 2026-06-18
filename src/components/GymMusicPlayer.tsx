@@ -1334,9 +1334,7 @@ export default function GymMusicPlayer() {
     expectedPlayingRef.current = nextPlaying;
     
     if (nextPlaying) {
-      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
     } else {
-      if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
     }
     
     setIsPlaying(nextPlaying);
@@ -1345,7 +1343,7 @@ export default function GymMusicPlayer() {
   const handleNext = useCallback(() => {
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-        fallbackSilentAudioRef.current.play().catch(() => {});
+      fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
     // Record skip in taste engine
@@ -1422,7 +1420,7 @@ export default function GymMusicPlayer() {
     setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-        fallbackSilentAudioRef.current.play().catch(() => {});
+      fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
     // Try to instantly update media session for fast car-screen response
@@ -3171,8 +3169,10 @@ export default function GymMusicPlayer() {
       // Define handlers that use the latest state via handlersRef to avoid stale closures, but keep references stable!
       sessionHandlersRef.current.playHandler = () => {
         expectedPlayingRef.current = true;
+        if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+          fallbackSilentAudioRef.current.play().catch(() => {});
+        }
         handlersRef.current.setIsPlaying(true);
-        if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.play().catch(() => {});
         if (youtubePlayerRef.current) {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -3195,8 +3195,8 @@ export default function GymMusicPlayer() {
       
       sessionHandlersRef.current.pauseHandler = () => {
         expectedPlayingRef.current = false;
-        handlersRef.current.setIsPlaying(false);
         if (fallbackSilentAudioRef.current) fallbackSilentAudioRef.current.pause();
+        handlersRef.current.setIsPlaying(false);
         if (youtubePlayerRef.current) {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -3376,18 +3376,12 @@ export default function GymMusicPlayer() {
             playing={isPlaying}
             volume={volume / 100}
             progressInterval={5000}
-            onError={async (e) => {
-              console.warn("ReactPlayer Error:", e);
-              // Auto-recovery mechanism when experiencing network drops
-              if (expectedPlayingRef.current && youtubePlayerRef.current) {
+            onError={async () => {
+              console.warn("ReactPlayer Error: Video might be unavailable or embed restricted");
+              if (expectedPlayingRef.current) {
                 setTimeout(() => {
-                  try {
-                    youtubePlayerRef.current.seekTo(position / 1000, "seconds");
-                    const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                    if (intPlayer && typeof intPlayer.playVideo === "function") {
-                      intPlayer.playVideo();
-                    }
-                  } catch (err) {}
+                  handleNext();
+                  showNotification("Error de YouTube (restringido), pasando a siguiente...");
                 }, 2000);
               }
             }}
@@ -3409,7 +3403,7 @@ export default function GymMusicPlayer() {
             }}
             onBuffer={() => {
               // Play silent audio to hold the iOS background session while buffering
-              if (expectedPlayingRef.current && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+              if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                 fallbackSilentAudioRef.current.play().catch(() => {});
               }
               // Safeguard action handlers when playback buffers to prevent iframe override
@@ -3429,7 +3423,7 @@ export default function GymMusicPlayer() {
                // even while the YouTube iframe plays. This first-party <audio> tells iOS/Android
                // to keep our JavaScript thread alive when the screen is locked, which prevents
                // the background YouTube iframe from being suspended automatically.
-               if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+               if (expectedPlayingRef.current && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                  fallbackSilentAudioRef.current.play().catch(() => {});
                }
 
@@ -3491,9 +3485,6 @@ export default function GymMusicPlayer() {
                setIsPlaying(false);
             }}
             onEnded={() => {
-              if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-                fallbackSilentAudioRef.current.play().catch(() => {});
-              }
               handleNext();
             }}
             onProgress={(state) => {
@@ -3542,29 +3533,6 @@ export default function GymMusicPlayer() {
                 setDuration(dur * 1000);
               }
             }}
-            config={{ 
-              youtube: { 
-                playerVars: { 
-                  origin: window.location.origin, 
-                  playsinline: 1,
-                  controls: 0,
-                  disablekb: 1,
-                  fs: 0,
-                  modestbranding: 1,
-                  rel: 0,
-                  iv_load_policy: 3,
-                  hl: 'en',
-                  vq: 'tiny'
-                } 
-              },
-              file: { 
-                forceAudio: true, 
-                attributes: { playsInline: true, id: 'native-audio' }
-              } 
-            }}
-            width="300px"
-            height="300px"
-            playsinline={true}
           />
         )}
       </div>
@@ -4577,9 +4545,6 @@ export default function GymMusicPlayer() {
                               intPlayer.pauseVideo();
                             }
                           } catch (e) {}
-                        }
-                        if (fallbackSilentAudioRef.current) {
-                          fallbackSilentAudioRef.current.pause();
                         }
                       }}
                     />

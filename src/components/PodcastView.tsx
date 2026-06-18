@@ -289,7 +289,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
   if (!isVisible) return null;
 
   return (
-    <div className="w-full h-full pb-[150px] overflow-y-auto premium-scrollbar bg-[#050505] relative flex flex-col">
+    <div className="w-full h-full bg-[#050505] relative flex flex-col overflow-hidden">
+      <div className="flex-1 overflow-y-auto premium-scrollbar pb-[150px] flex flex-col">
       {!selectedPodcast ? (
         <div className="flex flex-col gap-6 p-4 pt-6 max-w-5xl mx-auto w-full">
           {/* Header */}
@@ -701,44 +702,51 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
           )}
         </div>
       )}
+      </div>
 
-      {/* Mini Player Fixed at bottom inside this view */}
+      {/* Mini Player Absolute at bottom inside this view */}
       {currentEpisode && (
-        <div className="fixed bottom-[65px] md:bottom-0 left-1.5 md:left-[240px] right-1.5 md:right-[320px] lg:right-[380px] bg-[#111113]/95 backdrop-blur-md border border-emerald-500/30 md:border-x-0 md:border-b-0 md:border-t p-3 md:p-4 flex flex-col gap-2 z-[55] rounded-2xl md:rounded-none shadow-[0_10px_30px_rgba(0,0,0,0.8)]">
-          <div className="flex justify-between items-center w-full gap-2 text-xs font-bold text-slate-400">
-            <span>{formatTime(audioCurrentTime)}</span>
-            <input 
-               type="range" 
-               min="0" 
-               max={audioDuration || 100} 
-               value={audioCurrentTime} 
-               onChange={(e) => {
-                 if (audioRef.current) {
-                   audioRef.current.currentTime = Number(e.target.value);
-                   setAudioCurrentTime(Number(e.target.value));
-                 }
-               }}
-               className="flex-1 h-1 bg-white/10 rounded-full appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-emerald-500 cursor-pointer"
-            />
-            <span>{formatTime(audioDuration - audioCurrentTime)}</span>
+        <div className="absolute bottom-0 left-0 right-0 bg-[#111113]/98 backdrop-blur-xl border-t border-white/5 p-2 flex flex-col z-[55] shadow-[0_-20px_40px_rgba(0,0,0,0.8)]">
+          {/* Top Progress Bar for Compactness */}
+          <div className="absolute top-0 left-0 right-0 h-1 bg-white/10 group overflow-hidden">
+             <div className="absolute top-0 left-0 bottom-0 bg-emerald-500 transition-all pointer-events-none" style={{ width: `${(audioCurrentTime / (audioDuration || 1)) * 100}%` }} />
+             <input 
+                 type="range" 
+                 min="0" 
+                 max={audioDuration || 100} 
+                 value={audioCurrentTime} 
+                 onChange={(e) => {
+                   if (audioRef.current) {
+                     audioRef.current.currentTime = Number(e.target.value);
+                     setAudioCurrentTime(Number(e.target.value));
+                   }
+                 }}
+                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              />
           </div>
-          <div className="flex items-center gap-3 md:gap-4 w-full">
+          
+          <div className="flex items-center gap-3 w-full px-2 pt-1.5 pb-0.5">
             {currentEpisode.imageUrl && (
-              <img src={currentEpisode.imageUrl} className="w-10 h-10 md:w-12 md:h-12 rounded-lg object-cover shadow-lg shrink-0" alt="" />
+              <img src={currentEpisode.imageUrl} className="w-10 h-10 rounded-md object-cover shadow-lg shrink-0" alt="" />
             )}
             <div className="flex-1 min-w-0">
-              <p className="text-[10px] md:text-xs font-bold text-emerald-400 uppercase tracking-widest mb-0.5">Escuchando Ahora</p>
-              <p className="text-white font-bold text-xs md:text-sm truncate">{currentEpisode.title}</p>
+              <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">Escuchando Ahora</p>
+              <p className="text-white font-bold text-[13px] truncate leading-tight">{currentEpisode.title}</p>
             </div>
-            <button
-              onClick={() => {
-                if (isPlaying) audioRef.current?.pause();
-                else audioRef.current?.play();
-              }}
-              className="w-10 h-10 md:w-12 md:h-12 bg-emerald-500 hover:bg-emerald-400 rounded-full flex items-center justify-center text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)] shrink-0"
-            >
-              {isPlaying ? <Pause className="w-5 h-5 md:w-6 md:h-6" /> : <Play className="w-5 h-5 md:w-6 md:h-6 ml-1" />}
-            </button>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] font-bold text-slate-400 font-mono hidden sm:block">
+                {formatTime(audioCurrentTime)} / {formatTime(audioDuration)}
+              </span>
+              <button
+                onClick={() => {
+                  if (isPlaying) audioRef.current?.pause();
+                  else audioRef.current?.play();
+                }}
+                className="w-10 h-10 bg-emerald-500 hover:bg-emerald-400 rounded-full flex items-center justify-center text-white transition-colors shadow-[0_0_15px_rgba(16,185,129,0.3)] shrink-0 active:scale-95"
+              >
+                {isPlaying ? <Pause className="w-5 h-5 fill-white" /> : <Play className="w-5 h-5 fill-white ml-1" />}
+              </button>
+            </div>
           </div>
         </div>
       )}

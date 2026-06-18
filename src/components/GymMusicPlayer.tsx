@@ -3739,7 +3739,7 @@ export default function GymMusicPlayer() {
            flex-col border-r border-white/5 shrink-0 overflow-hidden 
            md:absolute md:top-0 md:bottom-0 md:w-[280px] z-[50] 
            transition-transform duration-300 ease-in-out
-           ${!isSidebarExpanded && mobileView !== "playlists" ? "md:-translate-x-full md:pointer-events-none" : "md:translate-x-0 cursor-default bg-[#050505] shadow-[10px_0_30px_rgba(0,0,0,0.8)]"}
+           ${!isSidebarExpanded ? "md:-translate-x-full md:pointer-events-none" : "md:translate-x-0 cursor-default bg-[#050505] shadow-[10px_0_30px_rgba(0,0,0,0.8)]"}
            bg-[#050505]
         `}>
             <div className="p-3 border-b border-white/[0.03] shrink-0 flex items-center justify-between w-full h-auto">
@@ -4167,7 +4167,7 @@ export default function GymMusicPlayer() {
         <div className={`${mobileView === "player" ? "flex" : "hidden md:flex"} flex-col-reverse md:flex-col flex-1 min-w-0 min-h-0 overflow-hidden bg-[#070708]`}>
             
           {/* PLAYER BAR */}
-          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
+          <div className={`${(!selectedPlaylist && !isPlaying && !overrideCurrentTrack) || trackListTab === "entertainment" ? 'hidden' : !isTrackListExpanded ? 'flex-1 p-3 pb-1 md:p-5 md:pb-3 flex flex-col justify-start items-center overflow-y-auto overflow-x-hidden' : 'hidden md:flex flex-none p-3 border-b border-white/5'} bg-[#0a0a0b]/85  border-b border-white/10 relative shrink-0 transition-all duration-500 ease-in-out z-30`}>
             
             {selectedPlaylist || overrideCurrentTrack || currentTrack ? (
               <div className="w-full flex-1 flex flex-col min-h-0">
@@ -4582,7 +4582,7 @@ export default function GymMusicPlayer() {
               )}
 
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
-                <div className="flex-1 overflow-y-auto p-0 sm:p-0 pb-[120px] sm:pb-0 premium-scrollbar relative">
+                <div className={`flex-1 ${trackListTab === "entertainment" ? 'overflow-hidden' : 'overflow-y-auto pb-[120px] sm:pb-0'} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}>
                   {trackListTab === "entertainment" ? (
                     <PodcastView 
                       isVisible={true}
@@ -5325,10 +5325,12 @@ export default function GymMusicPlayer() {
                   )}
                 </div>
 
-                <div className="px-3 py-0.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest shrink-0">
-                  <span>Total: {viewedTracks.length || 0} canciones</span>
-                  <span className="text-emerald-500/80">Flux Premium</span>
-                </div>
+                {trackListTab !== "entertainment" && (
+                  <div className="px-3 py-0.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest shrink-0">
+                    <span>Total: {viewedTracks.length || 0} canciones</span>
+                    <span className="text-emerald-500/80">Flux Premium</span>
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -5360,7 +5362,7 @@ export default function GymMusicPlayer() {
       </div>
 
       {/* Unified Spotify-Style Mobile Mini-Player (Floats above bottom-nav when track list is expanded/player minimized) */}
-      {currentTrack && isTrackListExpanded && (
+      {currentTrack && isTrackListExpanded && trackListTab !== "entertainment" && (
         <div 
           className="md:hidden fixed bottom-[65px] left-1.5 right-1.5 z-[55]"
         >
@@ -5442,33 +5444,6 @@ export default function GymMusicPlayer() {
         >
           <Compass className="w-5 h-5" />
           <span className="text-[8px] font-black uppercase tracking-widest">Explorar</span>
-        </button>
-
-        {/* Podcasts */}
-        <button 
-          onClick={() => {
-             setSelectedPlaylist(null);
-             setTrackListTab("entertainment");
-             setIsTrackListExpanded(true);
-             setMobileView("player");
-             setShowLibrary(false);
-             window.scrollTo({ top: 0, behavior: 'smooth' });
-          }}
-          className={`flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all relative ${
-            mobileView === "player" && trackListTab === "entertainment" && !selectedPlaylist && !showLibrary
-              ? "text-emerald-500 font-bold" 
-              : "text-slate-500 hover:text-emerald-400"
-          }`}
-        >
-          <div className="relative">
-            <Radio className="w-5 h-5" />
-            {Date.now() < new Date("2026-06-18T17:16:26Z").getTime() && (
-              <span className="absolute -top-1.5 -right-2 px-1 py-[1px] bg-rose-500 text-white text-[6px] font-black uppercase tracking-widest rounded rotate-[12deg] shadow-[0_0_8px_rgba(244,63,94,0.6)] z-10 animate-pulse">
-                Nuevo
-              </span>
-            )}
-          </div>
-          <span className="text-[8px] font-black uppercase tracking-widest mt-0.5">Podcasts</span>
         </button>
 
         {/* Comunidad (Second Position) */}

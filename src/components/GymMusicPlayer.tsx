@@ -552,10 +552,10 @@ const getTrackImage = (track?: MusicTrack): string | null => {
 // Keeps iOS background lock without excessive CPU usage or network calls
 const createSilentAudioBlobURL = (): string => {
   if (typeof window === "undefined") return "";
-  const sampleRate = 8000;
+  const sampleRate = 44100; // MUST be 44100Hz to prevent iOS system mixer from downsampling music quality
   const duration = 10;
   const numSamples = sampleRate * duration;
-  const buffer = new ArrayBuffer(44 + numSamples);
+  const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
   
   const writeString = (offset: number, string: string) => {
@@ -565,18 +565,18 @@ const createSilentAudioBlobURL = (): string => {
   };
   
   writeString(0, 'RIFF');
-  view.setUint32(4, 36 + numSamples, true);
+  view.setUint32(4, 36 + numSamples * 2, true);
   writeString(8, 'WAVE');
   writeString(12, 'fmt ');
   view.setUint32(16, 16, true);
-  view.setUint16(20, 1, true);
-  view.setUint16(22, 1, true);
+  view.setUint16(20, 1, true); // PCM format
+  view.setUint16(22, 1, true); // 1 channel
   view.setUint32(24, sampleRate, true);
-  view.setUint32(28, sampleRate, true);
-  view.setUint16(32, 1, true);
-  view.setUint16(34, 8, true);
+  view.setUint32(28, sampleRate * 2, true); // Byte rate
+  view.setUint16(32, 2, true); // Block align
+  view.setUint16(34, 16, true); // Bits per sample
   writeString(36, 'data');
-  view.setUint32(40, numSamples, true);
+  view.setUint32(40, numSamples * 2, true);
   
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 };

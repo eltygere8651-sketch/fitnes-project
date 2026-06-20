@@ -25,4 +25,5 @@ export interface MusicPlaylist {
   createdAt?: any;
   updatedAt?: any;
   folder?: string | null;
+  orderScore?: number;
 }

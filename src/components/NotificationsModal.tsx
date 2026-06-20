@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.8",
+    title: "✨ Actualización Flux v1.5.8 - Sincronización Playlists y Mejoras Visuales",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Sincronización Global: Las canciones añadidas a tus listas ahora se reflejan en tiempo real en todos los módulos de la interfaz, solucionando la discrepancia donde no se veían de inmediato.\n• Interfaz Móvil y Arrastre: Se perfeccionó y depuró la vista móvil ocultando controles inactivos como el botón de arrastre, garantizando un ecosistema táctil limpio sin romper las funciones de movimiento de listas."
+  },
+  {
     id: "update-v1.5.7",
     title: "✨ Actualización Flux v1.5.7 - Bloqueo de Pantalla Premium en Brave (iOS/Android)",
     category: "actualizacion",

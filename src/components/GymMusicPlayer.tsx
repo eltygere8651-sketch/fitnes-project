@@ -7008,7 +7008,7 @@ export default function GymMusicPlayer() {
                   <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
                     <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-2 block px-1">Selecciona destino</label>
                     {userPlaylists
-                      .filter(p => (p.ownerId === user?.uid || isAdmin || savedSecurityCode === "ho82788278") && p.name.toLowerCase() !== "favoritos")
+                      .filter(p => p.ownerId === user?.uid && p.name.toLowerCase() !== "favoritos")
                       .map((pl) => (
                         <button
                           key={pl.id}

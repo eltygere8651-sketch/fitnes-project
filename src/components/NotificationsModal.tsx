@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.5.9",
+    title: "✨ Actualización Flux v1.5.9 - Filtro Estricto de Biblioteca Personal",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Exclusividad de Playlists: Al añadir una canción a una playlist existente desde el modal de creación, ahora verás un filtro estricto que muestra exclusivamente tus propias playlists personales. Se solucionó el problema donde se mezclaban listas de la comunidad, garantizando una administración privada de tu biblioteca musical."
+  },
+  {
     id: "update-v1.5.8",
     title: "✨ Actualización Flux v1.5.8 - Sincronización Playlists y Mejoras Visuales",
     category: "actualizacion",

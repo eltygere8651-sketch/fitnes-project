@@ -548,11 +548,12 @@ const getTrackImage = (track?: MusicTrack): string | null => {
   return null;
 };
 
-// Generate a 10-second true silent WAV blob to prevent CPU overload from 0s looping
+// Generate a 10-second true silent WAV blob to prevent CPU overload
 // Keeps iOS background lock without excessive CPU usage or network calls
+// MUST be 44100Hz to prevent iOS system mixer from downsampling music quality
 const createSilentAudioBlobURL = (): string => {
   if (typeof window === "undefined") return "";
-  const sampleRate = 44100; // MUST be 44100Hz to prevent iOS system mixer from downsampling music quality
+  const sampleRate = 44100; 
   const duration = 10;
   const numSamples = sampleRate * duration;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
@@ -3403,8 +3404,8 @@ export default function GymMusicPlayer() {
             if (now - lastSessionSyncTimeRef.current > 2000) {
               lastSessionSyncTimeRef.current = now;
               if (expectedPlayingRef.current) {
-                enforceActionHandlers();
                 // Crucial fix: Periodically reset position state to lock out the iframe from stealing
+                // We do NOT call enforceActionHandlers() here because it causes audio micro-cuts on Bluetooth
                 if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
                   try {
                     const actualSeconds = youtubePlayerRef.current?.getCurrentTime() || (position / 1000);
@@ -3462,14 +3463,9 @@ export default function GymMusicPlayer() {
               if (expectedPlayingRef.current && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                 fallbackSilentAudioRef.current.play().catch(() => {});
               }
-              // Safeguard action handlers when playback buffers to prevent iframe override
-              enforceActionHandlers();
-              setTimeout(() => enforceActionHandlers(), 150);
-              setTimeout(() => enforceActionHandlers(), 500);
             }}
             onBufferEnd={() => {
-              // Safeguard action handlers on buffer complete
-              enforceActionHandlers();
+              // Do not recreate action handlers so it doesn't cause a micro-cut
             }}
             onPlay={() => {
                wasUnexpectedlyPausedRef.current = false;
@@ -3497,21 +3493,14 @@ export default function GymMusicPlayer() {
                    }
                  }
                } catch (e) {}
-               
-               setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 500);
-               setTimeout(() => { enforceActionHandlers(); registerMediaSession(); }, 2000);
             }}
             onPause={() => {
                // If we expect to be playing, never let the iframe stay paused
                if (expectedPlayingRef.current) {
                   wasUnexpectedlyPausedRef.current = true;
-                  
-                  // Grab the iOS background audio session lock back immediately
-                  if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-                    fallbackSilentAudioRef.current.play().catch(() => {});
-                  }
 
                   // Immediately counter react-player pause SYNCHRONOUSLY for iOS lock screen bypass
+                  // Done only once to avoid conflicting with YouTube's internal buffering state machine
                   if (expectedPlayingRef.current && youtubePlayerRef.current) {
                     try {
                       const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -3519,8 +3508,12 @@ export default function GymMusicPlayer() {
                         if (typeof intPlayer.unMute === "function") {
                           intPlayer.unMute();
                         }
+                        // Fix for iOS volume drop: force volume aggressively
                         if (typeof intPlayer.setVolume === "function") {
                           intPlayer.setVolume(handlersRef.current.volume || 100);
+                          setTimeout(() => {
+                            if (typeof intPlayer.setVolume === "function") intPlayer.setVolume(handlersRef.current.volume || 100);
+                          }, 500);
                         }
                         if (typeof intPlayer.playVideo === "function") {
                           intPlayer.playVideo();
@@ -3529,19 +3522,19 @@ export default function GymMusicPlayer() {
                         }
                       }
                     } catch(e) {}
+                    
+                    // Steal Media Session lock from YouTube AFTER it resumes 
+                    // Guarantees Bluetooth wheel controls work in Brave browser + No Micro-cuts
+                    setTimeout(() => {
+                       if (fallbackSilentAudioRef.current) {
+                         fallbackSilentAudioRef.current.pause();
+                         fallbackSilentAudioRef.current.play().catch(() => {});
+                         enforceActionHandlers();
+                         registerMediaSession();
+                       }
+                    }, 500);
                   }
 
-                  setTimeout(() => {
-                    if (expectedPlayingRef.current && youtubePlayerRef.current) {
-                      try {
-                        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                        if (intPlayer) {
-                          if (typeof intPlayer.playVideo === "function") intPlayer.playVideo();
-                          else if (typeof intPlayer.play === "function") intPlayer.play();
-                        }
-                      } catch(e) {}
-                    }
-                  }, 50);
                   // Extremely important: do NOT set isPlaying(false). This caused the audio to stop on iOS.
                   return;
                }
@@ -3582,11 +3575,14 @@ export default function GymMusicPlayer() {
                    if (nextSegment) {
                       const msUntilSkip = Math.max(0, (nextSegment.start - played) * 1000);
                       skipTimeoutRef.current = setTimeout(() => {
-                        if (isPlayingRef.current) {
-                           if (durationCurrent > 0 && nextSegment.end >= durationCurrent - 3) {
-                             handleNextRef.current();
-                           } else {
-                             youtubePlayerRef.current?.seekTo(nextSegment.end, 'seconds');
+                        if (isPlayingRef.current && youtubePlayerRef.current) {
+                           const actualSecs = youtubePlayerRef.current.getCurrentTime() || 0;
+                           if (actualSecs >= nextSegment.start - 2) {
+                              if (durationCurrent > 0 && nextSegment.end >= durationCurrent - 3) {
+                                handleNextRef.current();
+                              } else {
+                                youtubePlayerRef.current.seekTo(nextSegment.end, 'seconds');
+                              }
                            }
                         }
                       }, msUntilSkip);

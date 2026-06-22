@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.6.0",
+    title: "✨ Actualización Flux v1.6.0 - Eco-Watchdog y Solución a Cortes",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Sistema Eco-Friendly: Hemos optimizado el detector interno de fallos (Watchdog) para consumir un ~0% de batería y CPU.\n• Reproducción Ininterrumpida: En sesiones largas (1+ horas), el audio ya no se detendrá bruscamente si el navegador lo congela. El sistema lo reanuda automáticamente manteniendo la temperatura de tu móvil siempre baja."
+  },
+  {
     id: "update-v1.5.9",
     title: "✨ Actualización Flux v1.5.9 - Filtro Estricto de Biblioteca Personal",
     category: "actualizacion",

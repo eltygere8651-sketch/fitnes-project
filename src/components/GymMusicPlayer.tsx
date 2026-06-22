@@ -3631,6 +3631,67 @@ export default function GymMusicPlayer() {
     setVolume(newVol);
   };
 
+  // --- ECO-FRIENDLY WATCHDOG FOR YOUTUBE IFRAME STALLS (1-2 Hours Bug) ---
+  // Optimized to use minimal CPU and battery resources
+  const stuckBufferingTimeRef = useRef(0);
+  useEffect(() => {
+    // 15 seconds interval is extremely low frequency, virtually 0 impact on battery/CPU
+    const watchdog = setInterval(() => {
+      // Fast exit loop (nanoseconds execution if paused) to preserve battery tightly
+      if (!expectedPlayingRef.current || !youtubePlayerRef.current) {
+        stuckBufferingTimeRef.current = 0;
+        return;
+      }
+
+      try {
+        const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+        if (intPlayer && typeof intPlayer.getPlayerState === "function") {
+          const state = intPlayer.getPlayerState();
+          
+          // Estado 2: Pausado. Si el iframe se pausó solo (límite de inactividad de YouTube o suspensión del navegador)
+          if (state === 2) {
+            if (typeof intPlayer.playVideo === "function") {
+              intPlayer.playVideo();
+            }
+            stuckBufferingTimeRef.current = 0;
+          } 
+          // Estado 3: Buffering o -1: Sin empezar. A veces YouTube se queda colgado cargando infinitamente.
+          else if (state === 3 || state === -1) {
+            stuckBufferingTimeRef.current += 15000;
+            if (stuckBufferingTimeRef.current >= 30000) {
+              // Si lleva más de 30 segundos atascado en buffer, forzamos un seek minúsculo para destrabar
+              const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+              if (typeof youtubePlayerRef.current.seekTo === "function") {
+                youtubePlayerRef.current.seekTo(currentSec + 0.1, "seconds");
+              }
+              if (typeof intPlayer.playVideo === "function") {
+                intPlayer.playVideo();
+              }
+              stuckBufferingTimeRef.current = 0;
+            }
+          } 
+          // Estado 1: Reproduciendo
+          else if (state === 1) {
+            // Protección contra iOS/Browser bajando el volumen para ahorrar recursos
+            if (typeof intPlayer.isMuted === "function" && intPlayer.isMuted()) {
+               intPlayer.unMute();
+            }
+            if (typeof intPlayer.getVolume === "function" && intPlayer.getVolume() < 5) {
+               intPlayer.setVolume(handlersRef.current.volume || 100);
+            }
+            stuckBufferingTimeRef.current = 0;
+          } else {
+            stuckBufferingTimeRef.current = 0;
+          }
+        }
+      } catch (e) {
+        // Ignorar errores silenciosamente
+      }
+    }, 15000);
+    
+    return () => clearInterval(watchdog);
+  }, []);
+
   // --- DERIVED UI STATES (already defined above) ---
 
   return (

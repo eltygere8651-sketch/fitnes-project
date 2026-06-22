@@ -1621,14 +1621,48 @@ export default function GymMusicPlayer() {
   }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists, playingPlaylist, isRepeat]);
 
   const handlePrev = useCallback(() => {
-    setOverrideCurrentTrack(null);
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
-    // Try to instantly update media session for fast car-screen response
-    const activeTrack = displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
+    // 1) Si la canción lleva más de 3 segundos, lo estándar es reiniciar la canción actual.
+    // Esto previene que el iframe de YouTube se recargue innecesariamente en iOS/Brave, 
+    // lo cual evita que MediaSession corte o bloquee la reproducción al usar controles del coche.
+    if (youtubePlayerRef.current) {
+      const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
+      if (currentSec > 3) {
+        youtubePlayerRef.current.seekTo(0, "seconds");
+        setIsPlaying(true);
+        if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
+          try {
+             navigator.mediaSession.setPositionState({
+               duration: (duration || 0) / 1000,
+               playbackRate: 1,
+               position: 0
+             });
+          } catch(e) {}
+        }
+        return;
+      }
+    }
+
+    setOverrideCurrentTrack(null);
+
+    // 2) Si realmente vamos a la pista anterior, pre-calculamos cuál será
+    const tracksList = displayTracks;
+    let nextIndex = currentTrackIndex - 1;
+    if (nextIndex < 0) nextIndex = tracksList.length > 0 ? tracksList.length - 1 : 0;
+
+    if (isShuffle && tracksList.length > 1) {
+      nextIndex = Math.floor(Math.random() * tracksList.length);
+      if (nextIndex === currentTrackIndex) {
+        nextIndex = (nextIndex + 1) % tracksList.length;
+      }
+    }
+
+    // Try to instantly update media session for fast car-screen response with the *correct* incoming track
+    const activeTrack = tracksList[nextIndex] || ALL_DATABASE_TRACKS[0];
     if (activeTrack) {
       if ('mediaSession' in navigator) {
          try {
@@ -1641,41 +1675,26 @@ export default function GymMusicPlayer() {
       }
     }
 
-    if (isShuffle) {
-      const tracksList = displayTracks;
-      if (tracksList.length > 1) {
-        const currentIndex = currentTrackIndex;
-        let randomIndex = Math.floor(Math.random() * tracksList.length);
-        if (randomIndex === currentIndex) {
-          randomIndex = (randomIndex + 1) % tracksList.length;
-        }
-        setCurrentTrackIndex(randomIndex);
+    if (isShuffle && tracksList.length <= 1) {
+      // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
+      const allPlaylistsWithTracks = userPlaylists.filter(pl => pl.tracks && pl.tracks.length > 0);
+      if (allPlaylistsWithTracks.length > 0) {
+        const randomPl = allPlaylistsWithTracks[Math.floor(Math.random() * allPlaylistsWithTracks.length)];
+        setSelectedPlaylist(randomPl);
+        setPlayingPlaylist(randomPl);
+        const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
+        setCurrentTrackIndex(randTrackIdx);
       } else {
-        // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
-        const allPlaylistsWithTracks = userPlaylists.filter(pl => pl.tracks && pl.tracks.length > 0);
-        if (allPlaylistsWithTracks.length > 0) {
-          const randomPl = allPlaylistsWithTracks[Math.floor(Math.random() * allPlaylistsWithTracks.length)];
-          setSelectedPlaylist(randomPl);
-          setPlayingPlaylist(randomPl);
-          const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
-          setCurrentTrackIndex(randTrackIdx);
-        } else {
-          const randDbTrackIdx = Math.floor(Math.random() * ALL_DATABASE_TRACKS.length);
-          setCurrentTrackIndex(randDbTrackIdx);
-        }
+        const randDbTrackIdx = Math.floor(Math.random() * ALL_DATABASE_TRACKS.length);
+        setCurrentTrackIndex(randDbTrackIdx);
       }
       setIsPlaying(true);
       return;
     }
 
-    const tracksList = displayTracks;
-    if (currentTrackIndex > 0) {
-      setCurrentTrackIndex((prev) => prev - 1);
-    } else if (tracksList.length > 0) {
-      setCurrentTrackIndex(tracksList.length - 1);
-    }
+    setCurrentTrackIndex(nextIndex);
     setIsPlaying(true);
-  }, [currentTrackIndex, isShuffle, displayTracks, userPlaylists, playingPlaylist]);
+  }, [currentTrackIndex, isShuffle, displayTracks, userPlaylists, playingPlaylist, duration]);
 
   // Fetch meta for custom UI
   useEffect(() => {

@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.6.1",
+    title: "✨ Actualización Flux v1.6.1 - Fix Bluetooth iOS (Brave)",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Solucionado un error crítico (Crash) en iOS al usar el navegador Brave conectado al coche vía Bluetooth. Ahora, al presionar 'Anterior' desde el volante, la canción simplemente se reiniciará (si lleva más de 3 segundos), previniendo que el reproductor interno se bloquee mediante cargas excesivas de red."
+  },
+  {
     id: "update-v1.6.0",
     title: "✨ Actualización Flux v1.6.0 - Eco-Watchdog y Solución a Cortes",
     category: "actualizacion",

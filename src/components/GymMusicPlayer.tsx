@@ -1141,7 +1141,12 @@ export default function GymMusicPlayer() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [authCode, setAuthCode] = useState("");
   const [trackQueue, setTrackQueue] = useState<MusicTrack[]>([]);
-  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue" | "entertainment">("search");
+  const [trackListTab, setTrackListTab] = useState<"playlist" | "search" | "queue" | "entertainment">(
+    () => (localStorage.getItem("gym_music_last_tab") as any) || "search"
+  );
+  useEffect(() => {
+    localStorage.setItem("gym_music_last_tab", trackListTab);
+  }, [trackListTab]);
   const [playerTab, setPlayerTab] = useState<"artwork" | "siguiente" | "cola">("artwork");
   const trackQueueRef = useRef<MusicTrack[]>([]);
   
@@ -1409,10 +1414,93 @@ export default function GymMusicPlayer() {
     return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
+  const userPlaylistsRef = useRef<MusicPlaylist[]>([]);
+  useEffect(() => { userPlaylistsRef.current = userPlaylists; }, [userPlaylists]);
+
+  const positionRef = useRef(position);
+  useEffect(() => { positionRef.current = position; }, [position]);
+
+  // Cloud Sync (Cross-Device Playback Restore)
+  useEffect(() => {
+    if (!user) return;
+    const fetchCloudState = async () => {
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const { db } = await import("../lib/firebase");
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.playerState) {
+            const localSaveTime = parseInt(localStorage.getItem("gym_music_saved_timestamp") || "0", 10);
+            const cloudSaveTime = data.playerState.timestamp || 0;
+            
+            if (cloudSaveTime > localSaveTime) {
+              if (data.playerState.playlistId) localStorage.setItem("gym_music_last_played_playlist_id", data.playerState.playlistId);
+              if (data.playerState.trackIndex !== undefined) localStorage.setItem("gym_music_current_track_index", data.playerState.trackIndex.toString());
+              if (data.playerState.position !== undefined) localStorage.setItem("gym_music_saved_position", data.playerState.position.toString());
+              localStorage.setItem("gym_music_saved_timestamp", cloudSaveTime.toString());
+              
+              // Apply live if already loaded
+              if (playlistsLoadedInitiallyRef.current) {
+                if (data.playerState.playlistId) {
+                   const found = userPlaylistsRef.current.find(f => f.id === data.playerState.playlistId);
+                   if (found) {
+                     setPlayingPlaylist(found);
+                     setSelectedPlaylist(found);
+                   }
+                }
+                if (data.playerState.trackIndex !== undefined) setCurrentTrackIndex(data.playerState.trackIndex);
+                if (data.playerState.position !== undefined) {
+                  setPosition(data.playerState.position);
+                  if (youtubePlayerRef.current && typeof youtubePlayerRef.current.seekTo === "function") {
+                    youtubePlayerRef.current.seekTo(data.playerState.position / 1000, "seconds");
+                  }
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+    fetchCloudState();
+
+    const saveStateToCloud = async () => {
+      const plId = playingPlaylistRef.current?.id;
+      if (!plId) return;
+      const now = Date.now();
+      localStorage.setItem("gym_music_saved_timestamp", now.toString());
+      try {
+        const { updateDoc, doc } = await import("firebase/firestore");
+        const { db } = await import("../lib/firebase");
+        await updateDoc(doc(db, "users", user.uid), {
+          playerState: {
+            playlistId: plId,
+            trackIndex: currentTrackIndexRef.current,
+            position: positionRef.current,
+            timestamp: now
+          }
+        });
+      } catch(e) {}
+    };
+
+    const handleVisibility = () => {
+      if (document.hidden) saveStateToCloud();
+    };
+
+    window.addEventListener("beforeunload", saveStateToCloud);
+    document.addEventListener("visibilitychange", handleVisibility);
+    
+    return () => {
+      window.removeEventListener("beforeunload", saveStateToCloud);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [user]);
+
   useEffect(() => {
     const now = Date.now();
     if (now - lastPosSaveRef.current > 3000) {
       localStorage.setItem("gym_music_saved_position", position.toString());
+      localStorage.setItem("gym_music_saved_timestamp", now.toString());
       lastPosSaveRef.current = now;
     }
   }, [position]);
@@ -1627,22 +1715,13 @@ export default function GymMusicPlayer() {
     }
 
     // 1) Si la canción lleva más de 3 segundos, lo estándar es reiniciar la canción actual.
-    // Esto previene que el iframe de YouTube se recargue innecesariamente en iOS/Brave, 
-    // lo cual evita que MediaSession corte o bloquee la reproducción al usar controles del coche.
     if (youtubePlayerRef.current) {
       const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
       if (currentSec > 3) {
         youtubePlayerRef.current.seekTo(0, "seconds");
         setIsPlaying(true);
-        if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
-          try {
-             navigator.mediaSession.setPositionState({
-               duration: (duration || 0) / 1000,
-               playbackRate: 1,
-               position: 0
-             });
-          } catch(e) {}
-        }
+        // Do not force setPositionState to 0 manually here because it can cause a stall in Brave/Car displays
+        // We will let the interval or the next onProgress catch up to the new position automatically.
         return;
       }
     }
@@ -3503,9 +3582,6 @@ export default function GymMusicPlayer() {
               if (typeof intPlayer.unMute === "function") {
                 intPlayer.unMute();
               }
-              if (typeof intPlayer.setVolume === "function") {
-                intPlayer.setVolume(handlersRef.current.volume || 100);
-              }
               if (typeof intPlayer.playVideo === "function") {
                 intPlayer.playVideo();
               } else if (typeof intPlayer.play === "function") {
@@ -3695,9 +3771,6 @@ export default function GymMusicPlayer() {
             if (typeof intPlayer.isMuted === "function" && intPlayer.isMuted()) {
                intPlayer.unMute();
             }
-            if (typeof intPlayer.getVolume === "function" && intPlayer.getVolume() < 5) {
-               intPlayer.setVolume(handlersRef.current.volume || 100);
-            }
             stuckBufferingTimeRef.current = 0;
           } else {
             stuckBufferingTimeRef.current = 0;
@@ -3824,9 +3897,6 @@ export default function GymMusicPlayer() {
                      if (typeof intPlayer.unMute === "function") {
                        intPlayer.unMute();
                      }
-                     if (typeof intPlayer.setVolume === "function") {
-                       intPlayer.setVolume(handlersRef.current.volume || 100);
-                     }
                    }
                  }
                } catch (e) {}
@@ -3844,13 +3914,6 @@ export default function GymMusicPlayer() {
                       if (intPlayer) {
                         if (typeof intPlayer.unMute === "function") {
                           intPlayer.unMute();
-                        }
-                        // Fix for iOS volume drop: force volume aggressively
-                        if (typeof intPlayer.setVolume === "function") {
-                          intPlayer.setVolume(handlersRef.current.volume || 100);
-                          setTimeout(() => {
-                            if (typeof intPlayer.setVolume === "function") intPlayer.setVolume(handlersRef.current.volume || 100);
-                          }, 500);
                         }
                         if (typeof intPlayer.playVideo === "function") {
                           intPlayer.playVideo();

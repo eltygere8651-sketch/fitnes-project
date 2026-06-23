@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Mic, Search, Play, Pause, Loader2, ChevronLeft, ChevronDown, Headphones, Radio, Heart, Bookmark, Library, Clock, CheckCircle } from 'lucide-react';
+import { useFirebase } from "./FirebaseProvider";
+import { getDoc, setDoc, updateDoc, doc } from "firebase/firestore";
+import { db } from "../lib/firebase";
 
 interface Podcast {
   id: number;
@@ -103,12 +106,88 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
   const [currentEpisode, setCurrentEpisode] = useState<Episode | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  const { user } = useFirebase();
+  const currentEpisodeRef = useRef(currentEpisode);
+  useEffect(() => { currentEpisodeRef.current = currentEpisode; }, [currentEpisode]);
+  const activePodcastRef = useRef(selectedPodcast);
+  useEffect(() => { activePodcastRef.current = selectedPodcast; }, [selectedPodcast]);
 
   useEffect(() => {
     if (isVisible && !selectedPodcast && activeTab === "explore") {
       searchPodcasts(activeCategory);
     }
   }, [isVisible, activeCategory, activeTab]);
+
+  // Cloud Sync (Cross-Device) for Podcasts
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchCloudPodcastState = async () => {
+      try {
+        const snap = await getDoc(doc(db, "users", user.uid));
+        if (snap.exists()) {
+          const data = snap.data();
+          if (data.podcastState) {
+            const localTs = parseInt(localStorage.getItem("gymapp_podcast_timestamp") || "0", 10);
+            const cloudTs = data.podcastState.timestamp || 0;
+            if (cloudTs > localTs) {
+               localStorage.setItem("gymapp_podcast_timestamp", cloudTs.toString());
+               if (data.podcastState.episode) {
+                  localStorage.setItem("gymapp_podcast_current_episode", JSON.stringify(data.podcastState.episode));
+                  setCurrentEpisode(data.podcastState.episode);
+               }
+               if (data.podcastState.podcastContext) {
+                  localStorage.setItem("gymapp_podcast_current_context", JSON.stringify(data.podcastState.podcastContext));
+                  setSelectedPodcast(data.podcastState.podcastContext);
+               }
+               if (data.podcastState.currentTime) {
+                  setEpisodeProgress(prev => {
+                     const updated = { ...prev, [data.podcastState.episode.id]: data.podcastState.currentTime };
+                     localStorage.setItem("gymapp_podcast_progress", JSON.stringify(updated));
+                     return updated;
+                  });
+                  // If audio initialized, force time update
+                  if (audioRef.current) {
+                    audioRef.current.currentTime = data.podcastState.currentTime;
+                  }
+               }
+            }
+          }
+        }
+      } catch (e) {}
+    };
+    fetchCloudPodcastState();
+
+    const savePodcastCloudState = async () => {
+       const ep = currentEpisodeRef.current;
+       if (!ep) return;
+       const now = Date.now();
+       localStorage.setItem("gymapp_podcast_timestamp", now.toString());
+       try {
+         await updateDoc(doc(db, "users", user.uid), {
+            podcastState: {
+               episode: ep,
+               podcastContext: activePodcastRef.current,
+               currentTime: audioRef.current?.currentTime || 0,
+               timestamp: now
+            }
+         });
+       } catch(e) {}
+    };
+
+    const handleVisibility = () => {
+       if (document.hidden) savePodcastCloudState();
+    };
+
+    window.addEventListener("beforeunload", savePodcastCloudState);
+    document.addEventListener("visibilitychange", handleVisibility);
+    
+    return () => {
+       window.removeEventListener("beforeunload", savePodcastCloudState);
+       document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [user]);
 
   useEffect(() => {
     // Load persisted data
@@ -124,6 +203,13 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
 
       const ce = localStorage.getItem("gymapp_podcast_completed");
       if (ce) setCompletedEpisodes(JSON.parse(ce));
+
+      const savedCurEp = localStorage.getItem("gymapp_podcast_current_episode");
+      if (savedCurEp) setCurrentEpisode(JSON.parse(savedCurEp));
+
+      const savedCurCtx = localStorage.getItem("gymapp_podcast_current_context");
+      if (savedCurCtx) setSelectedPodcast(JSON.parse(savedCurCtx));
+
     } catch(e) {}
 
     // Ensure we have an audio element
@@ -169,12 +255,31 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
 
       audioRef.current = audio;
     }
-    return () => {
-      if (audioRef.current) {
-        audioRef.current.pause();
-      }
-    };
+    // Note: Do not pause and unmount audio globally here because PodcastView stays mounted inside GymMusicPlayer (just hidden) 
+    // unless really destroyed. Actually keeping it playing in background is fine, GymMusicPlayer handles muting.
   }, []);
+
+  // Update audio src if currentEpisode changes and isn't loaded yet
+  useEffect(() => {
+     if (currentEpisode && audioRef.current) {
+        if (audioRef.current.getAttribute('data-episode-id') !== currentEpisode.id) {
+           audioRef.current.setAttribute('data-episode-id', currentEpisode.id);
+           audioRef.current.src = currentEpisode.audioUrl;
+           
+           // Restore progress
+           const progress = episodeProgress[currentEpisode.id];
+           if (progress) {
+             const setTimeAndRemoveListener = () => {
+                 if (audioRef.current && Number.isFinite(progress)) {
+                     audioRef.current.currentTime = progress;
+                 }
+                 audioRef.current?.removeEventListener('loadedmetadata', setTimeAndRemoveListener);
+             };
+             audioRef.current.addEventListener('loadedmetadata', setTimeAndRemoveListener);
+           }
+        }
+     }
+  }, [currentEpisode, episodeProgress]);
 
   const searchPodcasts = async (query: string) => {
     setIsLoading(true);

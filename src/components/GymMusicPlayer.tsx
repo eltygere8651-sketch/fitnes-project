@@ -1383,9 +1383,6 @@ export default function GymMusicPlayer() {
       hl: 'en',
       vq: 'tiny'
     };
-    if (pendingSeekPosRef.current && pendingSeekPosRef.current > 0) {
-      vars.start = Math.floor(pendingSeekPosRef.current);
-    }
     return {
       youtube: { playerVars: vars },
       file: { forceAudio: true, attributes: { playsInline: true, id: 'native-audio' } }
@@ -1622,7 +1619,10 @@ export default function GymMusicPlayer() {
     displayTracks[currentTrackIndex] || displayTracks[0] || ALL_DATABASE_TRACKS[0];
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
   
-  const currentUrl = currentTrack.url || "";
+  const currentUrlRaw = currentTrack.url || "";
+  
+  const currentUrl = currentUrlRaw;
+  
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
   useEffect(() => {
@@ -1693,11 +1693,18 @@ export default function GymMusicPlayer() {
       setIsPlaying(true);
       setTrackQueue(trackQueueRef.current.slice(1));
       showNotification(`Siguiente en cola: ${nextTrack.title}`);
+      pendingSeekPosRef.current = null;
+      setPosition(0);
+      setDuration(0);
       return;
     }
 
     // Si la cola está vacía, limpiamos la pista forzada para volver al flujo de la lista de reproducción
     setOverrideCurrentTrack(null);
+
+    pendingSeekPosRef.current = null;
+    setPosition(0);
+    setDuration(0);
 
     if (isShuffle) {
       const tracksList = displayTracks;
@@ -1802,11 +1809,17 @@ export default function GymMusicPlayer() {
         setCurrentTrackIndex(randDbTrackIdx);
       }
       setIsPlaying(true);
+      pendingSeekPosRef.current = null;
+      setPosition(0);
+      setDuration(0);
       return;
     }
 
     setCurrentTrackIndex(nextIndex);
     setIsPlaying(true);
+    pendingSeekPosRef.current = null;
+    setPosition(0);
+    setDuration(0);
   }, [currentTrackIndex, isShuffle, displayTracks, userPlaylists, playingPlaylist, duration]);
 
   // Fetch meta for custom UI
@@ -3444,6 +3457,7 @@ export default function GymMusicPlayer() {
       } else {
         setIsLoadingTrack(true);
         setCurrentTrackIndex(trackIdx);
+        pendingSeekPosRef.current = null;
         setPosition(0);
         setDuration(0);
         setIsPlaying(true);
@@ -3451,6 +3465,7 @@ export default function GymMusicPlayer() {
     } else {
       setIsLoadingTrack(true);
       setCurrentTrackIndex(trackIdx);
+      pendingSeekPosRef.current = null;
       setPosition(0);
       setDuration(0);
       setIsPlaying(true);
@@ -3880,6 +3895,10 @@ export default function GymMusicPlayer() {
               registerMediaSession();
               enforceActionHandlers();
 
+              if (pendingSeekPosRef.current !== null && pendingSeekPosRef.current > 0) {
+                youtubePlayerRef.current?.seekTo(pendingSeekPosRef.current, "seconds");
+              }
+
               if (initialLoadRef.current) {
                 initialLoadRef.current = false;
               }
@@ -3896,7 +3915,6 @@ export default function GymMusicPlayer() {
             onPlay={() => {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
-               pendingSeekPosRef.current = null;
                
                // iOS Media Session fix: Parent must continue playing silent audio to retain MediaSession controls over the iframe
                if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
@@ -3956,9 +3974,14 @@ export default function GymMusicPlayer() {
               handleNext();
             }}
             onProgress={(state) => {
-              if (pendingSeekPosRef.current !== null && state.playedSeconds < 1) {
-                 // Ignore early progress events before the seek has actually taken effect
-                 return;
+              if (pendingSeekPosRef.current !== null && pendingSeekPosRef.current > 0) {
+                 if (state.playedSeconds < 1) {
+                    // Ignore early progress events before the seek has actually taken effect
+                    return;
+                 } else {
+                    // Seek has passed the 0-second mark reliably, we no longer need to protect against early events
+                    pendingSeekPosRef.current = null;
+                 }
               }
               const currentPosMs = state.playedSeconds * 1000;
               if (document.visibilityState === 'visible') {
@@ -5287,6 +5310,9 @@ export default function GymMusicPlayer() {
                                         bpm: 120
                                       }));
                                       setOverrideCurrentTrack(mapped[startIdx]);
+                                      pendingSeekPosRef.current = null;
+                                      setPosition(0);
+                                      setDuration(0);
                                       setIsPlaying(true);
                                       if (mapped.length > startIdx + 1) {
                                         const queue = mapped.slice(startIdx + 1);
@@ -5385,6 +5411,9 @@ export default function GymMusicPlayer() {
                                     
                                     if (currentIdx !== -1) {
                                       setOverrideCurrentTrack(allTracksOnly[currentIdx]);
+                                      pendingSeekPosRef.current = null;
+                                      setPosition(0);
+                                      setDuration(0);
                                       setIsPlaying(true);
                                       
                                       // Queue the rest of search results
@@ -5478,6 +5507,9 @@ export default function GymMusicPlayer() {
                                                 bpm: 120
                                               }));
                                               setOverrideCurrentTrack(mapped[0]);
+                                              pendingSeekPosRef.current = null;
+                                              setPosition(0);
+                                              setDuration(0);
                                               setIsPlaying(true);
                                               if (mapped.length > 1) {
                                                 const rest = mapped.slice(1);
@@ -5656,6 +5688,9 @@ export default function GymMusicPlayer() {
                                               }
                                               
                                               setOverrideCurrentTrack(finalTrack);
+                                              pendingSeekPosRef.current = null;
+                                              setPosition(0);
+                                              setDuration(0);
                                               setIsPlaying(true);
                                               showNotification(`Reproduciendo: ${subTrack.title}`);
                                             }}
@@ -5737,6 +5772,9 @@ export default function GymMusicPlayer() {
                                   }
                                   expectedPlayingRef.current = true;
                                   setOverrideCurrentTrack(track);
+                                  pendingSeekPosRef.current = null;
+                                  setPosition(0);
+                                  setDuration(0);
                                   setIsPlaying(true);
                                   setTrackQueue(prev => prev.filter((_, i) => i !== idx));
                                   showNotification(`Reproduciendo: ${track.title}`);
@@ -5839,6 +5877,9 @@ export default function GymMusicPlayer() {
                                   expectedPlayingRef.current = true;
                                   setPlayingPlaylist(selectedPlaylist);
                                   setCurrentTrackIndex(idx);
+                                  pendingSeekPosRef.current = null;
+                                  setPosition(0);
+                                  setDuration(0);
                                   setIsPlaying(true);
                                 }
                               }}

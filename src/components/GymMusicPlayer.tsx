@@ -1366,7 +1366,17 @@ export default function GymMusicPlayer() {
   const wasUnexpectedlyPausedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
   
-  // Intelligent gapless playback (SponsorBlock Integration)
+  const pendingSeekPosRef = useRef<number | null>(null);
+  
+  // Set initial seek from localStorage once on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const savedPos = localStorage.getItem("gym_music_saved_position");
+      if (savedPos) {
+        pendingSeekPosRef.current = Number(savedPos) / 1000;
+      }
+    }
+  }, []);
   const sponsorBlockSegmentsRef = useRef<{start: number, end: number, actionType: string}[]>([]);
   const skipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -3588,9 +3598,6 @@ export default function GymMusicPlayer() {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
             if (intPlayer) {
-              if (typeof intPlayer.unMute === "function") {
-                intPlayer.unMute();
-              }
               if (typeof intPlayer.playVideo === "function") {
                 intPlayer.playVideo();
               } else if (typeof intPlayer.play === "function") {
@@ -3773,14 +3780,6 @@ export default function GymMusicPlayer() {
               }
               stuckBufferingTimeRef.current = 0;
             }
-          } 
-          // Estado 1: Reproduciendo
-          else if (state === 1) {
-            // Protección contra iOS/Browser bajando el volumen para ahorrar recursos
-            if (typeof intPlayer.isMuted === "function" && intPlayer.isMuted()) {
-               intPlayer.unMute();
-            }
-            stuckBufferingTimeRef.current = 0;
           } else {
             stuckBufferingTimeRef.current = 0;
           }
@@ -3890,6 +3889,13 @@ export default function GymMusicPlayer() {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
                
+               if (pendingSeekPosRef.current !== null && pendingSeekPosRef.current > 0) {
+                 if (youtubePlayerRef.current) {
+                   youtubePlayerRef.current.seekTo(pendingSeekPosRef.current, "seconds");
+                 }
+                 setTimeout(() => { pendingSeekPosRef.current = null; }, 1000);
+               }
+               
                // iOS Media Session fix: Parent must continue playing silent audio to retain MediaSession controls over the iframe
                if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                  fallbackSilentAudioRef.current.play().catch(() => {});
@@ -3902,11 +3908,6 @@ export default function GymMusicPlayer() {
                try {
                  if (youtubePlayerRef.current) {
                    const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                   if (intPlayer) {
-                     if (typeof intPlayer.unMute === "function") {
-                       intPlayer.unMute();
-                     }
-                   }
                  }
                } catch (e) {}
             }}
@@ -3921,9 +3922,6 @@ export default function GymMusicPlayer() {
                     try {
                       const intPlayer = youtubePlayerRef.current.getInternalPlayer();
                       if (intPlayer) {
-                        if (typeof intPlayer.unMute === "function") {
-                          intPlayer.unMute();
-                        }
                         if (typeof intPlayer.playVideo === "function") {
                           intPlayer.playVideo();
                         } else if (typeof intPlayer.play === "function") {
@@ -3956,6 +3954,10 @@ export default function GymMusicPlayer() {
               handleNext();
             }}
             onProgress={(state) => {
+              if (pendingSeekPosRef.current !== null && state.playedSeconds < 1) {
+                 // Ignore early progress events before the seek has actually taken effect
+                 return;
+              }
               const currentPosMs = state.playedSeconds * 1000;
               if (document.visibilityState === 'visible') {
                 setPosition(currentPosMs);

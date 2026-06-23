@@ -266,8 +266,18 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
            audioRef.current.setAttribute('data-episode-id', currentEpisode.id);
            audioRef.current.src = currentEpisode.audioUrl;
            
-           // Restore progress
-           const progress = episodeProgress[currentEpisode.id];
+           // Restore progress from local storage instantly
+           let progress = episodeProgress[currentEpisode.id];
+           if (!progress) {
+             try {
+               const saved = localStorage.getItem("gymapp_podcast_progress");
+               if (saved) {
+                 const parsed = JSON.parse(saved);
+                 progress = parsed[currentEpisode.id];
+               }
+             } catch(e){}
+           }
+           
            if (progress) {
              const setTimeAndRemoveListener = () => {
                  if (audioRef.current && Number.isFinite(progress)) {
@@ -279,7 +289,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
            }
         }
      }
-  }, [currentEpisode, episodeProgress]);
+  }, [currentEpisode]);
 
   const searchPodcasts = async (query: string) => {
     setIsLoading(true);

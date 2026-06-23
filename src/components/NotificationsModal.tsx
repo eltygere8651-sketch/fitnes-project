@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.6.2",
+    title: "✨ Actualización Flux v1.6.2 - Corrección de Reanudación",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Reanudación Instantánea: Hemos solucionado el problema que causaba que la música se quedara congelada o atascada un par de segundos al volver a abrir o recargar la aplicación e intentar continuar escuchando. Ahora la reproducción se reanuda desde el punto donde la dejaste de forma fluida, directa y sin tirones, manteniendo el rendimiento eco de la batería."
+  },
+  {
     id: "update-v1.6.1",
     title: "✨ Actualización Flux v1.6.1 - Fix Bluetooth iOS (Brave)",
     category: "actualizacion",

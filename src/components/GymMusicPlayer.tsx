@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { Carousel } from "./Carousel";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
@@ -1366,17 +1366,32 @@ export default function GymMusicPlayer() {
   const wasUnexpectedlyPausedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
   
-  const pendingSeekPosRef = useRef<number | null>(null);
+  const pendingSeekPosRef = useRef<number | null>(
+    typeof window !== 'undefined' && localStorage.getItem("gym_music_saved_position") ? Number(localStorage.getItem("gym_music_saved_position")) / 1000 : null
+  );
   
-  // Set initial seek from localStorage once on mount
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedPos = localStorage.getItem("gym_music_saved_position");
-      if (savedPos) {
-        pendingSeekPosRef.current = Number(savedPos) / 1000;
-      }
+  const reactPlayerConfig = useMemo(() => {
+    const vars: any = {
+      origin: typeof window !== 'undefined' ? window.location.origin : '', 
+      playsinline: 1,
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      modestbranding: 1,
+      rel: 0,
+      iv_load_policy: 3,
+      hl: 'en',
+      vq: 'tiny'
+    };
+    if (pendingSeekPosRef.current && pendingSeekPosRef.current > 0) {
+      vars.start = Math.floor(pendingSeekPosRef.current);
     }
+    return {
+      youtube: { playerVars: vars },
+      file: { forceAudio: true, attributes: { playsInline: true, id: 'native-audio' } }
+    };
   }, []);
+  
   const sponsorBlockSegmentsRef = useRef<{start: number, end: number, actionType: string}[]>([]);
   const skipTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -3866,13 +3881,6 @@ export default function GymMusicPlayer() {
               enforceActionHandlers();
 
               if (initialLoadRef.current) {
-                const savedPos = localStorage.getItem("gym_music_saved_position");
-                if (savedPos) {
-                  const posInSecs = Number(savedPos) / 1000;
-                  if (posInSecs > 0) {
-                      player.seekTo(posInSecs, "seconds");
-                  }
-                }
                 initialLoadRef.current = false;
               }
             }}
@@ -3888,13 +3896,7 @@ export default function GymMusicPlayer() {
             onPlay={() => {
                wasUnexpectedlyPausedRef.current = false;
                setIsPlaying(true);
-               
-               if (pendingSeekPosRef.current !== null && pendingSeekPosRef.current > 0) {
-                 if (youtubePlayerRef.current) {
-                   youtubePlayerRef.current.seekTo(pendingSeekPosRef.current, "seconds");
-                 }
-                 setTimeout(() => { pendingSeekPosRef.current = null; }, 1000);
-               }
+               pendingSeekPosRef.current = null;
                
                // iOS Media Session fix: Parent must continue playing silent audio to retain MediaSession controls over the iframe
                if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
@@ -4017,26 +4019,7 @@ export default function GymMusicPlayer() {
                 setDuration(dur * 1000);
               }
             }}
-            config={{ 
-              youtube: { 
-                playerVars: { 
-                  origin: window.location.origin, 
-                  playsinline: 1,
-                  controls: 0,
-                  disablekb: 1,
-                  fs: 0,
-                  modestbranding: 1,
-                  rel: 0,
-                  iv_load_policy: 3,
-                  hl: 'en',
-                  vq: 'tiny'
-                } 
-              },
-              file: { 
-                forceAudio: true, 
-                attributes: { playsInline: true, id: 'native-audio' }
-              } 
-            }}
+            config={reactPlayerConfig}
             width="300px"
             height="300px"
             playsinline={true}

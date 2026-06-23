@@ -1321,7 +1321,13 @@ export default function GymMusicPlayer() {
     volumeRef.current = volume;
     localStorage.setItem("gym_music_volume", volume.toString());
   }, [volume]);
-  const [position, setPosition] = useState(0);
+  const [position, setPosition] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem("gym_music_saved_position");
+      return saved ? parseInt(saved, 10) : 0;
+    }
+    return 0;
+  });
   const [duration, setDuration] = useState(0);
   const [isShuffle, setIsShuffle] = useState(() => {
     const saved = localStorage.getItem("gym_music_is_shuffle");
@@ -1469,6 +1475,9 @@ export default function GymMusicPlayer() {
       if (!plId) return;
       const now = Date.now();
       localStorage.setItem("gym_music_saved_timestamp", now.toString());
+      localStorage.setItem("gym_music_last_played_playlist_id", plId);
+      localStorage.setItem("gym_music_current_track_index", currentTrackIndexRef.current.toString());
+      localStorage.setItem("gym_music_saved_position", positionRef.current.toString());
       try {
         const { updateDoc, doc } = await import("firebase/firestore");
         const { db } = await import("../lib/firebase");
@@ -1786,6 +1795,10 @@ export default function GymMusicPlayer() {
     }
   }, [currentTrack, currentUrl]);
 
+  const pendingRestoreRef = useRef<string | null>(
+    typeof window !== 'undefined' ? (localStorage.getItem("gym_music_last_played_playlist_id") || localStorage.getItem("gym_music_selected_playlist_id")) : null
+  );
+
   const communityDocsRef = useRef<any[]>([]);
   const userDocsRef = useRef<any[]>([]);
 
@@ -1875,37 +1888,34 @@ export default function GymMusicPlayer() {
 
       setUserPlaylists(sortedFolders);
       
-      if (!playlistsLoadedInitiallyRef.current && folders.length > 0) {
-        const savedPlaylistId = localStorage.getItem("gym_music_selected_playlist_id");
-        const lastPlayedPlId = localStorage.getItem("gym_music_last_played_playlist_id");
-        
-        let foundSelected = savedPlaylistId ? folders.find((f) => f.id === savedPlaylistId) : null;
-        let foundPlaying = lastPlayedPlId ? folders.find((f) => f.id === lastPlayedPlId) : null;
-        
-        setSelectedPlaylist(null);
-        setTrackListTab("search");
-        setIsTrackListExpanded(true);
-        setMobileView("player");
-        
-        if (foundPlaying) setPlayingPlaylist(foundPlaying);
-        else if (foundSelected) setPlayingPlaylist(foundSelected);
-        else setPlayingPlaylist(null);
-        
-        playlistsLoadedInitiallyRef.current = true;
-      } else if (playlistsLoadedInitiallyRef.current) {
-        const currentSelected = selectedPlaylistRef.current;
-        const currentPlaying = playingPlaylistRef.current;
-        const currentTrackIdx = currentTrackIndexRef.current;
-
-        if (currentSelected) {
-          const updatedSelected = folders.find((f) => f.id === currentSelected.id);
-          if (updatedSelected) {
-            const tracksSame = currentSelected.tracks?.length === updatedSelected.tracks?.length && 
-                               currentSelected.tracks?.every((t:any, i:number) => (t.id && t.id === updatedSelected.tracks[i]?.id) || (t.url && t.url === updatedSelected.tracks[i]?.url));
-            const metadataSame = currentSelected.name === updatedSelected.name && currentSelected.thumbnail_url === updatedSelected.thumbnail_url;
-            if (!tracksSame || !metadataSame) setSelectedPlaylist(updatedSelected);
+      // Attempt seamless state restore
+      if (pendingRestoreRef.current && (!selectedPlaylistRef.current && !playingPlaylistRef.current)) {
+        let found = folders.find((f) => f.id === pendingRestoreRef.current);
+        if (found) {
+          setPlayingPlaylist(found);
+          setSelectedPlaylist(found);
+          const lastTab = localStorage.getItem("gym_music_last_tab");
+          if (lastTab !== "entertainment") {
+            setTrackListTab("playlist");
           }
+          setMobileView("player");
+          pendingRestoreRef.current = null;
         }
+      }
+
+      const currentSelected = selectedPlaylistRef.current;
+      const currentPlaying = playingPlaylistRef.current;
+      const currentTrackIdx = currentTrackIndexRef.current;
+
+      if (currentSelected) {
+        const updatedSelected = folders.find((f) => f.id === currentSelected.id);
+        if (updatedSelected) {
+          const tracksSame = currentSelected.tracks?.length === updatedSelected.tracks?.length && 
+                             currentSelected.tracks?.every((t:any, i:number) => (t.id && t.id === updatedSelected.tracks[i]?.id) || (t.url && t.url === updatedSelected.tracks[i]?.url));
+          const metadataSame = currentSelected.name === updatedSelected.name && currentSelected.thumbnail_url === updatedSelected.thumbnail_url;
+          if (!tracksSame || !metadataSame) setSelectedPlaylist(updatedSelected);
+        }
+      }
 
         if (currentPlaying) {
           const updatedPlaying = folders.find((f) => f.id === currentPlaying.id);
@@ -1940,7 +1950,6 @@ export default function GymMusicPlayer() {
               }
             }
           }
-        }
       }
     };
 
@@ -3947,8 +3956,19 @@ export default function GymMusicPlayer() {
               handleNext();
             }}
             onProgress={(state) => {
+              const currentPosMs = state.playedSeconds * 1000;
               if (document.visibilityState === 'visible') {
-                setPosition(state.playedSeconds * 1000);
+                setPosition(currentPosMs);
+              }
+              
+              // Persist locally for seamless restoration, even if backgrounded, throttle to once every 5s
+              if (currentPosMs > 0 && Math.abs(currentPosMs - (positionRef.current || 0)) > 5000) {
+                 positionRef.current = currentPosMs;
+                 localStorage.setItem("gym_music_saved_position", currentPosMs.toString());
+                 if (playingPlaylistRef.current) {
+                   localStorage.setItem("gym_music_last_played_playlist_id", playingPlaylistRef.current.id);
+                   localStorage.setItem("gym_music_current_track_index", currentTrackIndexRef.current.toString());
+                 }
               }
               
               // Intelligent gapless logic: checking for silences/outros/intros using crowdsourced segments

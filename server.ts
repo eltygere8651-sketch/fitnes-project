@@ -1,5 +1,4 @@
 import express from "express";
-import youtubedl from 'youtube-dl-exec';
 import path from "path";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";

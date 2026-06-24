@@ -79,6 +79,23 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
     }
   };
 
+  const deleteActiveAnnouncement = async () => {
+    try {
+      const { query, collection, orderBy, limit, getDocs, updateDoc } = await import("firebase/firestore");
+      const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
+      const snap = await getDocs(q);
+      if (!snap.empty) {
+        await updateDoc(snap.docs[0].ref, { active: false });
+        alert("El comunicado activo ha sido eliminado y ocultado de los usuarios (Refresca la app para ver los cambios).");
+      } else {
+        alert("No hay ningún comunicado activo reciente para eliminar.");
+      }
+    } catch(err) {
+      console.error(err);
+      alert("Error eliminando comunicado");
+    }
+  };
+
   useEffect(() => {
     fetchUsers();
     fetchRequests();
@@ -1019,6 +1036,12 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                 >
                   <Send className="w-3.5 h-3.5" />
                   {isPublishing ? "Publicando Aviso..." : "Publicar Comunicado para Todos"}
+                </button>
+                <button
+                  onClick={deleteActiveAnnouncement}
+                  className="w-full py-2.5 bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/20 text-[10px] font-black uppercase tracking-widest rounded-xl transition-all cursor-pointer flex items-center justify-center mt-2"
+                >
+                  X Eliminar Comunicado Activo de Prueba
                 </button>
               </div>
             </div>

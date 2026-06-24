@@ -1304,15 +1304,20 @@ app.get("/api/system/health", async (req, res) => {
   
   // Check Main Library (Innertube)
   try {
-    if (!yt) {
-       yt = await Innertube.create({ generate_session_locally: true });
-    }
-    const searchRes = await yt.search("lofi", { type: "video" });
-    if (searchRes && searchRes.results && searchRes.results.length > 0) {
-       mainLibraryStatus = "online";
-    } else {
-       mainLibraryStatus = "error";
-    }
+    const checkYT = async () => {
+      if (!yt) {
+         yt = await Innertube.create({ generate_session_locally: true });
+      }
+      const searchRes = await yt.search("lofi", { type: "video" });
+      if (searchRes && searchRes.results && searchRes.results.length > 0) {
+         return "online";
+      } else {
+         return "error";
+      }
+    };
+    
+    const timeoutPromise = new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 6000));
+    mainLibraryStatus = await Promise.race([checkYT(), timeoutPromise]);
   } catch (e) {
     console.error("Health check main library error:", e);
     mainLibraryStatus = "offline";

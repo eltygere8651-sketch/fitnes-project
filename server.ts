@@ -169,14 +169,14 @@ app.get("/api/podcasts/episodes", async (req, res) => {
 
 // Fallback APIs (Invidious / Piped) for anti-block shielding (Plan B)
 const INVIDIOUS_INSTANCES = [
-  "https://vid.puffyan.us",
-  "https://invidious.jing.rocks",
-  "https://inv.tux.pizza"
+  "https://invidious.snopyta.org",
+  "https://inv.riverside.rocks",
+  "https://vid.puffyan.us"
 ];
 const PIPED_INSTANCES = [
-  "https://pipedapi.kavin.rocks",
-  "https://pipedapi.tokhmi.xyz", 
-  "https://pipedapi.smnz.de"
+  "https://api.piped.projectsegfau.lt",
+  "https://pipedapi.in.projectsegfau.lt",
+  "https://pipedapi.lunar.icu"
 ];
 
 // YouTube Search Cache (Eco-Friendly)
@@ -1297,7 +1297,53 @@ app.post("/api/support/telegram-trial", async (req, res) => {
   }
 });
 
+// System Health API (Admin Monitor)
+app.get("/api/system/health", async (req, res) => {
+  let mainLibraryStatus = "unknown";
+  let planBStatus = "unknown";
+  
+  // Check Main Library (Innertube)
+  try {
+    if (!yt) {
+       yt = await Innertube.create({ generate_session_locally: true });
+    }
+    const searchRes = await yt.search("lofi", { type: "video" });
+    if (searchRes && searchRes.results && searchRes.results.length > 0) {
+       mainLibraryStatus = "online";
+    } else {
+       mainLibraryStatus = "error";
+    }
+  } catch (e) {
+    console.error("Health check main library error:", e);
+    mainLibraryStatus = "offline";
+  }
 
+  // Check Plan B (Piped)
+  planBStatus = "offline";
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
+      const response = await fetch(`${instance}/trending?region=US`, { 
+        method: "GET",
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      if (response.ok) {
+        planBStatus = "online";
+        break; // found one working
+      }
+    } catch (e) {
+      // try next
+    }
+  }
+
+  res.json({
+    mainLibrary: mainLibraryStatus,
+    planB: planBStatus,
+    timestamp: Date.now()
+  });
+});
 
 // Output raw audio stream removed due to bot blocks
 async function startServer() {

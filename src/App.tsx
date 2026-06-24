@@ -33,6 +33,7 @@ function AppContent() {
   const [isDesktopMenuOpen, setIsDesktopMenuOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
+  const [globalBanner, setGlobalBanner] = useState<{title: string, content: string, category?: string} | null>(null);
 
   useEffect(() => {
     const handleOpen = () => setIsNotificationsOpen(true);
@@ -57,12 +58,22 @@ function AppContent() {
 
         if (!snapshot.empty) {
           const newestDoc = snapshot.docs[0];
-          const createdAt = newestDoc.data().createdAt;
+          const data = newestDoc.data();
+          const createdAt = data.createdAt;
           const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
           
           if (dbDate > staticDate) {
             newestId = newestDoc.id;
           }
+
+          // Check for active global banner (within last 24h)
+          if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
+             setGlobalBanner({ title: data.title, content: data.content, category: data.category });
+          } else {
+             setGlobalBanner(null);
+          }
+        } else {
+          setGlobalBanner(null);
         }
 
         if (newestId && newestId !== lastViewed) {
@@ -324,6 +335,18 @@ function AppContent() {
             </motion.div>
           )}
         </AnimatePresence>
+
+        {/* GLOBAL ANNOUNCEMENT BANNER */}
+        {globalBanner && (
+          <div className="w-full mt-2 overflow-hidden bg-gradient-to-r from-emerald-500/10 via-emerald-400/20 to-emerald-500/10 border-y border-emerald-500/20 py-2 shrink-0 flex items-center relative shadow-[0_0_15px_rgba(16,185,129,0.1)]">
+             <div className="flex items-center gap-6 text-emerald-400 font-extrabold uppercase text-[10px] tracking-widest px-4 animate-marquee whitespace-nowrap">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+                <span className="text-white drop-shadow-md">{globalBanner.title}:</span> 
+                <span className="opacity-90">{globalBanner.content}</span>
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0 shadow-[0_0_8px_rgba(52,211,153,0.8)] ml-12" />
+             </div>
+          </div>
+        )}
       </nav>
 
       {/* Desktop Menu Dropdown */}

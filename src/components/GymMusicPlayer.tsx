@@ -2392,21 +2392,8 @@ export default function GymMusicPlayer() {
       const categoryPrefix = categoryLabels[supportCategory] || "💬 [SOPORTE]";
       const fullMessageText = `${categoryPrefix}\n\n${msgText}`;
 
-      // 1. Guardar siempre en la colección Firestore support_messages (Seguridad absoluta de datos)
+      // 1. Guardar en Firestore fue removido a petición (solo usamos Telegram)
       let storedInDb = false;
-      try {
-        const supportRef = collection(db, "support_messages");
-        await addDoc(supportRef, {
-          userEmail: emailVal,
-          userName: nameVal,
-          message: msgText,
-          category: supportCategory,
-          createdAt: Date.now()
-        });
-        storedInDb = true;
-      } catch (dbErr) {
-        console.error("Failed to write to Firestore support_messages:", dbErr);
-      }
 
       // 2. Intentar enviar a Telegram a través del backend servidor /api/support/telegram
       let sentToTelegram = false;

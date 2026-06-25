@@ -1626,8 +1626,8 @@ export default function GymMusicPlayer() {
   
   const currentUrlRaw = currentTrack.url || "";
   
-  const [currentUrl, setCurrentUrl] = useState(currentUrlRaw);
   const isIOSDevice = typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+  const [currentUrl, setCurrentUrl] = useState(() => isIOSDevice ? "" : currentUrlRaw);
 
   useEffect(() => {
     if (!currentUrlRaw) {

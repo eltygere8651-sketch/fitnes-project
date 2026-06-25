@@ -9,6 +9,7 @@ import { getFirestore } from "firebase-admin/firestore";
 import fs from "fs";
 import cors from "cors";
 import rateLimit from "express-rate-limit";
+import play from "play-dl";
 
 // Global Error Handlers to prevent production crashes
 process.on('uncaughtException', (err) => {
@@ -1359,7 +1360,19 @@ app.get("/api/youtube/stream", async (req, res) => {
     return res.status(400).json({ error: "Missing video id" });
   }
 
-  // Try PIPED_INSTANCES to get the stream URL (proxy)
+  // 1. Try play-dl (most reliable backend extraction)
+  try {
+    const info = await play.video_info(`https://www.youtube.com/watch?v=${id}`);
+    // Prioritize audio-only formats, but fallback to any format if not available
+    const format = info.format.find(f => f.mimeType?.startsWith("audio/")) || info.format[0];
+    if (format && format.url) {
+      return res.json({ url: format.url });
+    }
+  } catch (error) {
+    console.error("play-dl extraction failed for", id, ":", error instanceof Error ? error.message : error);
+  }
+
+  // 2. Fallback to PIPED_INSTANCES
   for (const instance of PIPED_INSTANCES) {
     try {
       const controller = new AbortController();

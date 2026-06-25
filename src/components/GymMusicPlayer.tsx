@@ -580,11 +580,6 @@ const createSilentAudioBlobURL = (): string => {
   writeString(36, 'data');
   view.setUint32(40, numSamples * 2, true);
   
-  // Fill with a tiny, imperceptible noise to bypass iOS silence detection
-  for (let i = 0; i < numSamples; i++) {
-    view.setInt16(44 + i * 2, i % 2 === 0 ? 1 : -1, true);
-  }
-  
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 };
 
@@ -1498,7 +1493,8 @@ export default function GymMusicPlayer() {
     fetchCloudState();
 
     const saveStateToCloud = async () => {
-      const plId = playingPlaylistRef.current?.id || "database";
+      const plId = playingPlaylistRef.current?.id;
+      if (!plId) return;
       const now = Date.now();
       localStorage.setItem("gym_music_saved_timestamp", now.toString());
       localStorage.setItem("gym_music_last_played_playlist_id", plId);
@@ -1625,28 +1621,7 @@ export default function GymMusicPlayer() {
   
   const currentUrlRaw = currentTrack.url || "";
   
-  const isIOSDevice = typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
-  
-  const [currentUrl, setCurrentUrl] = useState("");
-
-  useEffect(() => {
-    if (!currentUrlRaw) {
-      setCurrentUrl("");
-      return;
-    }
-    
-    // Use stream-redirect directly so it's synchronous and doesn't break iOS user gesture requirements for auto-play
-    if (isIOSDevice) {
-       const match = currentUrlRaw.match(/(?:v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
-       const videoId = match ? match[1] : null;
-       if (videoId) {
-           setCurrentUrl(`/api/youtube/stream-redirect?id=${videoId}`);
-           return;
-       }
-    }
-    
-    setCurrentUrl(currentUrlRaw);
-  }, [currentUrlRaw, isIOSDevice]);
+  const currentUrl = currentUrlRaw;
   
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
@@ -1862,20 +1837,6 @@ export default function GymMusicPlayer() {
     typeof window !== 'undefined' ? (localStorage.getItem("gym_music_last_played_playlist_id") || localStorage.getItem("gym_music_selected_playlist_id")) : null
   );
 
-  const [isRestoringPlaylist, setIsRestoringPlaylist] = useState(!!pendingRestoreRef.current);
-
-  useEffect(() => {
-    if (pendingRestoreRef.current) {
-      const timeoutId = setTimeout(() => {
-        if (pendingRestoreRef.current) {
-          pendingRestoreRef.current = null;
-          setIsRestoringPlaylist(false);
-        }
-      }, 2000);
-      return () => clearTimeout(timeoutId);
-    }
-  }, []);
-
   const communityDocsRef = useRef<any[]>([]);
   const userDocsRef = useRef<any[]>([]);
 
@@ -1967,29 +1928,16 @@ export default function GymMusicPlayer() {
       
       // Attempt seamless state restore
       if (pendingRestoreRef.current && (!selectedPlaylistRef.current && !playingPlaylistRef.current)) {
-        if (pendingRestoreRef.current === "database") {
-          setPlayingPlaylist(null);
-          setSelectedPlaylist(null);
+        let found = folders.find((f) => f.id === pendingRestoreRef.current);
+        if (found) {
+          setPlayingPlaylist(found);
+          setSelectedPlaylist(found);
           const lastTab = localStorage.getItem("gym_music_last_tab");
           if (lastTab !== "entertainment") {
-            setTrackListTab("explore");
+            setTrackListTab("playlist");
           }
           setMobileView("player");
           pendingRestoreRef.current = null;
-          setIsRestoringPlaylist(false);
-        } else {
-          let found = folders.find((f) => f.id === pendingRestoreRef.current);
-          if (found) {
-            setPlayingPlaylist(found);
-            setSelectedPlaylist(found);
-            const lastTab = localStorage.getItem("gym_music_last_tab");
-            if (lastTab !== "entertainment") {
-              setTrackListTab("playlist");
-            }
-            setMobileView("player");
-            pendingRestoreRef.current = null;
-            setIsRestoringPlaylist(false);
-          }
         }
       }
 
@@ -2072,8 +2020,6 @@ export default function GymMusicPlayer() {
   useEffect(() => {
     if (playingPlaylist) {
       localStorage.setItem("gym_music_last_played_playlist_id", playingPlaylist.id);
-    } else {
-      localStorage.setItem("gym_music_last_played_playlist_id", "database");
     }
   }, [playingPlaylist]);
 
@@ -3894,7 +3840,7 @@ export default function GymMusicPlayer() {
         )}
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
-      <div className="absolute top-0 left-0 w-[50px] h-[50px] overflow-hidden pointer-events-none select-none z-0 opacity-[0.01]">
+      <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
         <audio
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}
@@ -3922,7 +3868,7 @@ export default function GymMusicPlayer() {
             }
           }}
         />
-        {currentUrl && !isRestoringPlaylist && (
+        {currentUrl && (
           <ReactPlayer
             ref={youtubePlayerRef}
             url={currentUrl}
@@ -4046,8 +3992,10 @@ export default function GymMusicPlayer() {
               if (currentPosMs > 0 && Math.abs(currentPosMs - (positionRef.current || 0)) > 5000) {
                  positionRef.current = currentPosMs;
                  localStorage.setItem("gym_music_saved_position", currentPosMs.toString());
-                 localStorage.setItem("gym_music_last_played_playlist_id", playingPlaylistRef.current ? playingPlaylistRef.current.id : "database");
-                 localStorage.setItem("gym_music_current_track_index", currentTrackIndexRef.current.toString());
+                 if (playingPlaylistRef.current) {
+                   localStorage.setItem("gym_music_last_played_playlist_id", playingPlaylistRef.current.id);
+                   localStorage.setItem("gym_music_current_track_index", currentTrackIndexRef.current.toString());
+                 }
               }
               
               // Intelligent gapless logic: checking for silences/outros/intros using crowdsourced segments

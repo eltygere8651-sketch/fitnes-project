@@ -98,19 +98,7 @@ function AppContent() {
     };
   }, []);
 
-  // --- Page Visibility State for Power Saving ---
-  const [isPageVisible, setIsPageVisible] = useState(true);
-  const isEcoMode = true;
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      setIsPageVisible(document.visibilityState === "visible");
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
+  // Removed unused visibility state
 
   // --- Progressive Web App (PWA) Install Logic ---
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);

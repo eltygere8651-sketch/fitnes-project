@@ -86,10 +86,10 @@ import {
   TasteDiagnostics, 
   RecommendedTrack 
 } from "../lib/recommendationEngine";
-import { UserManagementAdmin } from "./UserManagementAdmin";
-import { ExploreView } from "./ExploreView";
-import { PodcastView } from "./PodcastView";
-import { UserProfileModal } from "./UserProfileModal";
+const LazyExploreView = React.lazy(() => import('./ExploreView').then(m => ({ default: m.ExploreView })));
+const LazyPodcastView = React.lazy(() => import('./PodcastView').then(m => ({ default: m.PodcastView })));
+const LazyUserManagementAdmin = React.lazy(() => import('./UserManagementAdmin').then(m => ({ default: m.UserManagementAdmin })));
+const LazyUserProfileModal = React.lazy(() => import('./UserProfileModal').then(m => ({ default: m.UserProfileModal })));
 
 const COVER_THEMES = [
   {
@@ -751,20 +751,7 @@ export default function GymMusicPlayer() {
     }
   };
 
-  // --- Page Visibility State for Power Saving ---
-  const [isPageVisible, setIsPageVisible] = useState(true);
   const isEcoMode = true;
-
-  useEffect(() => {
-    const handleVisibility = () => {
-      setIsPageVisible(document.visibilityState === "visible");
-    };
-    document.addEventListener("visibilitychange", handleVisibility);
-
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibility);
-    };
-  }, []);
 
   const isAdmin = user?.email === "eltygere8651@gmail.com";
 
@@ -5223,24 +5210,26 @@ export default function GymMusicPlayer() {
               <div className="flex flex-col flex-1 min-h-0 bg-[#030303] overflow-hidden">
                 <div className={`flex-1 ${trackListTab === "entertainment" ? 'overflow-hidden' : 'overflow-y-auto pb-[120px] sm:pb-0'} p-0 sm:p-0 premium-scrollbar relative flex flex-col`}>
                   {trackListTab === "entertainment" ? (
-                    <PodcastView 
-                      isVisible={true}
-                      pauseBackgroundMusic={() => {
-                        setIsPlaying(false);
-                        expectedPlayingRef.current = false;
-                        if (youtubePlayerRef.current) {
-                          try {
-                            const intPlayer = youtubePlayerRef.current.getInternalPlayer();
-                            if (intPlayer && typeof intPlayer.pauseVideo === "function") {
-                              intPlayer.pauseVideo();
-                            }
-                          } catch (e) {}
-                        }
-                        if (fallbackSilentAudioRef.current) {
-                          fallbackSilentAudioRef.current.pause();
-                        }
-                      }}
-                    />
+                    <React.Suspense fallback={<div className="p-12 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto"/></div>}>
+                      <LazyPodcastView 
+                        isVisible={true}
+                        pauseBackgroundMusic={() => {
+                          setIsPlaying(false);
+                          expectedPlayingRef.current = false;
+                          if (youtubePlayerRef.current) {
+                            try {
+                              const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                              if (intPlayer && typeof intPlayer.pauseVideo === "function") {
+                                intPlayer.pauseVideo();
+                              }
+                            } catch (e) {}
+                          }
+                          if (fallbackSilentAudioRef.current) {
+                            fallbackSilentAudioRef.current.pause();
+                          }
+                        }}
+                      />
+                    </React.Suspense>
                   ) : trackListTab === "search" ? (
                     <div className="space-y-1">
                       {/* Search results view */}
@@ -5293,43 +5282,45 @@ export default function GymMusicPlayer() {
                                 </div>
                               ) : (
                                 <div className="space-y-6">
-                                  <ExploreView 
-                                    exploreData={exploreData}
-                                    setOverrideCurrentTrack={setOverrideCurrentTrack}
-                                    setIsPlaying={setIsPlaying}
-                                    showNotification={showNotification}
-                                    addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
-                                    loadPlaylistAndPlay={handleLoadExplorePlaylist}
-                                    playTracksContext={(tracks, startIdx) => {
-                                      const mapped = tracks.map(t => ({
-                                        id: t.id,
-                                        title: t.title,
-                                        artist: t.artist || "Artista",
-                                        url: t.url,
-                                        duration: t.duration || "N/A",
-                                        bpm: 120
-                                      }));
-                                      setOverrideCurrentTrack(mapped[startIdx]);
-                                      pendingSeekPosRef.current = null;
-                                      setPosition(0);
-                                      setDuration(0);
-                                      setIsPlaying(true);
-                                      if (mapped.length > startIdx + 1) {
-                                        const queue = mapped.slice(startIdx + 1);
-                                        setTrackQueue(queue);
-                                        trackQueueRef.current = queue;
-                                      }
-                                      showNotification(`Reproduciendo: ${mapped[startIdx].title}`);
-                                    }}
-                                    selectedCountry={selectedCountry}
-                                    setSelectedCountry={(c) => {
-                                      setSelectedCountry(c);
-                                      localStorage.setItem("gym_music_selected_country", c);
-                                      setExploreData(null);
-                                    }}
-                                    currentTrack={currentTrack}
-                                    isPlaying={isPlaying}
-                                  />
+                                  <React.Suspense fallback={<div className="p-12 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto"/></div>}>
+                                    <LazyExploreView 
+                                      exploreData={exploreData}
+                                      setOverrideCurrentTrack={setOverrideCurrentTrack}
+                                      setIsPlaying={setIsPlaying}
+                                      showNotification={showNotification}
+                                      addYoutubeTrackToPlaylist={addYoutubeTrackToPlaylist}
+                                      loadPlaylistAndPlay={handleLoadExplorePlaylist}
+                                      playTracksContext={(tracks, startIdx) => {
+                                        const mapped = tracks.map((t: any) => ({
+                                          id: t.id,
+                                          title: t.title,
+                                          artist: t.artist || "Artista",
+                                          url: t.url,
+                                          duration: t.duration || "N/A",
+                                          bpm: 120
+                                        }));
+                                        setOverrideCurrentTrack(mapped[startIdx]);
+                                        pendingSeekPosRef.current = null;
+                                        setPosition(0);
+                                        setDuration(0);
+                                        setIsPlaying(true);
+                                        if (mapped.length > startIdx + 1) {
+                                          const queue = mapped.slice(startIdx + 1);
+                                          setTrackQueue(queue);
+                                          trackQueueRef.current = queue;
+                                        }
+                                        showNotification(`Reproduciendo: ${mapped[startIdx].title}`);
+                                      }}
+                                      selectedCountry={selectedCountry}
+                                      setSelectedCountry={(c: string) => {
+                                        setSelectedCountry(c);
+                                        localStorage.setItem("gym_music_selected_country", c);
+                                        setExploreData(null);
+                                      }}
+                                      currentTrack={currentTrack}
+                                      isPlaying={isPlaying}
+                                    />
+                                  </React.Suspense>
                                 </div>
                               )}
                             </div>
@@ -5942,7 +5933,7 @@ export default function GymMusicPlayer() {
                                       {[...Array(3)].map((_, i) => (
                                         <div
                                           key={i}
-                                          className={`w-[2px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
+                                          className={`w-[2px] bg-emerald-400 rounded-full ${!isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
                                           style={{ height: "11px", transformOrigin: "bottom" }}
                                         />
                                       ))}
@@ -5968,7 +5959,7 @@ export default function GymMusicPlayer() {
                                       {[...Array(3)].map((_, i) => (
                                         <div
                                           key={i}
-                                          className={`w-[1.5px] bg-emerald-400 rounded-full ${isPageVisible && !isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
+                                          className={`w-[1.5px] bg-emerald-400 rounded-full ${!isEcoMode ? `animate-eq-bar-${i}` : ""} will-change-transform`}
                                           style={{ height: "9px", transformOrigin: "bottom" }}
                                         />
                                       ))}
@@ -7254,9 +7245,11 @@ export default function GymMusicPlayer() {
 
       {/* OVERLAY: LEGACY SYSTEM REMOVED */}
 
-      {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
-
-      {/* OVERLAY: TELEGRAM SUPPORT MODAL */}
+      {isAdminPanelOpen && (
+        <React.Suspense fallback={null}>
+          <LazyUserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />
+        </React.Suspense>
+      )}
       <AnimatePresence>
         {isSupportModalOpen && (
           <motion.div
@@ -7582,8 +7575,16 @@ export default function GymMusicPlayer() {
         )}
       </AnimatePresence>
 
-      {isAdminPanelOpen && <UserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />}
-      {isProfileModalOpen && <UserProfileModal onClose={() => setIsProfileModalOpen(false)} />}
+      {isAdminPanelOpen && (
+        <React.Suspense fallback={null}>
+          <LazyUserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />
+        </React.Suspense>
+      )}
+      {isProfileModalOpen && (
+        <React.Suspense fallback={null}>
+          <LazyUserProfileModal onClose={() => setIsProfileModalOpen(false)} />
+        </React.Suspense>
+      )}
 
       <AnimatePresence>
         {sessionHijacked && (

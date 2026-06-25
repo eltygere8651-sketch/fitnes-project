@@ -1354,6 +1354,44 @@ app.get("/api/system/health", async (req, res) => {
 });
 
 // Native Stream Resolver for iOS Background Playback
+app.get("/api/youtube/stream-redirect", async (req, res) => {
+  const { id } = req.query;
+  if (!id || typeof id !== "string") {
+    return res.status(400).send("Missing video id");
+  }
+
+  try {
+    const info = await play.video_info(`https://www.youtube.com/watch?v=${id}`);
+    const format = info.format.find(f => f.mimeType?.startsWith("audio/")) || info.format[0];
+    if (format && format.url) {
+      return res.redirect(302, format.url);
+    }
+  } catch (error) {
+    console.error("play-dl extraction failed for", id, error);
+  }
+
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const streamRes = await fetch(`${instance}/streams/${id}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (streamRes.ok) {
+        const data = await streamRes.json() as any;
+        if (data.audioStreams && data.audioStreams.length > 0) {
+          const bestAudio = data.audioStreams.sort((a: any, b: any) => b.bitrate - a.bitrate)[0];
+          if (bestAudio && bestAudio.url) {
+            return res.redirect(302, bestAudio.url);
+          }
+        }
+      }
+    } catch (e) {}
+  }
+  
+  res.status(404).send("Stream not found");
+});
+
 app.get("/api/youtube/stream", async (req, res) => {
   const { id } = req.query;
   if (!id || typeof id !== "string") {

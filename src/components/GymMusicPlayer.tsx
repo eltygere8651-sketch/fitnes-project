@@ -1653,7 +1653,13 @@ export default function GymMusicPlayer() {
     setIsPlaying(nextPlaying);
   }, [isPlaying]);
 
+  const isProcessingActionRef = useRef<boolean>(false);
+
   const handleNext = useCallback(() => {
+    if (isProcessingActionRef.current) return;
+    isProcessingActionRef.current = true;
+    setTimeout(() => { isProcessingActionRef.current = false; }, 800);
+
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
@@ -1737,6 +1743,10 @@ export default function GymMusicPlayer() {
   }, [displayTracks, currentTrackIndex, isShuffle, userPlaylists, playingPlaylist, isRepeat]);
 
   const handlePrev = useCallback(() => {
+    if (isProcessingActionRef.current) return;
+    isProcessingActionRef.current = true;
+    setTimeout(() => { isProcessingActionRef.current = false; }, 800);
+
     expectedPlayingRef.current = true;
     if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
@@ -3927,11 +3937,12 @@ export default function GymMusicPlayer() {
                     // Steal Media Session lock from YouTube AFTER it resumes 
                     // Guarantees Bluetooth wheel controls work in Brave browser + No Micro-cuts
                     setTimeout(() => {
-                       if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                       if (fallbackSilentAudioRef.current) {
+                         fallbackSilentAudioRef.current.pause();
                          fallbackSilentAudioRef.current.play().catch(() => {});
+                         enforceActionHandlers();
+                         registerMediaSession();
                        }
-                       enforceActionHandlers();
-                       registerMediaSession();
                     }, 500);
                   }
 

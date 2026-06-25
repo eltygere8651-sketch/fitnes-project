@@ -3927,12 +3927,11 @@ export default function GymMusicPlayer() {
                     // Steal Media Session lock from YouTube AFTER it resumes 
                     // Guarantees Bluetooth wheel controls work in Brave browser + No Micro-cuts
                     setTimeout(() => {
-                       if (fallbackSilentAudioRef.current) {
-                         fallbackSilentAudioRef.current.pause();
+                       if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                          fallbackSilentAudioRef.current.play().catch(() => {});
-                         enforceActionHandlers();
-                         registerMediaSession();
                        }
+                       enforceActionHandlers();
+                       registerMediaSession();
                     }, 500);
                   }
 

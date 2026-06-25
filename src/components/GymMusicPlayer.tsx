@@ -580,6 +580,11 @@ const createSilentAudioBlobURL = (): string => {
   writeString(36, 'data');
   view.setUint32(40, numSamples * 2, true);
   
+  // Fill with a tiny, imperceptible noise to bypass iOS silence detection
+  for (let i = 0; i < numSamples; i++) {
+    view.setInt16(44 + i * 2, i % 2 === 0 ? 1 : -1, true);
+  }
+  
   return URL.createObjectURL(new Blob([buffer], { type: 'audio/wav' }));
 };
 
@@ -1621,7 +1626,37 @@ export default function GymMusicPlayer() {
   
   const currentUrlRaw = currentTrack.url || "";
   
-  const currentUrl = currentUrlRaw;
+  const [currentUrl, setCurrentUrl] = useState(currentUrlRaw);
+  const isIOSDevice = typeof window !== 'undefined' && (/iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1));
+
+  useEffect(() => {
+    if (!currentUrlRaw) {
+      setCurrentUrl("");
+      return;
+    }
+    
+    // Only use proxy stream natively on iOS to prevent strict background pause rules of WKWebView iframes
+    if (isIOSDevice) {
+       const match = currentUrlRaw.match(/(?:v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/);
+       const videoId = match ? match[1] : null;
+       if (videoId) {
+           setCurrentUrl(""); // clear briefly
+           fetch(`/api/youtube/stream?id=${videoId}`)
+              .then(res => res.ok ? res.json() : null)
+              .then(data => {
+                  if (data && data.url) {
+                      setCurrentUrl(data.url);
+                  } else {
+                      setCurrentUrl(currentUrlRaw); // fallback to iframe
+                  }
+              })
+              .catch(() => setCurrentUrl(currentUrlRaw));
+           return;
+       }
+    }
+    
+    setCurrentUrl(currentUrlRaw);
+  }, [currentUrlRaw, isIOSDevice]);
   
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
@@ -3840,7 +3875,7 @@ export default function GymMusicPlayer() {
         )}
       </AnimatePresence>
       {/* Invisible embedding of YouTube ReactPlayer and background thread preservation audio */}
-      <div className="absolute top-0 left-0 w-[10px] h-[10px] overflow-hidden pointer-events-none select-none z-[-1] opacity-0">
+      <div className="absolute top-0 left-0 w-[50px] h-[50px] overflow-hidden pointer-events-none select-none z-0 opacity-[0.01]">
         <audio
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}

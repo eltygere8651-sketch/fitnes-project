@@ -1299,55 +1299,116 @@ app.post("/api/support/telegram-trial", async (req, res) => {
 
 // System Health API (Admin Monitor)
 app.get("/api/system/health", async (req, res) => {
-  let mainLibraryStatus = "unknown";
-  let planBStatus = "unknown";
-  
   // Check Main Library (Innertube)
-  try {
-    const checkYT = async () => {
+  const checkMain = async () => {
+    try {
       if (!yt) {
          yt = await Innertube.create({ generate_session_locally: true });
       }
       const searchRes = await yt.search("lofi", { type: "video" });
       if (searchRes && searchRes.results && searchRes.results.length > 0) {
          return "online";
-      } else {
-         return "error";
       }
-    };
-    
-    const timeoutPromise = new Promise<string>((_, reject) => setTimeout(() => reject(new Error("Timeout")), 6000));
-    mainLibraryStatus = await Promise.race([checkYT(), timeoutPromise]);
-  } catch (e) {
-    console.error("Health check main library error:", e);
-    mainLibraryStatus = "offline";
-  }
+      return "error";
+    } catch (e) {
+      return "offline";
+    }
+  };
+
+  const timeoutPromise = (ms: number, fallback: string) => new Promise<string>((resolve) => setTimeout(() => resolve(fallback), ms));
 
   // Check Plan B (Piped)
-  planBStatus = "offline";
-  for (const instance of PIPED_INSTANCES) {
+  const checkPlanB = async () => {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 sec timeout
-      const response = await fetch(`${instance}/trending?region=US`, { 
-        method: "GET",
-        signal: controller.signal
+      const promises = PIPED_INSTANCES.map(async (instance) => {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3500);
+        const response = await fetch(`${instance}/trending?region=US`, { 
+          method: "GET",
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        if (response.ok) return true;
+        throw new Error("Failed");
       });
-      clearTimeout(timeoutId);
-      if (response.ok) {
-        planBStatus = "online";
-        break; // found one working
-      }
+      // Return online if any resolves
+      await Promise.any(promises);
+      return "online";
     } catch (e) {
-      // try next
+      return "offline";
     }
-  }
+  };
 
+  // Run in parallel
+  const [mainLibraryStatus, planBStatus] = await Promise.all([
+    Promise.race([checkMain(), timeoutPromise(6000, "offline")]),
+    Promise.race([checkPlanB(), timeoutPromise(4000, "offline")])
+  ]);
+  
   res.json({
     mainLibrary: mainLibraryStatus,
     planB: planBStatus,
     timestamp: Date.now()
   });
+});
+
+// Native Stream Resolver for iOS Background Playback
+app.get("/api/youtube/stream", async (req, res) => {
+  const { id } = req.query;
+  if (!id || typeof id !== "string") {
+    return res.status(400).json({ error: "Missing video id" });
+  }
+
+  // Try PIPED_INSTANCES to get the stream URL (proxy)
+  for (const instance of PIPED_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const streamRes = await fetch(`${instance}/streams/${id}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (streamRes.ok) {
+        const data = await streamRes.json() as any;
+        if (data.audioStreams && data.audioStreams.length > 0) {
+          // Get best audio stream (usually m4a or webm)
+          const bestAudio = data.audioStreams.sort((a: any, b: any) => b.bitrate - a.bitrate)[0];
+          if (bestAudio && bestAudio.url) {
+            return res.json({ url: bestAudio.url });
+          }
+        }
+      }
+    } catch (e) {
+      // Continue to next instance
+    }
+  }
+  
+  // Try INVIDIOUS_INSTANCES as fallback
+  for (const instance of INVIDIOUS_INSTANCES) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const streamRes = await fetch(`${instance}/api/v1/videos/${id}`, { signal: controller.signal });
+      clearTimeout(timeoutId);
+      
+      if (streamRes.ok) {
+        const data = await streamRes.json() as any;
+        if (data.adaptiveFormats && data.adaptiveFormats.length > 0) {
+           const audioFormats = data.adaptiveFormats.filter((f: any) => f.type && f.type.includes("audio"));
+           if (audioFormats.length > 0) {
+             const bestAudio = audioFormats.sort((a: any, b: any) => (b.bitrate || 0) - (a.bitrate || 0))[0];
+             if (bestAudio && bestAudio.url) {
+                return res.json({ url: bestAudio.url });
+             }
+           }
+        }
+      }
+    } catch (e) {
+      // Continue
+    }
+  }
+
+  // If both fail, return empty to let the client fallback to standard iframe
+  return res.status(404).json({ error: "No stream found" });
 });
 
 // Output raw audio stream removed due to bot blocks

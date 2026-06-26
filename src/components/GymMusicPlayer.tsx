@@ -3888,27 +3888,6 @@ export default function GymMusicPlayer() {
           src={silentAudioBlobSrc}
           loop
           playsInline
-          onTimeUpdate={() => {
-            const now = Date.now();
-
-            if (now - lastSessionSyncTimeRef.current > 2000) {
-              lastSessionSyncTimeRef.current = now;
-              if (expectedPlayingRef.current) {
-                // Crucial fix: Periodically reset position state to lock out the iframe from stealing
-                // We do NOT call enforceActionHandlers() here because it causes audio micro-cuts on Bluetooth
-                if ("mediaSession" in navigator && navigator.mediaSession.setPositionState) {
-                  try {
-                    const actualSeconds = youtubePlayerRef.current?.getCurrentTime() || (position / 1000);
-                    navigator.mediaSession.setPositionState({
-                      duration: (durationRef.current || 0) / 1000,
-                      playbackRate: 1,
-                      position: actualSeconds,
-                    });
-                  } catch(e) {}
-                }
-              }
-            }
-          }}
         />
         {currentUrl && (
           <ReactPlayer
@@ -3996,8 +3975,6 @@ export default function GymMusicPlayer() {
                     // Guarantees Bluetooth wheel controls work in Brave browser + No Micro-cuts
                     setTimeout(() => {
                        if (fallbackSilentAudioRef.current) {
-                         fallbackSilentAudioRef.current.pause();
-                         fallbackSilentAudioRef.current.play().catch(() => {});
                          enforceActionHandlers();
                          registerMediaSession();
                        }

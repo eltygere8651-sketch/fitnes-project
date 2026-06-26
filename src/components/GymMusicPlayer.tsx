@@ -1094,6 +1094,64 @@ export default function GymMusicPlayer() {
     return localStorage.getItem("gym_music_selected_country") || "ES";
   });
   
+  const [customExplorePlaylists, setCustomExplorePlaylists] = useState<any[]>([]);
+
+  useEffect(() => {
+    const q = query(collection(db, "explore_custom_playlists"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snap) => {
+      const lists = snap.docs.map(doc => ({ ...doc.data(), docId: doc.id }));
+      setCustomExplorePlaylists(lists);
+    }, (error) => {
+      console.warn("Permiso denegado para explorar listas personalizadas, o reglas no propagadas:", error);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const handleAddCustomExplorePlaylist = async (url: string) => {
+    try {
+      let playlistId = url.trim();
+      const idMatch = url.match(/[?&]list=([^&]+)/i);
+      if (idMatch) {
+        playlistId = idMatch[1];
+      } else if (url.includes("youtube.com") || url.includes("youtu.be")) {
+        showNotification("URL inválida de YouTube Playlist (falta list=...)");
+        return;
+      }
+      
+      if (!playlistId) {
+        showNotification("Debes proporcionar un enlace o ID de lista válido.");
+        return;
+      }
+
+      showNotification("Obteniendo detalles de la lista...");
+      const res = await fetch(`/api/youtube/playlist-info?id=${playlistId}`);
+      if (!res.ok) throw new Error("No se pudo obtener la info de la lista");
+      const data = await res.json();
+      
+      await addDoc(collection(db, "explore_custom_playlists"), {
+        id: playlistId,
+        title: data.title || "Lista Recomendada",
+        thumbnail: data.thumbnail || "",
+        url: url,
+        isPlaylist: true,
+        artist: "Tendencias Globales",
+        createdAt: serverTimestamp()
+      });
+      showNotification("Lista añadida al Explorador con éxito");
+    } catch (e: any) {
+      showNotification(e.message || "Error al añadir la lista");
+    }
+  };
+
+  const handleDeleteCustomExplorePlaylist = async (docId: string) => {
+    try {
+      await deleteDoc(doc(db, "explore_custom_playlists", docId));
+      showNotification("Lista eliminada del Explorador");
+    } catch (e: any) {
+      showNotification("Error al eliminar la lista");
+    }
+  };
+  
   // Expanded playlist/mix tracks viewer states
   const [expandedPlaylistId, setExpandedPlaylistId] = useState<string | null>(null);
   const [expandedPlaylistTracks, setExpandedPlaylistTracks] = useState<any[]>([]);
@@ -5282,6 +5340,10 @@ export default function GymMusicPlayer() {
                                   <React.Suspense fallback={<div className="p-12 text-center text-slate-500"><Loader2 className="w-8 h-8 animate-spin mx-auto"/></div>}>
                                     <LazyExploreView 
                                       exploreData={exploreData}
+                                      customPlaylists={customExplorePlaylists}
+                                      isAdmin={isAdmin}
+                                      onAddCustomPlaylist={handleAddCustomExplorePlaylist}
+                                      onDeleteCustomPlaylist={handleDeleteCustomExplorePlaylist}
                                       setOverrideCurrentTrack={setOverrideCurrentTrack}
                                       setIsPlaying={setIsPlaying}
                                       showNotification={showNotification}

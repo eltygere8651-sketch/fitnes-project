@@ -678,6 +678,79 @@ app.get("/api/youtube/explore", async (req, res) => {
 const playlistCache = new Map<string, { data: any, timestamp: number }>();
 const PLAYLIST_CACHE_TTL = 1000 * 60 * 60 * 24 * 7; // 7 days
 
+// Playlist Info Cache
+const playlistInfoCache = new Map<string, { data: any, timestamp: number }>();
+
+app.get("/api/youtube/playlist-info", async (req, res) => {
+  const playlistId = req.query.id as string;
+  if (!playlistId) return res.status(400).json({ error: "Missing playlist ID" });
+
+  const cacheKey = playlistId;
+  const cached = playlistInfoCache.get(cacheKey);
+  if (cached && (Date.now() - cached.timestamp < PLAYLIST_CACHE_TTL)) {
+    return res.json(cached.data);
+  }
+
+  if (!yt) {
+    try {
+      yt = await Innertube.create();
+    } catch (e) {
+      console.error("Innertube create error:", e);
+    }
+  }
+
+  try {
+    if (yt) {
+      try {
+        const playlist = await yt.getPlaylist(playlistId);
+        if (playlist && playlist.info) {
+          const info = {
+            id: playlistId,
+            title: playlist.info.title || "Lista Recomendada",
+            thumbnail: (playlist.info.thumbnails && playlist.info.thumbnails.length > 0) ? playlist.info.thumbnails[0].url : ""
+          };
+          playlistInfoCache.set(cacheKey, { data: info, timestamp: Date.now() });
+          return res.json(info);
+        }
+      } catch (err) {
+        console.warn("Innertube getPlaylist info failed:", err);
+      }
+    }
+
+    for (const instance of PIPED_INSTANCES) {
+      try {
+        const pRes = await fetch(`${instance}/playlists/${playlistId}`);
+        if (pRes.ok) {
+          const pData = await pRes.json() as any;
+          const info = {
+            id: playlistId,
+            title: pData.name || "Lista Recomendada",
+            thumbnail: pData.thumbnailUrl || (pData.relatedStreams && pData.relatedStreams.length > 0 ? `https://i.ytimg.com/vi/${pData.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg` : "")
+          };
+          playlistInfoCache.set(cacheKey, { data: info, timestamp: Date.now() });
+          return res.json(info);
+        }
+      } catch (err) {
+        // Try next instance
+      }
+    }
+    // Final fallback: return default info instead of throwing 500 so the user can still save it
+    const fallbackInfo = {
+      id: playlistId,
+      title: "Lista Personalizada",
+      thumbnail: ""
+    };
+    return res.json(fallbackInfo);
+  } catch (err) {
+    console.error("Playlist info fetch error:", err);
+    return res.json({
+      id: playlistId,
+      title: "Lista Personalizada",
+      thumbnail: ""
+    });
+  }
+});
+
 // YouTube Playlist Tracks Extractor Endpoint
 app.get("/api/youtube/playlist", async (req, res) => {
   const playlistId = req.query.id as string;

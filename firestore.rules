@@ -109,5 +109,11 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // 6. Admin Explore Custom Playlists
+    match /explore_custom_playlists/{playlistId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

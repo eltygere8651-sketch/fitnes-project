@@ -261,8 +261,8 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
           const idxA = section.customItemOrder.indexOf(idA);
           const idxB = section.customItemOrder.indexOf(idB);
           if (idxA !== -1 && idxB !== -1) return idxA - idxB;
-          if (idxA !== -1) return -1;
-          if (idxB !== -1) return 1;
+          if (idxA === -1 && idxB !== -1) return -1;
+          if (idxB === -1 && idxA !== -1) return 1;
           return 0;
         });
       }
@@ -350,16 +350,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       const section = newLayout[sectionIndex];
       const currentData = getSectionData(section);
 
-      const itemOrder = section.customItemOrder
-        ? [...section.customItemOrder]
-        : currentData.map((d) => d.id || d.url);
-
-      currentData.forEach((d) => {
-        const id = d.id || d.url;
-        if (!itemOrder.includes(id)) {
-          itemOrder.push(id);
-        }
-      });
+      const itemOrder = currentData.map((d) => d.id || d.url);
 
       const itemIndex = itemOrder.indexOf(itemId);
       if (itemIndex === -1) return;

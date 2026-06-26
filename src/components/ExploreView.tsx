@@ -1,14 +1,39 @@
-import React, { useState } from 'react';
-import { Play, Pause, ListPlus, Sparkles, ChevronRight, ChevronDown, X, Loader2, Plus } from 'lucide-react';
-import { MusicTrack } from '../types';
-import { Carousel } from './Carousel';
+import React, { useState, useEffect } from "react";
+import {
+  Play,
+  Pause,
+  ListPlus,
+  Sparkles,
+  ChevronRight,
+  ChevronDown,
+  X,
+  Loader2,
+  Plus,
+  Settings2,
+  Eye,
+  EyeOff,
+  ArrowUp,
+  ArrowDown,
+  Pencil,
+  Check,
+  MessageSquare,
+} from "lucide-react";
+import { MusicTrack } from "../types";
+import { Carousel } from "./Carousel";
 
 interface ExploreViewProps {
   exploreData: any;
   customPlaylists?: any[];
+  exploreLayout?: any[] | null;
   isAdmin?: boolean;
-  onAddCustomPlaylist?: (url: string) => Promise<void>;
+  onAddCustomPlaylist?: (url: string, sectionId?: string) => Promise<void>;
   onDeleteCustomPlaylist?: (docId: string) => Promise<void>;
+  onUpdateExploreLayout?: (layout: any[]) => Promise<void>;
+  onPublishAnnouncement?: (
+    title: string,
+    content: string,
+    category?: string,
+  ) => Promise<void>;
   setOverrideCurrentTrack: (track: MusicTrack) => void;
   setIsPlaying: (playing: boolean) => void;
   showNotification: (msg: string) => void;
@@ -21,251 +46,998 @@ interface ExploreViewProps {
   isPlaying?: boolean;
 }
 
-export const ExploreView: React.FC<ExploreViewProps> = React.memo(({
-  exploreData,
-  customPlaylists = [],
-  isAdmin,
-  onAddCustomPlaylist,
-  onDeleteCustomPlaylist,
-  setOverrideCurrentTrack,
-  setIsPlaying,
-  showNotification,
-  addYoutubeTrackToPlaylist,
-  loadPlaylistAndPlay,
-  playTracksContext,
-  selectedCountry,
-  setSelectedCountry,
-  currentTrack,
-  isPlaying
-}) => {
-  const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newPlaylistUrl, setNewPlaylistUrl] = useState("");
-  const [isAdding, setIsAdding] = useState(false);
-
-  const COUNTRIES = [
-    { code: "GLOBAL", label: "Global", flag: "🌎" },
-    { code: "US", label: "Estados Unidos", flag: "🇺🇸" },
-    { code: "ES", label: "España", flag: "🇪🇸" },
-    { code: "MX", label: "México", flag: "🇲🇽" },
-    { code: "AR", label: "Argentina", flag: "🇦🇷" },
-    { code: "CO", label: "Colombia", flag: "🇨🇴" },
-    { code: "DO", label: "República Dominicana", flag: "🇩🇴" },
-    { code: "CL", label: "Chile", flag: "🇨🇱" },
-    { code: "PE", label: "Perú", flag: "🇵🇪" },
-    { code: "GB", label: "Reino Unido", flag: "🇬🇧" },
-    { code: "DE", label: "Alemania", flag: "🇩🇪" },
-    { code: "FR", label: "Francia", flag: "🇫🇷" },
-    { code: "IT", label: "Italia", flag: "🇮🇹" }
-  ];
-
-  if (!exploreData || (exploreData.top100?.length === 0 && exploreData.trending?.length === 0)) {
-    return (
-      <div className="p-12 text-center space-y-4">
-        <div className="flex justify-center">
-            <Sparkles className="w-8 h-8 text-emerald-500/30 animate-pulse" />
-        </div>
-        <p className="text-slate-400 text-sm font-medium">No se han podido cargar las tendencias en este momento.</p>
-        <button 
-          onClick={() => window.location.reload()}
-          className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all"
-        >
-          Reintentar
-        </button>
-      </div>
+export const ExploreView: React.FC<ExploreViewProps> = React.memo(
+  ({
+    exploreData,
+    customPlaylists = [],
+    exploreLayout,
+    isAdmin,
+    onAddCustomPlaylist,
+    onDeleteCustomPlaylist,
+    onUpdateExploreLayout,
+    onPublishAnnouncement,
+    setOverrideCurrentTrack,
+    setIsPlaying,
+    showNotification,
+    addYoutubeTrackToPlaylist,
+    loadPlaylistAndPlay,
+    playTracksContext,
+    selectedCountry,
+    setSelectedCountry,
+    currentTrack,
+    isPlaying,
+  }) => {
+    const [isCountryModalOpen, setIsCountryModalOpen] = useState(false);
+    const [showAddModal, setShowAddModal] = useState(false);
+    const [showAddSectionModal, setShowAddSectionModal] = useState(false);
+    const [newPlaylistUrl, setNewPlaylistUrl] = useState("");
+    const [newSectionTitle, setNewSectionTitle] = useState("");
+    const [selectedSectionId, setSelectedSectionId] = useState("custom_0");
+    const [isAdding, setIsAdding] = useState(false);
+    const [notifyUsers, setNotifyUsers] = useState(false);
+    const [notifyMessage, setNotifyMessage] = useState("");
+    const [showNotifyModal, setShowNotifyModal] = useState(false);
+    const [manualNotifyTitle, setManualNotifyTitle] = useState(
+      "🎶 ¡Nuevos Lanzamientos!",
     );
-  }
+    const [manualNotifyMessage, setManualNotifyMessage] = useState("");
 
-  const sections = [
-    { title: "💎 Recomendaciones Especiales", data: customPlaylists },
-    { title: "✨ Mixes Para Ti", data: exploreData.mixParaTi || [] },
-    { title: "Top 100 Playlists", data: exploreData.top100 || [] },
-    { title: "Top 20 Tendencias", data: exploreData.top20Tendencias || [] },
-    { title: "Daily Top 20", data: exploreData.dailyTopPlaylists || [] },
-    { title: "Nuevos Videos Musicales", data: exploreData.dailyTop || [] },
-    { title: "Tendencias Globales", data: exploreData.trending || [] }
-  ];
+    const [itemToDelete, setItemToDelete] = useState<{
+      docId?: string;
+      sectionId?: string;
+      itemId?: string;
+    } | null>(null);
 
-  const handleAddSubmit = async () => {
-    if (!newPlaylistUrl || !onAddCustomPlaylist) return;
-    setIsAdding(true);
-    await onAddCustomPlaylist(newPlaylistUrl);
-    setNewPlaylistUrl("");
-    setShowAddModal(false);
-    setIsAdding(false);
-  };
+    const handleHideItem = async (sectionId: string, itemId: string) => {
+      if (!onUpdateExploreLayout) return;
+      const newLayout = [...sortedLayout];
+      const sectionIndex = newLayout.findIndex((s) => s.id === sectionId);
+      if (sectionIndex === -1) return;
 
-  return (
-    <div className="space-y-4 pb-32 px-0 sm:px-2">
-      {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
-      <div className="px-3 flex items-center justify-between">
-        {setSelectedCountry && selectedCountry && (
-          <div className="relative max-w-[200px] w-full">
-            <button
-              onClick={() => setIsCountryModalOpen(!isCountryModalOpen)}
-              className="w-full text-left bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer flex justify-between items-center"
-            >
-              <span className="truncate">
-                {COUNTRIES.find(c => c.code === selectedCountry)?.flag} Top Listas {COUNTRIES.find(c => c.code === selectedCountry)?.label}
-              </span>
-              <ChevronDown className={`w-3.5 h-3.5 text-[#1ED760] shrink-0 transition-transform ${isCountryModalOpen ? 'rotate-180' : ''}`} />
-            </button>
+      const section = newLayout[sectionIndex];
+      const hiddenItems = section.hiddenItems ? [...section.hiddenItems] : [];
+      if (!hiddenItems.includes(itemId)) {
+        hiddenItems.push(itemId);
+      }
 
-            {isCountryModalOpen && (
-              <>
-                <div className="fixed inset-0 z-[40]" onClick={() => setIsCountryModalOpen(false)}></div>
-                <div className="absolute top-full left-0 mt-2 z-[50] w-full min-w-[220px] bg-[#18181A] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                  <div className="max-h-[300px] overflow-y-auto p-1">
-                    {COUNTRIES.map((c) => (
-                      <button
-                        key={c.code}
-                        onClick={() => {
-                          setSelectedCountry(c.code);
-                          setIsCountryModalOpen(false);
-                        }}
-                        className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${selectedCountry === c.code ? 'bg-[#1ED760]/10 text-[#1ED760] font-bold' : 'text-slate-300 hover:bg-white/5 hover:text-white'}`}
-                      >
-                        <span className="text-xl">{c.flag}</span>
-                        <span className="text-xs">{c.label}</span>
-                        {selectedCountry === c.code && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#1ED760]" />}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </>
-            )}
+      newLayout[sectionIndex] = { ...section, hiddenItems };
+      await onUpdateExploreLayout(newLayout);
+    };
+    const [editingSectionId, setEditingSectionId] = useState<string | null>(
+      null,
+    );
+    const [editingSectionTitle, setEditingSectionTitle] = useState("");
+    const [draggedItem, setDraggedItem] = useState<{
+      sectionId: string;
+      itemId: string;
+      index: number;
+    } | null>(null);
+    const [dragOverItem, setDragOverItem] = useState<{
+      sectionId: string;
+      index: number;
+    } | null>(null);
+
+    const COUNTRIES = [
+      { code: "GLOBAL", label: "Global", flag: "🌎" },
+      { code: "US", label: "Estados Unidos", flag: "🇺🇸" },
+      { code: "ES", label: "España", flag: "🇪🇸" },
+      { code: "MX", label: "México", flag: "🇲🇽" },
+      { code: "AR", label: "Argentina", flag: "🇦🇷" },
+      { code: "CO", label: "Colombia", flag: "🇨🇴" },
+      { code: "DO", label: "República Dominicana", flag: "🇩🇴" },
+      { code: "CL", label: "Chile", flag: "🇨🇱" },
+      { code: "PE", label: "Perú", flag: "🇵🇪" },
+      { code: "GB", label: "Reino Unido", flag: "🇬🇧" },
+      { code: "DE", label: "Alemania", flag: "🇩🇪" },
+      { code: "FR", label: "Francia", flag: "🇫🇷" },
+      { code: "IT", label: "Italia", flag: "🇮🇹" },
+    ];
+
+    if (
+      !exploreData ||
+      (exploreData.top100?.length === 0 && exploreData.trending?.length === 0)
+    ) {
+      return (
+        <div className="p-12 text-center space-y-4">
+          <div className="flex justify-center">
+            <Sparkles className="w-8 h-8 text-emerald-500/30 animate-pulse" />
           </div>
-        )}
-
-        {isAdmin && (
-          <button 
-            onClick={() => setShowAddModal(true)}
-            className="flex items-center gap-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-[#1ED760]/20 whitespace-nowrap ml-2"
+          <p className="text-slate-400 text-sm font-medium">
+            No se han podido cargar las tendencias en este momento.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-6 py-2 bg-white/5 border border-white/10 rounded-full text-xs font-bold text-white hover:bg-white/10 transition-all"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Añadir Lista</span>
+            Reintentar
           </button>
-        )}
-      </div>
+        </div>
+      );
+    }
 
-      {showAddModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
-            <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-              <Plus className="w-5 h-5 text-[#1ED760]" />
-              Añadir al Explorador
-            </h3>
-            <p className="text-xs text-slate-400 mb-4">Pega el enlace de una lista de YouTube Music para fijarla en "Recomendaciones Especiales".</p>
-            
-            <input
-              type="text"
-              placeholder="https://music.youtube.com/playlist?list=..."
-              value={newPlaylistUrl}
-              onChange={(e) => setNewPlaylistUrl(e.target.value)}
-              className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#1ED760]/50 transition-colors mb-4"
-              disabled={isAdding}
-            />
-            
-            <div className="flex gap-2 justify-end">
+    const defaultLayout = [
+      {
+        id: "custom_0",
+        title: "💎 Recomendaciones Especiales",
+        type: "custom",
+        visible: true,
+        order: 0,
+      },
+      {
+        id: "mixParaTi",
+        title: "✨ Mixes Para Ti",
+        type: "default",
+        visible: true,
+        order: 1,
+      },
+      {
+        id: "top100",
+        title: "Top 100 Playlists",
+        type: "default",
+        visible: true,
+        order: 2,
+      },
+      {
+        id: "top20",
+        title: "Top 20 Tendencias",
+        type: "default",
+        visible: true,
+        order: 3,
+      },
+      {
+        id: "daily20",
+        title: "Daily Top 20",
+        type: "default",
+        visible: true,
+        order: 4,
+      },
+      {
+        id: "dailyTop",
+        title: "Nuevos Videos Musicales",
+        type: "default",
+        visible: true,
+        order: 5,
+      },
+      {
+        id: "trending",
+        title: "Tendencias Globales",
+        type: "default",
+        visible: true,
+        order: 6,
+      },
+    ];
+
+    const currentLayout =
+      exploreLayout && exploreLayout.length > 0 ? exploreLayout : defaultLayout;
+    const sortedLayout = [...currentLayout].sort((a, b) => a.order - b.order);
+
+    const getSectionData = (section: any) => {
+      let data: any[] = [];
+
+      // Load default data for non-custom sections
+      if (section.type !== "custom") {
+        switch (section.id) {
+          case "mixParaTi":
+            data = exploreData.mixParaTi || [];
+            break;
+          case "top100":
+            data = exploreData.top100 || [];
+            break;
+          case "top20":
+            data = exploreData.top20Tendencias || [];
+            break;
+          case "daily20":
+            data = exploreData.dailyTopPlaylists || [];
+            break;
+          case "dailyTop":
+            data = exploreData.dailyTop || [];
+            break;
+          case "trending":
+            data = exploreData.trending || [];
+            break;
+          default:
+            data = [];
+            break;
+        }
+      }
+
+      // Add custom playlists for this section (works for BOTH custom and default sections)
+      const customItemsForSection = customPlaylists.filter(
+        (p: any) =>
+          p.sectionId === section.id ||
+          (!p.sectionId && section.id === "custom_0"),
+      );
+
+      data = [...data, ...customItemsForSection];
+
+      if (section.hiddenItems && Array.isArray(section.hiddenItems)) {
+        data = data.filter((d) => !section.hiddenItems.includes(d.id || d.url));
+      }
+
+      if (section.customItemOrder && Array.isArray(section.customItemOrder)) {
+        data = [...data].sort((a, b) => {
+          const idA = a.id || a.url;
+          const idB = b.id || b.url;
+          const idxA = section.customItemOrder.indexOf(idA);
+          const idxB = section.customItemOrder.indexOf(idB);
+          if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+          if (idxA !== -1) return -1;
+          if (idxB !== -1) return 1;
+          return 0;
+        });
+      }
+      return data;
+    };
+
+    const sectionsToRender = sortedLayout
+      .filter((s) => s.visible || isAdmin)
+      .map((s) => ({
+        id: s.id,
+        title: s.title,
+        type: s.type,
+        visible: s.visible,
+        data: getSectionData(s),
+      }))
+      .filter(
+        (s) =>
+          (s.data && s.data.length > 0) || (isAdmin && s.type === "custom"),
+      );
+
+    const handleMoveSection = async (
+      sectionId: string,
+      direction: "up" | "down",
+    ) => {
+      if (!onUpdateExploreLayout) return;
+      const newLayout = [...sortedLayout];
+      const index = newLayout.findIndex((s) => s.id === sectionId);
+      if (index === -1) return;
+
+      if (direction === "up" && index > 0) {
+        const temp = newLayout[index];
+        newLayout[index] = newLayout[index - 1];
+        newLayout[index - 1] = temp;
+      } else if (direction === "down" && index < newLayout.length - 1) {
+        const temp = newLayout[index];
+        newLayout[index] = newLayout[index + 1];
+        newLayout[index + 1] = temp;
+      } else {
+        return;
+      }
+      newLayout.forEach((s, i) => (s.order = i));
+      await onUpdateExploreLayout(newLayout);
+    };
+
+    const handleToggleVisibility = async (sectionId: string) => {
+      if (!onUpdateExploreLayout) return;
+      const newLayout = [...sortedLayout];
+      const index = newLayout.findIndex((s) => s.id === sectionId);
+      if (index === -1) return;
+      newLayout[index].visible = !newLayout[index].visible;
+      await onUpdateExploreLayout(newLayout);
+    };
+
+    const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+
+    const handleRenameSection = async (sectionId: string) => {
+      if (!onUpdateExploreLayout || !editingSectionTitle.trim()) return;
+      const newLayout = [...sortedLayout];
+      const index = newLayout.findIndex((s) => s.id === sectionId);
+      if (index === -1) return;
+      newLayout[index].title = editingSectionTitle.trim();
+      await onUpdateExploreLayout(newLayout);
+      setEditingSectionId(null);
+      setEditingSectionTitle("");
+    };
+
+    const handleDeleteSection = async (sectionId: string) => {
+      if (!onUpdateExploreLayout) return;
+      const newLayout = sortedLayout.filter((s) => s.id !== sectionId);
+      newLayout.forEach((s, i) => (s.order = i));
+      await onUpdateExploreLayout(newLayout);
+      setSectionToDelete(null);
+    };
+
+    const handleDropItem = async (
+      sectionId: string,
+      itemId: string,
+      targetIndex: number,
+    ) => {
+      if (!onUpdateExploreLayout) return;
+      const newLayout = [...sortedLayout];
+      const sectionIndex = newLayout.findIndex((s) => s.id === sectionId);
+      if (sectionIndex === -1) return;
+
+      const section = newLayout[sectionIndex];
+      const currentData = getSectionData(section);
+
+      const itemOrder = section.customItemOrder
+        ? [...section.customItemOrder]
+        : currentData.map((d) => d.id || d.url);
+
+      currentData.forEach((d) => {
+        const id = d.id || d.url;
+        if (!itemOrder.includes(id)) {
+          itemOrder.push(id);
+        }
+      });
+
+      const itemIndex = itemOrder.indexOf(itemId);
+      if (itemIndex === -1) return;
+
+      const [removed] = itemOrder.splice(itemIndex, 1);
+
+      // If we are dropping to a later index, and we removed an item before it,
+      // the array is now 1 element shorter. So targetIndex remains the same
+      // to insert exactly where the user hovered. Wait, the array `splice` with targetIndex handles this if it's the raw array index.
+      itemOrder.splice(targetIndex, 0, removed);
+
+      newLayout[sectionIndex] = { ...section, customItemOrder: itemOrder };
+      await onUpdateExploreLayout(newLayout);
+    };
+
+    const handleAddSubmit = async () => {
+      if (!newPlaylistUrl || !onAddCustomPlaylist) return;
+      setIsAdding(true);
+      await onAddCustomPlaylist(newPlaylistUrl, selectedSectionId);
+
+      if (notifyUsers && onPublishAnnouncement) {
+        const title = "🎶 ¡Nueva Música en el Explorador!";
+        const message =
+          notifyMessage.trim() ||
+          "Hemos añadido nuevo contenido a nuestras listas. ¡Ve a descubrilo en la sección de Explorar!";
+        await onPublishAnnouncement(title, message, "novedad");
+      }
+
+      setNewPlaylistUrl("");
+      setNotifyUsers(false);
+      setNotifyMessage("");
+      setShowAddModal(false);
+      setIsAdding(false);
+    };
+
+    const handleAddSectionSubmit = async () => {
+      if (!onUpdateExploreLayout || !newSectionTitle.trim()) return;
+      setIsAdding(true);
+      const newLayout = [...sortedLayout];
+      newLayout.push({
+        id: "custom_" + Date.now(),
+        title: newSectionTitle.trim(),
+        type: "custom",
+        visible: true,
+        order: newLayout.length,
+      });
+      await onUpdateExploreLayout(newLayout);
+      setNewSectionTitle("");
+      setShowAddSectionModal(false);
+      setIsAdding(false);
+    };
+
+    return (
+      <div className="space-y-4 pb-32 px-0 sm:px-2">
+        {/* COUNTRY SELECTOR & ADMIN ACTIONS */}
+        <div className="px-3 flex items-center justify-between">
+          {setSelectedCountry && selectedCountry && (
+            <div className="relative max-w-[200px] w-full">
               <button
-                onClick={() => setShowAddModal(false)}
-                className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white"
-                disabled={isAdding}
+                onClick={() => setIsCountryModalOpen(!isCountryModalOpen)}
+                className="w-full text-left bg-[#111113] border border-white/10 text-white rounded-full px-4 py-2 text-[11px] font-bold outline-none focus:border-[#1ED760]/50 hover:bg-white/[0.05] transition-colors cursor-pointer flex justify-between items-center"
               >
-                Cancelar
+                <span className="truncate">
+                  {COUNTRIES.find((c) => c.code === selectedCountry)?.flag} Top
+                  Listas{" "}
+                  {COUNTRIES.find((c) => c.code === selectedCountry)?.label}
+                </span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-[#1ED760] shrink-0 transition-transform ${isCountryModalOpen ? "rotate-180" : ""}`}
+                />
+              </button>
+
+              {isCountryModalOpen && (
+                <>
+                  <div
+                    className="fixed inset-0 z-[40]"
+                    onClick={() => setIsCountryModalOpen(false)}
+                  ></div>
+                  <div className="absolute top-full left-0 mt-2 z-[50] w-full min-w-[220px] bg-[#18181A] border border-white/10 rounded-xl shadow-2xl overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                    <div className="max-h-[300px] overflow-y-auto p-1">
+                      {COUNTRIES.map((c) => (
+                        <button
+                          key={c.code}
+                          onClick={() => {
+                            setSelectedCountry(c.code);
+                            setIsCountryModalOpen(false);
+                          }}
+                          className={`w-full text-left px-3 py-2.5 rounded-lg flex items-center gap-3 transition-colors ${selectedCountry === c.code ? "bg-[#1ED760]/10 text-[#1ED760] font-bold" : "text-slate-300 hover:bg-white/5 hover:text-white"}`}
+                        >
+                          <span className="text-xl">{c.flag}</span>
+                          <span className="text-xs">{c.label}</span>
+                          {selectedCountry === c.code && (
+                            <div className="ml-auto w-1.5 h-1.5 rounded-full bg-[#1ED760]" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {isAdmin && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowNotifyModal(true)}
+                className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-blue-500/20 whitespace-nowrap"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Notificar Novedades</span>
               </button>
               <button
-                onClick={handleAddSubmit}
-                disabled={!newPlaylistUrl || isAdding}
-                className="px-4 py-2 bg-[#1ED760] text-black text-xs font-bold rounded-full disabled:opacity-50 flex items-center gap-2"
+                onClick={() => setShowAddSectionModal(true)}
+                className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-white/10 whitespace-nowrap"
               >
-                {isAdding ? <Loader2 className="w-4 h-4 animate-spin" /> : "Añadir Lista"}
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Añadir Categoría</span>
+              </button>
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="flex items-center gap-1.5 bg-[#1ED760]/10 hover:bg-[#1ED760]/20 text-[#1ED760] px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-[#1ED760]/20 whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Añadir Lista / Video</span>
               </button>
             </div>
-          </div>
+          )}
         </div>
-      )}
 
-      {sections.map((section, idx) => (
-        section.data && section.data.length > 0 && (
-          <section key={idx} className="space-y-3">
-            <Carousel 
-              title={
+        {showAddSectionModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-white" />
+                Nueva Categoría
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">
+                Crea un nuevo carrusel para añadir tus propias listas de
+                reproducción y videos.
+              </p>
+
+              <input
+                type="text"
+                placeholder="Ej: Nuevos Álbums"
+                value={newSectionTitle}
+                onChange={(e) => setNewSectionTitle(e.target.value)}
+                className="w-full bg-[#1A1A1A] text-white border border-white/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-white transition-colors mb-6"
+                autoFocus
+              />
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowAddSectionModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white"
+                  disabled={isAdding}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddSectionSubmit}
+                  disabled={!newSectionTitle.trim() || isAdding}
+                  className="px-4 py-2 bg-white text-black text-xs font-bold rounded-full disabled:opacity-50 flex items-center gap-2 hover:bg-slate-200 transition-colors"
+                >
+                  {isAdding ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Crear Categoría"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showNotifyModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <MessageSquare className="w-5 h-5 text-blue-500" />
+                Notificar Novedades
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">
+                Envía un aviso a todos los usuarios para destacar nuevos
+                lanzamientos o actualizaciones en el explorador.
+              </p>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 mb-2 block">
+                    Título:
+                  </label>
+                  <input
+                    type="text"
+                    value={manualNotifyTitle}
+                    onChange={(e) => setManualNotifyTitle(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-slate-400 mb-2 block">
+                    Mensaje:
+                  </label>
+                  <textarea
+                    placeholder="Ej: Nuevos álbumes de tus artistas favoritos disponibles..."
+                    value={manualNotifyMessage}
+                    onChange={(e) => setManualNotifyMessage(e.target.value)}
+                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors resize-none h-24"
+                  />
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowNotifyModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                  disabled={isAdding}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={async () => {
+                    if (
+                      onPublishAnnouncement &&
+                      manualNotifyTitle.trim() &&
+                      manualNotifyMessage.trim()
+                    ) {
+                      setIsAdding(true);
+                      await onPublishAnnouncement(
+                        manualNotifyTitle.trim(),
+                        manualNotifyMessage.trim(),
+                        "novedad",
+                      );
+                      setManualNotifyMessage("");
+                      setShowNotifyModal(false);
+                      setIsAdding(false);
+                    }
+                  }}
+                  disabled={
+                    isAdding ||
+                    !manualNotifyTitle.trim() ||
+                    !manualNotifyMessage.trim()
+                  }
+                  className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full hover:bg-blue-600 disabled:opacity-50 transition-colors"
+                >
+                  {isAdding ? "Enviando..." : "Enviar Notificación"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {itemToDelete && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <X className="w-5 h-5 text-red-500" />
+                Eliminar Lista
+              </h3>
+              <p className="text-sm text-slate-300 mb-6">
+                ¿Estás seguro de que deseas eliminar esta lista recomendada?
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setItemToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => {
+                    if (itemToDelete.docId && onDeleteCustomPlaylist) {
+                      onDeleteCustomPlaylist(itemToDelete.docId);
+                    } else if (itemToDelete.sectionId && itemToDelete.itemId) {
+                      handleHideItem(
+                        itemToDelete.sectionId,
+                        itemToDelete.itemId,
+                      );
+                    }
+                    setItemToDelete(null);
+                  }}
+                  className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-full hover:bg-red-600 transition-colors"
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sectionToDelete && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <X className="w-5 h-5 text-red-500" />
+                Eliminar Categoría
+              </h3>
+              <p className="text-sm text-slate-300 mb-6">
+                ¿Estás seguro de que deseas eliminar esta categoría? Se ocultará
+                de la vista de los usuarios.
+              </p>
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setSectionToDelete(null)}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => handleDeleteSection(sectionToDelete)}
+                  className="px-4 py-2 bg-red-500 text-white text-xs font-bold rounded-full hover:bg-red-600 transition-colors"
+                >
+                  Sí, eliminar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showAddModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
+              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
+                <Plus className="w-5 h-5 text-[#1ED760]" />
+                Añadir al Explorador
+              </h3>
+              <p className="text-xs text-slate-400 mb-4">
+                Pega el enlace de una lista o video de YouTube Music para
+                fijarlo en el Explorador.
+              </p>
+
+              <input
+                type="text"
+                placeholder="https://music.youtube.com/playlist?list=... o watch?v=..."
+                value={newPlaylistUrl}
+                onChange={(e) => setNewPlaylistUrl(e.target.value)}
+                className="w-full bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-[#1ED760]/50 transition-colors mb-4"
+                disabled={isAdding}
+              />
+
+              <div className="mb-4">
+                <label className="text-xs font-bold text-slate-400 mb-2 block">
+                  Categoría destino:
+                </label>
+                <select
+                  value={selectedSectionId}
+                  onChange={(e) => setSelectedSectionId(e.target.value)}
+                  className="w-full bg-[#1A1A1A] text-white border border-white/10 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#1ED760] transition-colors appearance-none"
+                >
+                  {sortedLayout.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
+                  {sortedLayout.length === 0 && (
+                    <option value="custom_0">
+                      💎 Recomendaciones Especiales
+                    </option>
+                  )}
+                </select>
+              </div>
+
+              <div className="mb-6 space-y-3">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={notifyUsers}
+                    onChange={(e) => setNotifyUsers(e.target.checked)}
+                    className="w-4 h-4 rounded bg-black/50 border-white/20 text-[#1ED760] focus:ring-[#1ED760] focus:ring-offset-0"
+                  />
+                  <span className="text-xs font-medium text-slate-300">
+                    Notificar a los usuarios
+                  </span>
+                </label>
+
+                {notifyUsers && (
+                  <textarea
+                    placeholder="Escribe un mensaje para notificar a los usuarios..."
+                    value={notifyMessage}
+                    onChange={(e) => setNotifyMessage(e.target.value)}
+                    className="w-full bg-black/50 border border-[#1ED760]/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#1ED760] transition-colors resize-none h-16"
+                  />
+                )}
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <button
+                  onClick={() => setShowAddModal(false)}
+                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white"
+                  disabled={isAdding}
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleAddSubmit}
+                  disabled={!newPlaylistUrl || isAdding}
+                  className="px-4 py-2 bg-[#1ED760] text-black text-xs font-bold rounded-full disabled:opacity-50 flex items-center gap-2"
+                >
+                  {isAdding ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    "Añadir Lista"
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {sectionsToRender.map((section, idx) => (
+          <section
+            key={section.id}
+            className={`space-y-3 relative group/section ${!section.visible ? "opacity-50 grayscale" : ""}`}
+          >
+            <div className="flex items-center justify-between px-3 sm:px-1">
+              {editingSectionId === section.id ? (
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={editingSectionTitle}
+                    onChange={(e) => setEditingSectionTitle(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        handleRenameSection(section.id);
+                      } else if (e.key === "Escape") {
+                        setEditingSectionId(null);
+                        setEditingSectionTitle("");
+                      }
+                    }}
+                    autoFocus
+                    className="bg-black/50 border border-[#1ED760]/50 rounded px-2 py-1 text-sm font-bold text-white focus:outline-none w-48"
+                  />
+                  <button
+                    onClick={() => handleRenameSection(section.id)}
+                    className="p-1 text-[#1ED760] hover:bg-[#1ED760]/20 rounded transition-colors"
+                  >
+                    <Check className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingSectionId(null);
+                      setEditingSectionTitle("");
+                    }}
+                    className="p-1 text-slate-400 hover:text-white rounded transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
                 <h2 className="text-sm font-bold text-white flex items-center gap-2 cursor-pointer hover:underline w-fit">
                   {section.title}
                   <ChevronRight className="w-4 h-4 text-slate-400" />
                 </h2>
-              }
-              className="gap-4 pb-2 snap-x px-3 sm:px-1"
+              )}
+              {isAdmin && (
+                <div className="flex items-center gap-1 opacity-0 group-hover/section:opacity-100 transition-opacity bg-black/50 backdrop-blur-md px-2 py-1 rounded-full border border-white/10">
+                  <button
+                    onClick={() => {
+                      setEditingSectionId(section.id);
+                      setEditingSectionTitle(section.title);
+                    }}
+                    className="p-1 text-slate-400 hover:text-white transition-colors"
+                    title="Renombrar sección"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                  </button>
+                  <div className="w-px h-4 bg-white/20 mx-1"></div>
+                  <button
+                    onClick={() => handleMoveSection(section.id, "up")}
+                    disabled={idx === 0}
+                    className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                    title="Subir sección"
+                  >
+                    <ArrowUp className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleMoveSection(section.id, "down")}
+                    disabled={idx === sectionsToRender.length - 1}
+                    className="p-1 text-slate-400 hover:text-white disabled:opacity-30 transition-colors"
+                    title="Bajar sección"
+                  >
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
+                  <div className="w-px h-4 bg-white/20 mx-1"></div>
+                  <button
+                    onClick={() => handleToggleVisibility(section.id)}
+                    className="p-1 text-slate-400 hover:text-white transition-colors"
+                    title={
+                      section.visible ? "Ocultar sección" : "Mostrar sección"
+                    }
+                  >
+                    {section.visible ? (
+                      <EyeOff className="w-4 h-4" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-emerald-500" />
+                    )}
+                  </button>
+                  {section.type === "custom" && (
+                    <button
+                      onClick={() => setSectionToDelete(section.id)}
+                      className="p-1 text-red-400 hover:text-red-300 transition-colors"
+                      title="Eliminar categoría"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <Carousel
+              title={null}
+              className="gap-4 pb-2 snap-x px-3 sm:px-1 min-h-[140px]"
             >
-              {section.data.map((item: any, songIdx: number) => {
-                const isActive = currentTrack && (currentTrack.url === item.url || currentTrack.id === item.id);
-                
-                return (
-                <div key={item.id + idx + songIdx} className="snap-start shrink-0 w-[130px] sm:w-36 group cursor-pointer" onClick={() => {
-                  if (item.isPlaylist) {
-                    loadPlaylistAndPlay(item.data || item);
-                    return;
-                  }
-                  
-                  if (isActive) {
-                    setIsPlaying(!isPlaying);
-                    return;
-                  }
+              {(!section.data || section.data.length === 0) && (
+                <div className="w-full flex items-center justify-center p-8 border border-dashed border-white/10 rounded-xl text-slate-400 text-xs">
+                  No hay elementos en esta categoría. Usa "Añadir Lista / Video"
+                  para agregar contenido.
+                </div>
+              )}
+              {section.data &&
+                section.data.map((item: any, songIdx: number) => {
+                  const isActive =
+                    currentTrack &&
+                    (currentTrack.url === item.url ||
+                      currentTrack.id === item.id);
+                  const itemId = item.id || item.url;
 
-                  if (playTracksContext) {
-                    const songsOnly = section.data.filter((t: any) => !t.isPlaylist);
-                    const idxInSongs = songsOnly.findIndex((t: any) => t.id === item.id);
-                    playTracksContext(songsOnly, idxInSongs !== -1 ? idxInSongs : 0);
-                  } else {
-                    const mapped: MusicTrack = {
-                      id: item.id,
-                      title: item.title,
-                      artist: item.artist || "Artista",
-                      url: item.url,
-                      duration: item.duration || "0:00",
-                      bpm: 120
-                    };
-                    setOverrideCurrentTrack(mapped);
-                    setIsPlaying(true);
-                    showNotification(`Reproduciendo: ${item.title}`);
-                  }
-                }}>
-                  <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#111113] border border-white/5 relative mb-2.5">
-                      <img src={item.thumbnail} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" loading="lazy" referrerPolicy="no-referrer" />
-                      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                         <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl">
+                  return (
+                    <div
+                      key={itemId + idx + songIdx}
+                      className={`snap-start shrink-0 w-[130px] sm:w-36 group cursor-pointer relative transition-all ${draggedItem?.itemId === itemId ? "opacity-50 scale-95" : ""} ${dragOverItem?.sectionId === section.id && dragOverItem?.index === songIdx ? "border-l-2 border-[#1ED760] pl-1 -ml-1" : ""}`}
+                      draggable={isAdmin}
+                      onDragStart={(e) => {
+                        if (isAdmin) {
+                          setDraggedItem({
+                            sectionId: section.id,
+                            itemId,
+                            index: songIdx,
+                          });
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", itemId);
+                        }
+                      }}
+                      onDragOver={(e) => {
+                        if (isAdmin && draggedItem) {
+                          e.preventDefault();
+                          e.dataTransfer.dropEffect = "move";
+                          if (
+                            dragOverItem?.sectionId !== section.id ||
+                            dragOverItem?.index !== songIdx
+                          ) {
+                            setDragOverItem({
+                              sectionId: section.id,
+                              index: songIdx,
+                            });
+                          }
+                        }
+                      }}
+                      onDragLeave={(e) => {
+                        if (
+                          isAdmin &&
+                          dragOverItem?.sectionId === section.id &&
+                          dragOverItem?.index === songIdx
+                        ) {
+                          setDragOverItem(null);
+                        }
+                      }}
+                      onDrop={(e) => {
+                        if (isAdmin && draggedItem) {
+                          e.preventDefault();
+                          if (
+                            draggedItem.sectionId === section.id &&
+                            draggedItem.itemId !== itemId
+                          ) {
+                            handleDropItem(
+                              section.id,
+                              draggedItem.itemId,
+                              songIdx,
+                            );
+                          }
+                          setDraggedItem(null);
+                          setDragOverItem(null);
+                        }
+                      }}
+                      onDragEnd={() => {
+                        setDraggedItem(null);
+                        setDragOverItem(null);
+                      }}
+                      onClick={() => {
+                        if (item.isPlaylist) {
+                          loadPlaylistAndPlay(item.data || item);
+                          return;
+                        }
+
+                        if (isActive) {
+                          setIsPlaying(!isPlaying);
+                          return;
+                        }
+
+                        if (playTracksContext) {
+                          const songsOnly = section.data.filter(
+                            (t: any) => !t.isPlaylist,
+                          );
+                          const idxInSongs = songsOnly.findIndex(
+                            (t: any) => t.id === item.id,
+                          );
+                          playTracksContext(
+                            songsOnly,
+                            idxInSongs !== -1 ? idxInSongs : 0,
+                          );
+                        } else {
+                          const mapped: MusicTrack = {
+                            id: item.id,
+                            title: item.title,
+                            artist: item.artist || "Artista",
+                            url: item.url,
+                            duration: item.duration || "0:00",
+                            bpm: 120,
+                          };
+                          setOverrideCurrentTrack(mapped);
+                          setIsPlaying(true);
+                          showNotification(`Reproduciendo: ${item.title}`);
+                        }
+                      }}
+                    >
+                      <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#111113] border border-white/5 relative mb-2.5">
+                        <img
+                          src={item.thumbnail}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          loading="lazy"
+                          referrerPolicy="no-referrer"
+                        />
+                        <div className="absolute inset-0 bg-black/10 group-hover:bg-black/40 transition-colors flex items-center justify-center">
+                          <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl">
                             {isActive && isPlaying ? (
                               <Pause className="w-2 h-2 text-black fill-black" />
                             ) : (
                               <Play className="w-2 h-2 text-black fill-black ml-0.5" />
                             )}
-                         </div>
+                          </div>
+                        </div>
+                        <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-[9px] font-medium text-white px-1.5 py-0.5 rounded-sm backdrop-blur-sm shadow-md">
+                          {item.artist !== "YouTube Music"
+                            ? "PLAYLIST"
+                            : "CANAL"}
+                        </div>
+                        {isAdmin && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (item.docId) {
+                                setItemToDelete({ docId: item.docId });
+                              } else {
+                                setItemToDelete({
+                                  sectionId: section.id,
+                                  itemId: item.id || item.url,
+                                });
+                              }
+                            }}
+                            className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-500/80 text-white p-1 rounded-full backdrop-blur-sm shadow-md transition-colors opacity-0 group-hover:opacity-100"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
                       </div>
-                      <div className="absolute bottom-1.5 right-1.5 bg-black/60 text-[9px] font-medium text-white px-1.5 py-0.5 rounded-sm backdrop-blur-sm shadow-md">
-                        {item.artist !== "YouTube Music" ? "PLAYLIST" : "CANAL"}
-                      </div>
-                      {isAdmin && item.docId && onDeleteCustomPlaylist && (
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            if (window.confirm("¿Seguro que deseas eliminar esta lista recomendada?")) {
-                              onDeleteCustomPlaylist(item.docId);
-                            }
-                          }}
-                          className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-red-500/80 text-white p-1 rounded-full backdrop-blur-sm shadow-md transition-colors opacity-0 group-hover:opacity-100"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      )}
-                  </div>
-                  <p className="text-[12px] font-bold text-white leading-tight line-clamp-2" title={item.title}>{item.title}</p>
-                </div>
-              );})}
+                      <p
+                        className="text-[12px] font-bold text-white leading-tight line-clamp-2"
+                        title={item.title}
+                      >
+                        {item.title}
+                      </p>
+                    </div>
+                  );
+                })}
             </Carousel>
           </section>
-        )
-      ))}
-    </div>
-  );
-});
+        ))}
+      </div>
+    );
+  },
+);

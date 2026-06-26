@@ -115,5 +115,11 @@ service cloud.firestore {
       allow get, list: if true;
       allow create, update, delete: if isAdmin();
     }
+
+    // 7. Admin Configuration
+    match /admin/{docId} {
+      allow get, list: if true;
+      allow create, update, delete: if isAdmin();
+    }
   }
 }

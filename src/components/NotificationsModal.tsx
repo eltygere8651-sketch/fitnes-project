@@ -18,6 +18,13 @@ import { db } from "../lib/firebase";
 // Compiled App Updates to ensure update history is always populated
 export const COMPILED_UPDATES: Announcement[] = [
   {
+    id: "update-v1.7.0",
+    title: "✨ Actualización Flux v1.7.0 - Mejoras en el Explorador y Novedades",
+    category: "actualizacion",
+    createdAt: new Date(),
+    content: "• Gestión Rápida de Listas: Ahora puedes reordenar listas simplemente arrastrando con el ratón, haciendo la organización mucho más fluida.\n• Edición en Vivo: Renombra categorías existentes fácilmente.\n• Limpieza Dinámica: Se pueden ocultar o eliminar listas de cualquier categoría para mantener el explorador siempre con música fresca.\n• Notificaciones Integradas: El sistema ahora cuenta con un mecanismo para resaltar y notificar de manera global los últimos lanzamientos musicales."
+  },
+  {
     id: "update-v1.6.6",
     title: "✨ Actualización Flux v1.6.6 - Reanudación Inteligente",
     category: "actualizacion",

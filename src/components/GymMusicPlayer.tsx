@@ -1251,9 +1251,6 @@ export default function GymMusicPlayer() {
   };
 
   const [showLibrary, setShowLibrary] = useState(false);
-  const [searchSubTab, setSearchSubTab] = useState<
-    "novedades" | "charts" | "moods"
-  >("novedades");
   const [isTrackListExpanded, setIsTrackListExpanded] = useState<boolean>(true);
   const [isSidebarExpanded, setIsSidebarExpanded] = useState<boolean>(false);
   const [previewPlaylist, setPreviewPlaylist] = useState<MusicPlaylist | null>(
@@ -1482,26 +1479,6 @@ export default function GymMusicPlayer() {
         "Error al actualizar el diseño: " + (e.message || "Desconocido"),
       );
       console.error("Error update layout:", e);
-    }
-  };
-
-  const handlePublishAnnouncement = async (
-    title: string,
-    content: string,
-    category: string = "noticia",
-  ) => {
-    try {
-      const randId = "ann_" + Math.random().toString(36).substring(2, 11);
-      await setDoc(doc(db, "announcements", randId), {
-        title,
-        content,
-        category,
-        createdAt: new Date(),
-        active: true,
-      });
-      showNotification("Notificación enviada a los usuarios");
-    } catch (e) {
-      console.error("Error publishing announcement:", e);
     }
   };
 
@@ -4854,14 +4831,8 @@ export default function GymMusicPlayer() {
               }
             }}
             onBuffer={() => {
-              // Play silent audio to hold the iOS background session while buffering
-              if (
-                expectedPlayingRef.current &&
-                fallbackSilentAudioRef.current &&
-                fallbackSilentAudioRef.current.paused
-              ) {
-                fallbackSilentAudioRef.current.play().catch(() => {});
-              }
+              // We do not play silent audio here anymore to avoid stealing audio focus from YouTube iframe
+              // which causes a 2-3 second delay in sound resuming. The pre-activation in onProgress is enough.
             }}
             onBufferEnd={() => {
               // Do not recreate action handlers so it doesn't cause a micro-cut
@@ -4938,12 +4909,18 @@ export default function GymMusicPlayer() {
                 pendingSeekPosRef.current !== null &&
                 pendingSeekPosRef.current > 0
               ) {
-                if (state.playedSeconds < 1) {
-                  // Ignore early progress events before the seek has actually taken effect
+                if (state.playedSeconds < 1 && pendingSeekPosRef.current > 2) {
+                  // Ignore early progress events and enforce the seek if YouTube iframe ignored the onReady seek
+                  youtubePlayerRef.current?.seekTo(
+                    pendingSeekPosRef.current,
+                    "seconds",
+                  );
                   return;
-                } else {
+                } else if (state.playedSeconds >= 1) {
                   // Seek has passed the 0-second mark reliably, we no longer need to protect against early events
                   pendingSeekPosRef.current = null;
+                } else {
+                  return; // It's seeking to < 2 seconds, just wait.
                 }
               }
               const currentPosMs = state.playedSeconds * 1000;
@@ -6549,9 +6526,6 @@ export default function GymMusicPlayer() {
                                       onUpdateExploreLayout={
                                         handleUpdateExploreLayout
                                       }
-                                      onPublishAnnouncement={
-                                        handlePublishAnnouncement
-                                      }
                                       setOverrideCurrentTrack={
                                         setOverrideCurrentTrack
                                       }
@@ -7566,7 +7540,7 @@ export default function GymMusicPlayer() {
                   }}
                   className="px-5 py-2.5 bg-emerald-500 text-black font-black uppercase text-[10px] rounded-lg hover:scale-105 transition-all shadow-xl flex items-center gap-2"
                 >
-                  Explorar Novedades
+                  Explorar
                 </button>
               </div>
             </div>

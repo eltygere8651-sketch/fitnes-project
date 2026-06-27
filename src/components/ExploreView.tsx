@@ -16,7 +16,6 @@ import {
   ArrowDown,
   Pencil,
   Check,
-  MessageSquare,
 } from "lucide-react";
 import { MusicTrack } from "../types";
 import { Carousel } from "./Carousel";
@@ -29,11 +28,6 @@ interface ExploreViewProps {
   onAddCustomPlaylist?: (url: string, sectionId?: string) => Promise<void>;
   onDeleteCustomPlaylist?: (docId: string) => Promise<void>;
   onUpdateExploreLayout?: (layout: any[]) => Promise<void>;
-  onPublishAnnouncement?: (
-    title: string,
-    content: string,
-    category?: string,
-  ) => Promise<void>;
   setOverrideCurrentTrack: (track: MusicTrack) => void;
   setIsPlaying: (playing: boolean) => void;
   showNotification: (msg: string) => void;
@@ -55,7 +49,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     onAddCustomPlaylist,
     onDeleteCustomPlaylist,
     onUpdateExploreLayout,
-    onPublishAnnouncement,
     setOverrideCurrentTrack,
     setIsPlaying,
     showNotification,
@@ -74,13 +67,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
     const [newSectionTitle, setNewSectionTitle] = useState("");
     const [selectedSectionId, setSelectedSectionId] = useState("custom_0");
     const [isAdding, setIsAdding] = useState(false);
-    const [notifyUsers, setNotifyUsers] = useState(false);
-    const [notifyMessage, setNotifyMessage] = useState("");
-    const [showNotifyModal, setShowNotifyModal] = useState(false);
-    const [manualNotifyTitle, setManualNotifyTitle] = useState(
-      "🎶 ¡Nuevos Lanzamientos!",
-    );
-    const [manualNotifyMessage, setManualNotifyMessage] = useState("");
 
     const [itemToDelete, setItemToDelete] = useState<{
       docId?: string;
@@ -371,17 +357,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       setIsAdding(true);
       await onAddCustomPlaylist(newPlaylistUrl, selectedSectionId);
 
-      if (notifyUsers && onPublishAnnouncement) {
-        const title = "🎶 ¡Nueva Música en el Explorador!";
-        const message =
-          notifyMessage.trim() ||
-          "Hemos añadido nuevo contenido a nuestras listas. ¡Ve a descubrilo en la sección de Explorar!";
-        await onPublishAnnouncement(title, message, "novedad");
-      }
-
       setNewPlaylistUrl("");
-      setNotifyUsers(false);
-      setNotifyMessage("");
       setShowAddModal(false);
       setIsAdding(false);
     };
@@ -457,13 +433,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
           {isAdmin && (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setShowNotifyModal(true)}
-                className="flex items-center gap-1.5 bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-blue-500/20 whitespace-nowrap"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Notificar Novedades</span>
-              </button>
-              <button
                 onClick={() => setShowAddSectionModal(true)}
                 className="flex items-center gap-1.5 bg-white/5 hover:bg-white/10 text-white px-3 py-2 rounded-full text-[11px] font-bold transition-colors border border-white/10 whitespace-nowrap"
               >
@@ -520,83 +489,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                   ) : (
                     "Crear Categoría"
                   )}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {showNotifyModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-            <div className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-2xl p-5 shadow-2xl animate-in fade-in zoom-in-95">
-              <h3 className="text-white font-bold mb-4 flex items-center gap-2">
-                <MessageSquare className="w-5 h-5 text-blue-500" />
-                Notificar Novedades
-              </h3>
-              <p className="text-xs text-slate-400 mb-4">
-                Envía un aviso a todos los usuarios para destacar nuevos
-                lanzamientos o actualizaciones en el explorador.
-              </p>
-
-              <div className="space-y-4 mb-6">
-                <div>
-                  <label className="text-xs font-bold text-slate-400 mb-2 block">
-                    Título:
-                  </label>
-                  <input
-                    type="text"
-                    value={manualNotifyTitle}
-                    onChange={(e) => setManualNotifyTitle(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-bold text-slate-400 mb-2 block">
-                    Mensaje:
-                  </label>
-                  <textarea
-                    placeholder="Ej: Nuevos álbumes de tus artistas favoritos disponibles..."
-                    value={manualNotifyMessage}
-                    onChange={(e) => setManualNotifyMessage(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors resize-none h-24"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-2 justify-end">
-                <button
-                  onClick={() => setShowNotifyModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white transition-colors"
-                  disabled={isAdding}
-                >
-                  Cancelar
-                </button>
-                <button
-                  onClick={async () => {
-                    if (
-                      onPublishAnnouncement &&
-                      manualNotifyTitle.trim() &&
-                      manualNotifyMessage.trim()
-                    ) {
-                      setIsAdding(true);
-                      await onPublishAnnouncement(
-                        manualNotifyTitle.trim(),
-                        manualNotifyMessage.trim(),
-                        "novedad",
-                      );
-                      setManualNotifyMessage("");
-                      setShowNotifyModal(false);
-                      setIsAdding(false);
-                    }
-                  }}
-                  disabled={
-                    isAdding ||
-                    !manualNotifyTitle.trim() ||
-                    !manualNotifyMessage.trim()
-                  }
-                  className="px-4 py-2 bg-blue-500 text-white text-xs font-bold rounded-full hover:bg-blue-600 disabled:opacity-50 transition-colors"
-                >
-                  {isAdding ? "Enviando..." : "Enviar Notificación"}
                 </button>
               </div>
             </div>
@@ -713,30 +605,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                 </select>
               </div>
 
-              <div className="mb-6 space-y-3">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={notifyUsers}
-                    onChange={(e) => setNotifyUsers(e.target.checked)}
-                    className="w-4 h-4 rounded bg-black/50 border-white/20 text-[#1ED760] focus:ring-[#1ED760] focus:ring-offset-0"
-                  />
-                  <span className="text-xs font-medium text-slate-300">
-                    Notificar a los usuarios
-                  </span>
-                </label>
-
-                {notifyUsers && (
-                  <textarea
-                    placeholder="Escribe un mensaje para notificar a los usuarios..."
-                    value={notifyMessage}
-                    onChange={(e) => setNotifyMessage(e.target.value)}
-                    className="w-full bg-black/50 border border-[#1ED760]/30 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-[#1ED760] transition-colors resize-none h-16"
-                  />
-                )}
-              </div>
-
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-end mt-6">
                 <button
                   onClick={() => setShowAddModal(false)}
                   className="px-4 py-2 text-xs font-bold text-slate-300 hover:text-white"

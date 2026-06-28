@@ -2190,6 +2190,36 @@ export default function GymMusicPlayer() {
 
   const lastSkipTimeRef = useRef<number>(0);
 
+  const loadIframeVideoDirectly = (targetTrack: any) => {
+    if (!targetTrack) return;
+    if ("mediaSession" in navigator) {
+      try {
+        navigator.mediaSession.metadata = new MediaMetadata({
+          title: targetTrack.title || "Cargando...",
+          artist: targetTrack.artist || "Flux",
+          artwork: [
+            {
+              src:
+                targetTrack.thumbnail_url ||
+                "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17",
+              sizes: "512x512",
+              type: "image/jpeg",
+            },
+          ],
+        });
+      } catch (e) {}
+    }
+    const nextUrl = (targetTrack.url || "").replace("music.youtube.com", "www.youtube.com");
+    const match = nextUrl.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
+    if (match && match[1] && document.hidden) {
+       const videoId = match[1];
+       const intPlayer = youtubePlayerRef.current?.getInternalPlayer();
+       if (intPlayer && typeof intPlayer.loadVideoById === "function") {
+           intPlayer.loadVideoById(videoId);
+       }
+    }
+  };
+
   const handleNext = useCallback(() => {
     const now = Date.now();
     if (now - lastSkipTimeRef.current < 400) return;
@@ -2203,63 +2233,50 @@ export default function GymMusicPlayer() {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
-    // Record skip in taste engine
-    const activeTrack =
+    const currentActiveTrack =
       overrideCurrentTrack ||
       displayTracks[currentTrackIndex] ||
       displayTracks[0] ||
       ALL_DATABASE_TRACKS[0];
-    if (activeTrack) {
-      if ("mediaSession" in navigator) {
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: activeTrack.title || "Saltando...",
-            artist: activeTrack.artist || "Flux",
-            artwork: [
-              {
-                src:
-                  activeTrack.thumbnail_url ||
-                  "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17",
-                sizes: "512x512",
-                type: "image/jpeg",
-              },
-            ],
-          });
-        } catch (e) {}
-      }
-      recordTrackSkip(activeTrack);
+      
+    if (currentActiveTrack) {
+      recordTrackSkip(currentActiveTrack);
     }
 
+    let nextTrackTarget = null;
+    let nextIndex = 0;
+
     if (trackQueueRef.current.length > 0) {
-      const nextTrack = trackQueueRef.current[0];
-      setOverrideCurrentTrack(nextTrack);
-      setIsPlaying(true);
+      nextTrackTarget = trackQueueRef.current[0];
+      setOverrideCurrentTrack(nextTrackTarget);
       setTrackQueue(trackQueueRef.current.slice(1));
-      showNotification(`Siguiente en cola: ${nextTrack.title}`);
+      showNotification(`Siguiente en cola: ${nextTrackTarget.title}`);
       pendingSeekPosRef.current = null;
       setPosition(0);
       setDuration(0);
+      setIsPlaying(true);
+      loadIframeVideoDirectly(nextTrackTarget);
       return;
     }
 
-    // Si la cola está vacía, limpiamos la pista forzada para volver al flujo de la lista de reproducción
     setOverrideCurrentTrack(null);
-
     pendingSeekPosRef.current = null;
     setPosition(0);
     setDuration(0);
 
+    const tracksList = displayTracks;
+
     if (isShuffle) {
-      const tracksList = displayTracks;
       if (tracksList.length > 1) {
         const currentIndex = currentTrackIndex;
         let randomIndex = Math.floor(Math.random() * tracksList.length);
         if (randomIndex === currentIndex) {
           randomIndex = (randomIndex + 1) % tracksList.length;
         }
+        nextIndex = randomIndex;
+        nextTrackTarget = tracksList[randomIndex];
         setCurrentTrackIndex(randomIndex);
       } else {
-        // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
         const allPlaylistsWithTracks = userPlaylists.filter(
           (pl) => pl.tracks && pl.tracks.length > 0,
         );
@@ -2273,32 +2290,42 @@ export default function GymMusicPlayer() {
           const randTrackIdx = Math.floor(
             Math.random() * randomPl.tracks.length,
           );
+          nextIndex = randTrackIdx;
+          nextTrackTarget = randomPl.tracks[randTrackIdx];
           setCurrentTrackIndex(randTrackIdx);
         } else {
           const randDbTrackIdx = Math.floor(
             Math.random() * ALL_DATABASE_TRACKS.length,
           );
+          nextIndex = randDbTrackIdx;
+          nextTrackTarget = ALL_DATABASE_TRACKS[randDbTrackIdx];
           setCurrentTrackIndex(randDbTrackIdx);
         }
       }
       setIsPlaying(true);
+      loadIframeVideoDirectly(nextTrackTarget);
       return;
     }
 
-    const tracksList = displayTracks;
     if (isRepeat) {
+      nextTrackTarget = currentActiveTrack;
       if (youtubePlayerRef.current) {
         youtubePlayerRef.current.seekTo(0);
       }
       setIsPlaying(true);
+      loadIframeVideoDirectly(nextTrackTarget);
       return;
     }
+    
     if (currentTrackIndex < tracksList.length - 1) {
-      setCurrentTrackIndex((prev) => prev + 1);
+      nextIndex = currentTrackIndex + 1;
     } else if (tracksList.length > 0) {
-      setCurrentTrackIndex(0);
+      nextIndex = 0;
     }
+    nextTrackTarget = tracksList[nextIndex];
+    setCurrentTrackIndex(nextIndex);
     setIsPlaying(true);
+    loadIframeVideoDirectly(nextTrackTarget);
   }, [
     displayTracks,
     currentTrackIndex,
@@ -2306,6 +2333,7 @@ export default function GymMusicPlayer() {
     userPlaylists,
     playingPlaylist,
     isRepeat,
+    overrideCurrentTrack,
   ]);
 
   const handlePrev = useCallback(() => {
@@ -2321,87 +2349,68 @@ export default function GymMusicPlayer() {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
-    // 1) Si la canción lleva más de 3 segundos, lo estándar es reiniciar la canción actual.
     if (youtubePlayerRef.current) {
       const currentSec = youtubePlayerRef.current.getCurrentTime() || 0;
       if (currentSec > 3) {
         youtubePlayerRef.current.seekTo(0, "seconds");
         setIsPlaying(true);
-        // Do not force setPositionState to 0 manually here because it can cause a stall in Brave/Car displays
-        // We will let the interval or the next onProgress catch up to the new position automatically.
         return;
       }
     }
 
     setOverrideCurrentTrack(null);
+    pendingSeekPosRef.current = null;
+    setPosition(0);
+    setDuration(0);
 
-    // 2) Si realmente vamos a la pista anterior, pre-calculamos cuál será
     const tracksList = displayTracks;
     let nextIndex = currentTrackIndex - 1;
-    if (nextIndex < 0)
+    if (nextIndex < 0) {
       nextIndex = tracksList.length > 0 ? tracksList.length - 1 : 0;
-
-    if (isShuffle && tracksList.length > 1) {
-      nextIndex = Math.floor(Math.random() * tracksList.length);
-      if (nextIndex === currentTrackIndex) {
-        nextIndex = (nextIndex + 1) % tracksList.length;
-      }
     }
+    
+    let nextTrackTarget = tracksList[nextIndex] || ALL_DATABASE_TRACKS[0];
 
-    // Try to instantly update media session for fast car-screen response with the *correct* incoming track
-    const activeTrack = tracksList[nextIndex] || ALL_DATABASE_TRACKS[0];
-    if (activeTrack) {
-      if ("mediaSession" in navigator) {
-        try {
-          navigator.mediaSession.metadata = new MediaMetadata({
-            title: activeTrack.title || "Saltando...",
-            artist: activeTrack.artist || "Flux Premium",
-            artwork: [
-              {
-                src:
-                  activeTrack.thumbnail_url ||
-                  "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17",
-                sizes: "512x512",
-                type: "image/jpeg",
-              },
-            ],
-          });
-        } catch (e) {}
-      }
-    }
-
-    if (isShuffle && tracksList.length <= 1) {
-      // Playlist has only 1 track or is empty! Jump to a random song in ANY other user playlist with songs, or database tracks
-      const allPlaylistsWithTracks = userPlaylists.filter(
-        (pl) => pl.tracks && pl.tracks.length > 0,
-      );
-      if (allPlaylistsWithTracks.length > 0) {
-        const randomPl =
-          allPlaylistsWithTracks[
-            Math.floor(Math.random() * allPlaylistsWithTracks.length)
-          ];
-        setSelectedPlaylist(randomPl);
-        setPlayingPlaylist(randomPl);
-        const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
-        setCurrentTrackIndex(randTrackIdx);
+    if (isShuffle) {
+      if (tracksList.length > 1) {
+        nextIndex = Math.floor(Math.random() * tracksList.length);
+        if (nextIndex === currentTrackIndex) {
+          nextIndex = (nextIndex + 1) % tracksList.length;
+        }
+        nextTrackTarget = tracksList[nextIndex];
+        setCurrentTrackIndex(nextIndex);
       } else {
-        const randDbTrackIdx = Math.floor(
-          Math.random() * ALL_DATABASE_TRACKS.length,
+        const allPlaylistsWithTracks = userPlaylists.filter(
+          (pl) => pl.tracks && pl.tracks.length > 0,
         );
-        setCurrentTrackIndex(randDbTrackIdx);
+        if (allPlaylistsWithTracks.length > 0) {
+          const randomPl =
+            allPlaylistsWithTracks[
+              Math.floor(Math.random() * allPlaylistsWithTracks.length)
+            ];
+          setSelectedPlaylist(randomPl);
+          setPlayingPlaylist(randomPl);
+          const randTrackIdx = Math.floor(Math.random() * randomPl.tracks.length);
+          nextIndex = randTrackIdx;
+          nextTrackTarget = randomPl.tracks[randTrackIdx];
+          setCurrentTrackIndex(randTrackIdx);
+        } else {
+          const randDbTrackIdx = Math.floor(
+            Math.random() * ALL_DATABASE_TRACKS.length,
+          );
+          nextIndex = randDbTrackIdx;
+          nextTrackTarget = ALL_DATABASE_TRACKS[randDbTrackIdx];
+          setCurrentTrackIndex(randDbTrackIdx);
+        }
       }
       setIsPlaying(true);
-      pendingSeekPosRef.current = null;
-      setPosition(0);
-      setDuration(0);
+      loadIframeVideoDirectly(nextTrackTarget);
       return;
     }
 
     setCurrentTrackIndex(nextIndex);
     setIsPlaying(true);
-    pendingSeekPosRef.current = null;
-    setPosition(0);
-    setDuration(0);
+    loadIframeVideoDirectly(nextTrackTarget);
   }, [
     currentTrackIndex,
     isShuffle,
@@ -5068,14 +5077,18 @@ export default function GymMusicPlayer() {
               const played = state.playedSeconds;
               const durationCurrent = durationRef.current / 1000;
 
-              // Pre-activar el audio de respaldo 2 segundos antes del final para que iOS no suspenda la app al terminar el iframe
-              if (durationCurrent > 0 && played >= durationCurrent - 2) {
+              // Pre-activar el audio de respaldo 1.5 segundos antes del final para que iOS no suspenda la app
+              if (durationCurrent > 3 && played >= durationCurrent - 1.5) {
                 if (
                   fallbackSilentAudioRef.current &&
                   fallbackSilentAudioRef.current.paused
                 ) {
                   fallbackSilentAudioRef.current.play().catch(() => {});
                 }
+                
+                // Gapless early skip to mask YouTube loading delay
+                handleNextRef.current();
+                return;
               }
               const segments = sponsorBlockSegmentsRef.current;
 

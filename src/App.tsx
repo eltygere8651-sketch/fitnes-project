@@ -21,7 +21,7 @@ import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit, onSnapshot } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
@@ -46,54 +46,59 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    // Real-time unread check to guarantee 100% instant notification indicator illumination
+    // Check for unread announcements using getDocs (replaces onSnapshot for scale)
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
-    const unsubscribeSnapshot = onSnapshot(q, (snapshot) => {
-      try {
-        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
-        let hasUnreadDb = false;
+    const checkUnread = () => {
+      getDocs(q).then((snapshot) => {
+        try {
+          const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
+          let hasUnreadDb = false;
 
-        let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
-        let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
+          let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
+          let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
 
-        if (!snapshot.empty) {
-          const newestDoc = snapshot.docs[0];
-          const data = newestDoc.data();
-          const createdAt = data.createdAt;
-          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
-          
-          if (dbDate > staticDate) {
-            newestId = newestDoc.id;
-          }
+          if (!snapshot.empty) {
+            const newestDoc = snapshot.docs[0];
+            const data = newestDoc.data();
+            const createdAt = data.createdAt;
+            const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
+            
+            if (dbDate > staticDate) {
+              newestId = newestDoc.id;
+            }
 
-          // Check for active global banner (within last 24h)
-          if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
-             setGlobalBanner({ title: data.title, content: data.content, category: data.category });
+            // Check for active global banner (within last 24h)
+            if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
+               setGlobalBanner({ title: data.title, content: data.content, category: data.category });
+            } else {
+               setGlobalBanner(null);
+            }
           } else {
              setGlobalBanner(null);
           }
-        } else {
-          setGlobalBanner(null);
-        }
 
-        if (newestId && newestId !== lastViewed) {
-          hasUnreadDb = true;
-        }
+          if (newestId && newestId !== lastViewed) {
+            hasUnreadDb = true;
+          }
 
-        setHasUnread(hasUnreadDb);
-      } catch (err) {
-        console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
-      }
-    }, (error) => {
-      console.warn("Error en el snapshot de anuncios:", error);
-    });
+          setHasUnread(hasUnreadDb);
+        } catch (err) {
+          console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
+        }
+      }).catch((error) => {
+        console.warn("Error en getDocs de anuncios:", error);
+      });
+    };
+
+    checkUnread();
+    const interval = setInterval(checkUnread, 15 * 60 * 1000);
 
     const handleRead = () => {
       setHasUnread(false);
     };
     window.addEventListener("notifications-read", handleRead);
     return () => {
-      unsubscribeSnapshot();
+      clearInterval(interval);
       window.removeEventListener("notifications-read", handleRead);
     };
   }, []);

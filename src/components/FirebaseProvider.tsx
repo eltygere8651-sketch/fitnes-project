@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useMemo } from "react";
 import { onAuthStateChanged, User } from "firebase/auth";
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, registerAuthErrorHandler } from "../lib/firebase";
 
 export interface UserAccessData {
@@ -71,53 +71,60 @@ export const FirebaseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       if (u) {
-        // Listen to Firestore changes in real-time
+        // Fetch from Firestore without active websocket to save concurrents
         const userRef = doc(db, "users", u.uid);
-        unsubscribeFirestore = onSnapshot(userRef, (snapshot) => {
-          if (snapshot.exists()) {
-            const data = snapshot.data();
-            setDbUserProfile({
-              displayName: data.displayName,
-              photoURL: data.photoURL
-            });
+        
+        const fetchUserData = () => {
+          getDoc(userRef).then((snapshot) => {
+            if (snapshot.exists()) {
+              const data = snapshot.data();
+              setDbUserProfile({
+                displayName: data.displayName,
+                photoURL: data.photoURL
+              });
 
-            const tStart = data.trialStart || null;
-            const subEnd = data.subscriptionEnd || null;
-            const planType = data.plan || "free";
-            const allowedUsers = data.maxUsers || 1;
-            const now = Date.now();
-            const msPerDay = 1000 * 60 * 60 * 24;
+              const tStart = data.trialStart || null;
+              const subEnd = data.subscriptionEnd || null;
+              const planType = data.plan || "free";
+              const allowedUsers = data.maxUsers || 1;
+              const now = Date.now();
+              const msPerDay = 1000 * 60 * 60 * 24;
 
-            let isValid = false;
-            let daysRemaining = 0;
+              let isValid = false;
+              let daysRemaining = 0;
 
-            if (u.email === "eltygere8651@gmail.com") {
-              isValid = true;
-              daysRemaining = 999;
-            } else if (subEnd && subEnd > now) {
-              isValid = true;
-              daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
-            } else if (planType === "free" && tStart) {
-              const trialEnd = tStart + 7 * msPerDay;
-              if (trialEnd > now) {
+              if (u.email === "eltygere8651@gmail.com") {
                 isValid = true;
-                daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
+                daysRemaining = 999;
+              } else if (subEnd && subEnd > now) {
+                isValid = true;
+                daysRemaining = Math.max(0, Math.ceil((subEnd - now) / msPerDay));
+              } else if (planType === "free" && tStart) {
+                const trialEnd = tStart + 7 * msPerDay;
+                if (trialEnd > now) {
+                  isValid = true;
+                  daysRemaining = Math.max(0, Math.ceil((trialEnd - now) / msPerDay));
+                }
               }
-            }
 
-            setAccessData({
-              trialStart: tStart,
-              subscriptionEnd: subEnd,
-              plan: planType,
-              isValid,
-              daysRemaining,
-              maxUsers: allowedUsers,
-              activeSessionId: data.activeSessionId || null
-            });
-          }
-        }, (err) => {
-          console.error("Firestore onSnapshot error:", err);
-        });
+              setAccessData({
+                trialStart: tStart,
+                subscriptionEnd: subEnd,
+                plan: planType,
+                isValid,
+                daysRemaining,
+                maxUsers: allowedUsers,
+                activeSessionId: data.activeSessionId || null
+              });
+            }
+          }).catch((err) => {
+            console.error("Firestore getDoc error:", err);
+          });
+        };
+
+        fetchUserData();
+        const pollInterval = setInterval(fetchUserData, 5 * 60 * 1000);
+        unsubscribeFirestore = () => clearInterval(pollInterval);
 
         const syncProfile = async (retryCount = 0) => {
           try {

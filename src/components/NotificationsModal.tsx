@@ -12,7 +12,7 @@ import {
   Trash2
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
-import { collection, onSnapshot, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
+import { collection, query, orderBy, limit, doc, deleteDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 // Compiled App Updates to ensure update history is always populated
@@ -260,42 +260,43 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
     setLoading(true);
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(20));
     
-    const unsubscribe = onSnapshot(q, (querySnap) => {
-      const firebaseList: Announcement[] = [];
-      querySnap.forEach((docSnap) => {
-        const data = docSnap.data();
-        const ca = data.createdAt;
-        const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
-        firebaseList.push({
-          id: docSnap.id,
-          title: data.title || "Aviso",
-          content: data.content || "",
-          category: data.category || "noticia",
-          createdAt: parsedDate
+    import("firebase/firestore").then(({ getDocs }) => {
+      getDocs(q).then((querySnap) => {
+        const firebaseList: Announcement[] = [];
+        querySnap.forEach((docSnap) => {
+          const data = docSnap.data();
+          const ca = data.createdAt;
+          const parsedDate = ca ? (typeof ca.toDate === 'function' ? ca.toDate() : new Date(ca)) : new Date();
+          firebaseList.push({
+            id: docSnap.id,
+            title: data.title || "Aviso",
+            content: data.content || "",
+            category: data.category || "noticia",
+            createdAt: parsedDate
+          });
         });
-      });
 
-      // Merge realtime database announcements with compiled app updates
-      const combined = [...firebaseList, ...COMPILED_UPDATES];
-      combined.sort((a, b) => {
-        const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-        const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
-        return dateB - dateA;
-      });
+        // Merge realtime database announcements with compiled app updates
+        const combined = [...firebaseList, ...COMPILED_UPDATES];
+        combined.sort((a, b) => {
+          const dateA = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+          const dateB = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+          return dateB - dateA;
+        });
 
-      setAnnouncements(combined);
-      
-      if (isOpen && combined.length > 0) {
-        localStorage.setItem("flux_last_viewed_announcement_id", combined[0].id);
-        window.dispatchEvent(new Event("notifications-read"));
-      }
-      setLoading(false);
-    }, (err) => {
-      console.error("Error al cargar comunicados:", err);
-      setLoading(false);
+        setAnnouncements(combined);
+        
+        if (isOpen && combined.length > 0) {
+          localStorage.setItem("flux_last_viewed_announcement_id", combined[0].id);
+          window.dispatchEvent(new Event("notifications-read"));
+        }
+        setLoading(false);
+      }).catch((err) => {
+        console.error("Error al cargar comunicados:", err);
+        setLoading(false);
+      });
     });
 
-    return () => unsubscribe();
   }, [isOpen]);
 
   const handleDeleteAnnouncement = async (id: string, e: React.MouseEvent) => {

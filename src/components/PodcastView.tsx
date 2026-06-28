@@ -506,6 +506,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                             alt={podcast.name}
                             className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
                             loading="lazy"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
                           {!!podcast.episodeCount && (
                             <span className="absolute bottom-5 right-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-300 pointer-events-none group-hover:scale-[1.02] transition-transform">
@@ -555,6 +557,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                           alt={podcast.name}
                           className="w-full aspect-square rounded-xl object-cover mb-3 shadow-md group-hover:scale-[1.02] transition-transform"
                           loading="lazy"
+                          referrerPolicy="no-referrer"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                         {!!podcast.episodeCount && (
                           <span className="absolute bottom-5 right-2 bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded-md text-[10px] font-bold text-slate-300 pointer-events-none group-hover:scale-[1.02] transition-transform">
@@ -606,6 +610,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                               src={episode.imageUrl || podcastContext.imageUrl} 
                               className="w-14 h-14 md:w-16 md:h-16 rounded-xl object-cover shadow-sm bg-black/50" 
                               alt="" 
+                              referrerPolicy="no-referrer"
+                              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                             />
                             {isThisPlaying && (
                                <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
@@ -684,6 +690,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
               src={selectedPodcast.imageUrl}
               alt={selectedPodcast.name}
               className="w-20 h-20 sm:w-24 sm:h-24 md:w-36 md:h-36 rounded-2xl shadow-xl object-cover shrink-0 relative z-10"
+              referrerPolicy="no-referrer"
+              onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
             />
             <div className="flex-1 flex flex-col justify-center min-w-0 relative z-10">
               <h2 className="text-lg md:text-3xl font-black text-white mb-0.5 md:mb-2 line-clamp-2 leading-tight">{selectedPodcast.name}</h2>
@@ -756,6 +764,8 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
                           src={episode.imageUrl || selectedPodcast.imageUrl} 
                           className="w-14 h-14 md:w-16 md:h-16 rounded-xl object-cover shadow-sm bg-black/50" 
                           alt="" 
+                          referrerPolicy="no-referrer"
+                          onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                         />
                         {isThisPlaying && (
                            <div className="absolute inset-0 bg-black/40 rounded-xl flex items-center justify-center">
@@ -842,7 +852,7 @@ export const PodcastView = ({ isVisible, pauseBackgroundMusic }: { isVisible: bo
           
           <div className="flex items-center gap-3 w-full px-2 pt-1.5 pb-0.5">
             {currentEpisode.imageUrl && (
-              <img src={currentEpisode.imageUrl} className="w-10 h-10 rounded-md object-cover shadow-lg shrink-0" alt="" />
+              <img src={currentEpisode.imageUrl} className="w-10 h-10 rounded-md object-cover shadow-lg shrink-0" alt="" referrerPolicy="no-referrer" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
             )}
             <div className="flex-1 min-w-0">
               <p className="text-[9px] font-black text-emerald-400 uppercase tracking-widest leading-none mb-1">Escuchando Ahora</p>

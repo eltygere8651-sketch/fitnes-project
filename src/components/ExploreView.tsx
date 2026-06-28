@@ -40,6 +40,55 @@ interface ExploreViewProps {
   isPlaying?: boolean;
 }
 
+const getTrackImage = (track?: any): string | null => {
+  if (!track) return null;
+  if (track.thumbnail) return track.thumbnail;
+  if (track.thumbnail_url) return track.thumbnail_url;
+  if (track.imageUrl) return track.imageUrl;
+  if (track.artwork_url) return track.artwork_url;
+  if (track.artwork) return track.artwork;
+  if (
+    track.url &&
+    (track.url.includes("youtube.com") || track.url.includes("youtu.be"))
+  ) {
+    const match = track.url.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
+    if (match && match[1]) {
+      return `https://i.ytimg.com/vi/${match[1]}/mqdefault.jpg`;
+    }
+  }
+  if (track.id?.startsWith("yt_")) {
+    const vid = track.id.split("_")[1];
+    if (vid) return `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+  }
+  if (track.id && typeof track.id === "string" && track.id.length === 11) {
+    return `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+  }
+  return null;
+};
+
+const getItemImage = (item: any): string => {
+  if (item.thumbnail) return item.thumbnail;
+  if (item.thumbnail_url) return item.thumbnail_url;
+  if (item.imageUrl) return item.imageUrl;
+  if (item.artwork_url) return item.artwork_url;
+  if (item.artwork) return item.artwork;
+  
+  if (item.isPlaylist && item.data && item.data.tracks && item.data.tracks.length > 0) {
+    const trackImg = getTrackImage(item.data.tracks[0]);
+    if (trackImg) return trackImg;
+  }
+  
+  if (item.tracks && item.tracks.length > 0) {
+    const trackImg = getTrackImage(item.tracks[0]);
+    if (trackImg) return trackImg;
+  }
+  
+  const selfImg = getTrackImage(item);
+  if (selfImg) return selfImg;
+  
+  return "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+};
+
 export const ExploreView: React.FC<ExploreViewProps> = React.memo(
   ({
     exploreData,
@@ -835,7 +884,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             id: item.id,
                             title: item.title,
                             artist: item.artist || "Artista",
-                            url: item.url,
+                            url: `https://www.youtube.com/watch?v=${item.id}`,
                             duration: item.duration || "0:00",
                             bpm: 120,
                           };
@@ -847,10 +896,34 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                     >
                       <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#111113] border border-white/5 relative mb-2.5">
                         <img
-                          src={item.thumbnail}
+                          src={getItemImage(item)}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                           loading="lazy"
                           referrerPolicy="no-referrer"
+                          onError={(e) => {
+                            const img = e.target as HTMLImageElement;
+                            if (!img.dataset.retried && item.id) {
+                              img.dataset.retried = "true";
+                              const endpoint = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE") 
+                                ? `/api/youtube/playlist-info?id=${item.id}`
+                                : `/api/youtube/video-info?id=${item.id}`;
+                              
+                              fetch(endpoint)
+                                .then(res => res.json())
+                                .then(data => {
+                                  if (data.thumbnail) {
+                                    img.src = data.thumbnail;
+                                  } else {
+                                    img.style.display = 'none';
+                                  }
+                                })
+                                .catch(() => {
+                                  img.style.display = 'none';
+                                });
+                            } else {
+                              img.style.display = 'none';
+                            }
+                          }}
                         />
                         <div className="absolute inset-0 bg-black/10 group-hover:bg-black/40 transition-colors flex items-center justify-center">
                           <div className="w-4 h-4 rounded-full bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform scale-75 group-hover:scale-100 shadow-xl">

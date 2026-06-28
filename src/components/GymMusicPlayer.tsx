@@ -68,7 +68,6 @@ import {
 import {
   collection,
   query,
-  onSnapshot,
   addDoc,
   updateDoc,
   deleteDoc,
@@ -646,9 +645,11 @@ const getPlaylistSaves = (
   return finalSaves;
 };
 
-const getTrackImage = (track?: MusicTrack): string | null => {
+const getTrackImage = (track?: any): string | null => {
   if (!track) return null;
   if (track.thumbnail) return track.thumbnail;
+  if (track.thumbnail_url) return track.thumbnail_url;
+  if (track.imageUrl) return track.imageUrl;
   if (track.artwork_url) return track.artwork_url;
   if (track.artwork) return track.artwork;
   if (
@@ -663,6 +664,23 @@ const getTrackImage = (track?: MusicTrack): string | null => {
   if (track.id?.startsWith("yt_")) {
     const vid = track.id.split("_")[1];
     if (vid) return `https://i.ytimg.com/vi/${vid}/mqdefault.jpg`;
+  }
+  // If track.id is exactly 11 characters (typical youtube ID)
+  if (track.id && typeof track.id === "string" && track.id.length === 11) {
+    return `https://i.ytimg.com/vi/${track.id}/mqdefault.jpg`;
+  }
+  return null;
+};
+
+const getPlaylistImage = (pl?: any): string | null => {
+  if (!pl) return null;
+  if (pl.imageUrl) return pl.imageUrl;
+  if (pl.thumbnail_url) return pl.thumbnail_url;
+  if (pl.thumbnail) return pl.thumbnail;
+  if (pl.artwork_url) return pl.artwork_url;
+  if (pl.artwork) return pl.artwork;
+  if (pl.tracks && pl.tracks.length > 0) {
+    return getTrackImage(pl.tracks[0]);
   }
   return null;
 };
@@ -1353,47 +1371,55 @@ export default function GymMusicPlayer() {
   const [exploreLayout, setExploreLayout] = useState<any[] | null>(null);
 
   useEffect(() => {
-    const unsub = onSnapshot(
-      doc(db, "admin", "explore_layout"),
-      (docSnap) => {
+    const fetchExploreLayout = async () => {
+      try {
+        const { getDoc, doc } = await import("firebase/firestore");
+        const docSnap = await getDoc(doc(db, "admin", "explore_layout"));
         if (docSnap.exists()) {
           setExploreLayout(docSnap.data().sections || []);
         } else {
           setExploreLayout(null);
         }
-      },
-      (error) => {
+      } catch (error) {
         console.warn(
           "Permiso denegado para explore_layout o reglas no propagadas:",
           error,
         );
-      },
-    );
-    return () => unsub();
+      }
+    };
+    fetchExploreLayout();
+
+    const handleRefresh = () => fetchExploreLayout();
+    window.addEventListener("refreshExplore", handleRefresh);
+    return () => window.removeEventListener("refreshExplore", handleRefresh);
   }, []);
 
   useEffect(() => {
-    const q = query(
-      collection(db, "explore_custom_playlists"),
-      orderBy("createdAt", "desc"),
-    );
-    const unsubscribe = onSnapshot(
-      q,
-      (snap) => {
+    const fetchCustomExplorePlaylists = async () => {
+      try {
+        const { getDocs, collection, query, orderBy } = await import("firebase/firestore");
+        const q = query(
+          collection(db, "explore_custom_playlists"),
+          orderBy("createdAt", "desc"),
+        );
+        const snap = await getDocs(q);
         const lists = snap.docs.map((doc) => ({
           ...doc.data(),
           docId: doc.id,
         }));
         setCustomExplorePlaylists(lists);
-      },
-      (error) => {
+      } catch (error) {
         console.warn(
           "Permiso denegado para explorar listas personalizadas, o reglas no propagadas:",
           error,
         );
-      },
-    );
-    return () => unsubscribe();
+      }
+    };
+    fetchCustomExplorePlaylists();
+
+    const handleRefresh = () => fetchCustomExplorePlaylists();
+    window.addEventListener("refreshExplore", handleRefresh);
+    return () => window.removeEventListener("refreshExplore", handleRefresh);
   }, []);
 
   const handleAddCustomExplorePlaylist = async (
@@ -1456,6 +1482,7 @@ export default function GymMusicPlayer() {
       showNotification(
         (isPlaylist ? "Lista" : "Video") + " añadida al Explorador con éxito",
       );
+      window.dispatchEvent(new Event("refreshExplore"));
     } catch (e: any) {
       showNotification(e.message || "Error al añadir");
     }
@@ -1465,6 +1492,7 @@ export default function GymMusicPlayer() {
     try {
       await deleteDoc(doc(db, "explore_custom_playlists", docId));
       showNotification("Lista eliminada del Explorador");
+      window.dispatchEvent(new Event("refreshExplore"));
     } catch (e: any) {
       showNotification("Error al eliminar la lista");
     }
@@ -1474,6 +1502,7 @@ export default function GymMusicPlayer() {
     try {
       await setDoc(doc(db, "admin", "explore_layout"), { sections: newLayout });
       showNotification("Diseño del explorador actualizado");
+      window.dispatchEvent(new Event("refreshExplore"));
     } catch (e: any) {
       showNotification(
         "Error al actualizar el diseño: " + (e.message || "Desconocido"),
@@ -1759,6 +1788,33 @@ export default function GymMusicPlayer() {
 
   const youtubePlayerRef = useRef<any>(null);
   const fallbackSilentAudioRef = useRef<HTMLAudioElement>(null);
+
+  useEffect(() => {
+    if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.srcObject) {
+      try {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        if (AudioContextClass) {
+          const ctx = new AudioContextClass();
+          const osc = ctx.createOscillator();
+          const dst = ctx.createMediaStreamDestination();
+          osc.type = "sine";
+          osc.frequency.value = 0; // Pure silence
+          osc.connect(dst);
+          osc.start();
+          fallbackSilentAudioRef.current.srcObject = dst.stream;
+
+          const resumeAudio = () => {
+            if (ctx.state === "suspended") ctx.resume();
+          };
+          document.addEventListener("click", resumeAudio, { once: true });
+          document.addEventListener("touchstart", resumeAudio, { once: true });
+        }
+      } catch (e) {
+        console.warn("Web Audio API not supported, falling back to blob", e);
+      }
+    }
+  }, []);
+
   const expectedPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
@@ -2081,8 +2137,7 @@ export default function GymMusicPlayer() {
   const currentTrack = overrideCurrentTrack || baseCurrentTrack;
 
   const currentUrlRaw = currentTrack.url || "";
-
-  const currentUrl = currentUrlRaw;
+  const currentUrl = currentUrlRaw.replace("music.youtube.com", "www.youtube.com");
 
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
@@ -2509,6 +2564,20 @@ export default function GymMusicPlayer() {
         !playingPlaylistRef.current
       ) {
         let found = folders.find((f) => f.id === pendingRestoreRef.current);
+        if (!found) {
+          try {
+            const savedData = localStorage.getItem("gym_music_last_played_playlist_data");
+            if (savedData) {
+              const parsed = JSON.parse(savedData);
+              if (parsed && parsed.id === pendingRestoreRef.current) {
+                found = parsed;
+              }
+            }
+          } catch (e) {
+            console.warn("Failed to parse saved playlist data", e);
+          }
+        }
+
         if (found) {
           setPlayingPlaylist(found);
           setSelectedPlaylist(found);
@@ -2614,21 +2683,32 @@ export default function GymMusicPlayer() {
     };
     fetchCommunity();
 
-    if (user) {
-      const qUser = query(
-        collection(db, "users", user.uid, "playlists"),
-        orderBy("createdAt", "desc"),
-      );
-      unsubscribeUser = onSnapshot(qUser, (snap) => {
+    const fetchUserPlaylists = async () => {
+      if (!user) {
+        userDocsRef.current = [];
+        processMergedDocs();
+        return;
+      }
+      try {
+        const qUser = query(
+          collection(db, "users", user.uid, "playlists"),
+          orderBy("createdAt", "desc"),
+        );
+        const snap = await getDocs(qUser);
         userDocsRef.current = snap.docs;
         processMergedDocs();
-      });
-    } else {
-      userDocsRef.current = [];
-      processMergedDocs();
-    }
+      } catch (error) {
+        console.error("Error fetching user playlists", error);
+      }
+    };
+    fetchUserPlaylists();
 
-    return () => unsubscribeUser();
+    const handleRefresh = () => fetchUserPlaylists();
+    window.addEventListener("refreshUserPlaylists", handleRefresh);
+
+    return () => {
+      window.removeEventListener("refreshUserPlaylists", handleRefresh);
+    };
   }, [user, isAdmin]);
 
   useEffect(() => {
@@ -2637,6 +2717,14 @@ export default function GymMusicPlayer() {
         "gym_music_last_played_playlist_id",
         playingPlaylist.id,
       );
+      try {
+        localStorage.setItem(
+          "gym_music_last_played_playlist_data",
+          JSON.stringify(playingPlaylist)
+        );
+      } catch (e) {
+        console.warn("Could not save playing playlist data", e);
+      }
     }
   }, [playingPlaylist]);
 
@@ -2926,6 +3014,7 @@ export default function GymMusicPlayer() {
           folder: nextFolderValue,
           updatedAt: serverTimestamp(),
         });
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
       } catch (err) {
         console.error(
           "Firebase folder field update failed, fell back to local state:",
@@ -2965,7 +3054,7 @@ export default function GymMusicPlayer() {
           description:
             copyPlaylistDescInput.trim() || "Canal guardado desde novedades",
           icon: playlistToCopy.icon || "📂",
-          thumbnail_url: playlistToCopy.thumbnail_url || "",
+          thumbnail_url: getPlaylistImage(playlistToCopy) || "",
           ownerId: user.uid,
           ownerName: user.displayName || "Socio Premium",
           isPublic: true,
@@ -2979,6 +3068,7 @@ export default function GymMusicPlayer() {
           collection(db, "users", user.uid, "playlists"),
           newPlDoc,
         );
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
         showNotification(`Canal "${newPlDoc.name}" guardado con éxito`);
         setSelectedPlaylist({ id: docRef.id, ...newPlDoc } as any);
       } else {
@@ -3035,6 +3125,7 @@ export default function GymMusicPlayer() {
         }
 
         await updateDoc(targetRef, updateData);
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
 
         showNotification(
           `¡Añadidas ${tracksToAdd.length} canciones a "${targetPl.name}" con éxito!`,
@@ -3233,7 +3324,7 @@ export default function GymMusicPlayer() {
     setEditingId(pl.id);
     setEditingName(pl.name);
     setEditingDescription(pl.description || "");
-    setEditingCover(pl.thumbnail_url || "");
+    setEditingCover(getPlaylistImage(pl) || "");
     setAuthCode(savedSecurityCode || "");
   };
 
@@ -3313,6 +3404,7 @@ export default function GymMusicPlayer() {
         thumbnail_url: coverToSave,
         updatedAt: serverTimestamp(),
       });
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
       setEditingId(null);
       alert("Canal actualizado.");
     } catch (error: any) {
@@ -3389,6 +3481,7 @@ export default function GymMusicPlayer() {
         ? doc(db, pl.path)
         : doc(db, "users", targetOwnerId, "playlists", deletingId);
       await deleteDoc(docRef);
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
 
       if (selectedPlaylist?.id === deletingId) {
         setSelectedPlaylist(null);
@@ -3609,6 +3702,7 @@ export default function GymMusicPlayer() {
         tracks: tracksCopy,
         updatedAt: serverTimestamp(),
       });
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
 
       const newPlaylistObj = { ...selectedPlaylist, tracks: tracksCopy };
       setSelectedPlaylist(newPlaylistObj);
@@ -3633,13 +3727,14 @@ export default function GymMusicPlayer() {
   };
 
   const handleLoadExplorePlaylist = async (item: any) => {
+    const itemThumbnail = item.thumbnail || item.thumbnail_url || item.imageUrl || item.artwork_url || item.artwork || "";
     if (item.isLocalMix) {
       setPreviewPlaylist({
         id: item.id,
         name: item.title,
         description: item.artist || "Selección para ti",
         tracks: item.tracks,
-        thumbnail_url: item.thumbnail,
+        thumbnail_url: itemThumbnail || (item.tracks?.length ? getTrackImage(item.tracks[0]) : ""),
         ownerId: "flux",
         ownerName: "Flux Music",
         createdAt: new Date().toISOString(),
@@ -3662,11 +3757,11 @@ export default function GymMusicPlayer() {
             duration: item.duration || "N/A",
             url: item.url || `https://www.youtube.com/watch?v=${item.id}`,
             thumbnail:
-              item.thumbnail ||
+              itemThumbnail ||
               `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
           },
         ],
-        thumbnail_url: item.thumbnail,
+        thumbnail_url: itemThumbnail || `https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`,
         ownerId: "youtube",
         ownerName: item.artist || "Flux",
         createdAt: new Date().toISOString(),
@@ -3690,7 +3785,7 @@ export default function GymMusicPlayer() {
           name: item.title,
           description: item.artist || "Lista oficial",
           tracks: tracks,
-          thumbnail_url: item.thumbnail,
+          thumbnail_url: itemThumbnail || getTrackImage(tracks[0]) || "",
           ownerId: "youtube",
           ownerName: item.artist || "Flux",
           createdAt: new Date().toISOString(),
@@ -3954,6 +4049,7 @@ export default function GymMusicPlayer() {
           collection(db, "users", currentUser.uid, "playlists"),
           newPlDoc,
         );
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
 
         showNotification(`Nueva playlist "${name}" creada con éxito.`);
 
@@ -4018,6 +4114,7 @@ export default function GymMusicPlayer() {
         }
 
         await updateDoc(docRef, updateData);
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
 
         if (selectedPlaylist?.id === targetPl.id) {
           setSelectedPlaylist({
@@ -4119,6 +4216,7 @@ export default function GymMusicPlayer() {
       }
 
       await updateDoc(docRef, updateData);
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
 
       setSelectedPlaylist({
         ...selectedPlaylist,
@@ -4212,7 +4310,7 @@ export default function GymMusicPlayer() {
       const newPl = {
         name: pl.name,
         description: pl.description || "",
-        thumbnail_url: pl.thumbnail_url || "",
+        thumbnail_url: getPlaylistImage(pl) || "",
         category: "Local",
         ownerId: currentUser.uid,
         ownerName: currentUser.displayName || nicknameInput || "Premium Member",
@@ -4227,6 +4325,7 @@ export default function GymMusicPlayer() {
         collection(db, "users", currentUser.uid, "playlists"),
         newPl,
       );
+      window.dispatchEvent(new Event("refreshUserPlaylists"));
       showNotification(`"${pl.name}" guardada en tu biblioteca.`);
     } catch (err) {
       console.error(err);
@@ -4279,6 +4378,7 @@ export default function GymMusicPlayer() {
 
       try {
         await addDoc(collection(db, "users", user.uid, "playlists"), newPl);
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
         showNotification("Guardado en Favoritos");
       } catch (err) {
         console.error("Error creating Favoritos:", err);
@@ -4320,12 +4420,14 @@ export default function GymMusicPlayer() {
           tracks: updatedTracks,
           updatedAt: serverTimestamp(),
         });
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
         showNotification("Eliminado de Favoritos");
       } else {
         await updateDoc(plRef, {
           tracks: [...favPlaylist.tracks, track],
           updatedAt: serverTimestamp(),
         });
+        window.dispatchEvent(new Event("refreshUserPlaylists"));
         showNotification("Añadido a Favoritos");
       }
     } catch (err: any) {
@@ -4855,12 +4957,10 @@ export default function GymMusicPlayer() {
               wasUnexpectedlyPausedRef.current = false;
               setIsPlaying(true);
 
-              // iOS Media Session fix: Pause silent audio while iframe plays to prevent iOS from ducking/pausing the iframe when the silent audio loops
-              if (
-                fallbackSilentAudioRef.current &&
-                !fallbackSilentAudioRef.current.paused
-              ) {
+              // Steal Media Session lock from iframe
+              if (fallbackSilentAudioRef.current) {
                 fallbackSilentAudioRef.current.pause();
+                fallbackSilentAudioRef.current.play().catch(() => {});
               }
 
               enforceActionHandlers();
@@ -5045,7 +5145,6 @@ export default function GymMusicPlayer() {
             config={reactPlayerConfig}
             width="300px"
             height="300px"
-            playsinline={true}
           />
         )}
       </div>
@@ -5400,14 +5499,9 @@ export default function GymMusicPlayer() {
                               <Headphones className="w-5 h-5 text-white/90" />
                             )}
                           </span>
-                          {(pl.thumbnail_url ||
-                            getTrackImage(pl.tracks?.[0])) && (
+                          {getPlaylistImage(pl) && (
                             <img
-                              src={
-                                pl.thumbnail_url ||
-                                getTrackImage(pl.tracks?.[0]) ||
-                                ""
-                              }
+                              src={getPlaylistImage(pl)!}
                               alt={pl.name}
                               className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f]"
                               loading="lazy"
@@ -5792,6 +5886,8 @@ export default function GymMusicPlayer() {
                             src={displayArtwork}
                             alt="Artwork"
                             className="w-full h-full object-cover transition-opacity duration-300"
+                            referrerPolicy="no-referrer"
+                            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                           />
                         </div>
                       </div>
@@ -6023,6 +6119,8 @@ export default function GymMusicPlayer() {
                                 src={displayArtwork}
                                 alt="Artwork"
                                 className="w-full h-full object-cover transition-opacity duration-300"
+                                referrerPolicy="no-referrer"
+                                onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                               />
                               <div className="absolute inset-0 bg-gradient-to-tr from-black/20 via-transparent to-white/5 pointer-events-none" />
                             </div>
@@ -6556,7 +6654,7 @@ export default function GymMusicPlayer() {
                                           id: t.id,
                                           title: t.title,
                                           artist: t.artist || "Artista",
-                                          url: t.url,
+                                          url: `https://www.youtube.com/watch?v=${t.id}`,
                                           duration: t.duration || "N/A",
                                           bpm: 120,
                                         }));
@@ -6710,6 +6808,7 @@ export default function GymMusicPlayer() {
                                   alt=""
                                   className="w-full h-full object-cover group-hover/yt:scale-110 transition-transform duration-500"
                                   referrerPolicy="no-referrer"
+                                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                                 />
                                 <div className="absolute inset-0 bg-black/20 group-hover/yt:bg-black/60 transition-colors flex items-center justify-center">
                                   <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center opacity-0 group-hover/yt:opacity-100 transition-all transform scale-75 group-hover/yt:scale-100 shadow-xl">
@@ -7590,6 +7689,8 @@ export default function GymMusicPlayer() {
                   src={displayArtwork}
                   className="w-full h-full object-cover"
                   alt=""
+                  referrerPolicy="no-referrer"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
                 />
               </div>
 
@@ -7873,14 +7974,9 @@ export default function GymMusicPlayer() {
                                     />
                                   )}
                                 </span>
-                                {(pl.thumbnail_url ||
-                                  getTrackImage(pl.tracks?.[0])) && (
+                                {getPlaylistImage(pl) && (
                                   <img
-                                    src={
-                                      pl.thumbnail_url ||
-                                      getTrackImage(pl.tracks?.[0]) ||
-                                      ""
-                                    }
+                                    src={getPlaylistImage(pl)!}
                                     alt={pl.name}
                                     className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f] transition-transform duration-500 ease-out group-hover:scale-110"
                                     loading="lazy"
@@ -8060,9 +8156,9 @@ export default function GymMusicPlayer() {
                         <>
                           <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent pointer-events-none" />
                           <Headphones className="w-10 h-10 text-white/95 relative z-10" />
-                          {previewPlaylist.thumbnail_url && (
+                          {getPlaylistImage(previewPlaylist) && (
                             <img
-                              src={previewPlaylist.thumbnail_url}
+                              src={getPlaylistImage(previewPlaylist)!}
                               alt={previewPlaylist.name}
                               className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f]"
                               loading="lazy"
@@ -8992,14 +9088,9 @@ export default function GymMusicPlayer() {
                         >
                           <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative flex items-center justify-center bg-[#333]">
                             <ListMusic className="w-4 h-4 text-slate-500 absolute" />
-                            {(pl.thumbnail_url ||
-                              getTrackImage(pl.tracks?.[0])) && (
+                            {getPlaylistImage(pl) && (
                               <img
-                                src={
-                                  pl.thumbnail_url ||
-                                  getTrackImage(pl.tracks?.[0]) ||
-                                  ""
-                                }
+                                src={getPlaylistImage(pl)!}
                                 className="absolute inset-0 w-full h-full object-cover z-10"
                                 referrerPolicy="no-referrer"
                                 onError={(e) => {

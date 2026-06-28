@@ -667,11 +667,19 @@ app.get("/api/youtube/explore", async (req, res) => {
           p.thumbnails[p.thumbnails.length - 1].url ||
           p.thumbnails[0].url ||
           "";
+      } else if (Array.isArray(p.thumbnail) && p.thumbnail.length > 0) {
+        thumbnail = p.thumbnail[0].url;
       } else if (p.thumbnail && typeof p.thumbnail === "string") {
         thumbnail = p.thumbnail;
       }
 
-      if (!thumbnail) thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+      if (!thumbnail) {
+        if (id && id.length === 11) {
+          thumbnail = `https://i.ytimg.com/vi/${id}/mqdefault.jpg`;
+        } else {
+          thumbnail = "";
+        }
+      }
 
       const isPlaylist =
         !!p.endpoint?.payload?.browseId ||
@@ -686,8 +694,8 @@ app.get("/api/youtube/explore", async (req, res) => {
         artist: author || "YouTube Music",
         duration: isPlaylist ? "Playlist" : p.duration?.text || "N/A",
         url: isPlaylist
-          ? `https://music.youtube.com/playlist?list=${id}`
-          : `https://music.youtube.com/watch?v=${id}`,
+          ? `https://www.youtube.com/playlist?list=${id}`
+          : `https://www.youtube.com/watch?v=${id}`,
         thumbnail,
         isPlaylist,
         subType: isPlaylist ? "playlist" : "cancion",

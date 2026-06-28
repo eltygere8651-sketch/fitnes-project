@@ -2133,14 +2133,12 @@ export default function GymMusicPlayer() {
     setIsPlaying(nextPlaying);
   }, [isPlaying]);
 
-  const isProcessingActionRef = useRef<boolean>(false);
+  const lastSkipTimeRef = useRef<number>(0);
 
   const handleNext = useCallback(() => {
-    if (isProcessingActionRef.current) return;
-    isProcessingActionRef.current = true;
-    setTimeout(() => {
-      isProcessingActionRef.current = false;
-    }, 800);
+    const now = Date.now();
+    if (now - lastSkipTimeRef.current < 400) return;
+    lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
     if (
@@ -2256,11 +2254,9 @@ export default function GymMusicPlayer() {
   ]);
 
   const handlePrev = useCallback(() => {
-    if (isProcessingActionRef.current) return;
-    isProcessingActionRef.current = true;
-    setTimeout(() => {
-      isProcessingActionRef.current = false;
-    }, 800);
+    const now = Date.now();
+    if (now - lastSkipTimeRef.current < 400) return;
+    lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
     if (
@@ -4516,11 +4512,15 @@ export default function GymMusicPlayer() {
           // Fetch exact native time to prevent lockscreen progress jump backwards
           const actualSeconds =
             youtubePlayerRef.current?.getCurrentTime() || position / 1000;
-          navigator.mediaSession.setPositionState({
-            duration: (duration || 0) / 1000,
-            playbackRate: 1,
-            position: actualSeconds,
-          });
+          
+          const validDuration = Math.max(0, (duration || 0) / 1000);
+          if (validDuration > 0 && !isNaN(validDuration)) {
+            navigator.mediaSession.setPositionState({
+              duration: validDuration,
+              playbackRate: 1,
+              position: Math.max(0, Math.min(actualSeconds, validDuration)),
+            });
+          }
           lastSyncDurationRef.current = duration;
           lastSyncTrackRef.current = currentTrackIndex;
           lastSyncIsPlayingRef.current = isPlaying;
@@ -4594,11 +4594,14 @@ export default function GymMusicPlayer() {
           const target = currentSec + 10;
           youtubePlayerRef.current.seekTo(target, "seconds");
           try {
-            navigator.mediaSession.setPositionState({
-              duration: (durationRef.current || 0) / 1000,
-              playbackRate: 1,
-              position: target,
-            });
+            const validDuration = Math.max(0, (durationRef.current || 0) / 1000);
+            if (validDuration > 0 && !isNaN(validDuration)) {
+              navigator.mediaSession.setPositionState({
+                duration: validDuration,
+                playbackRate: 1,
+                position: Math.max(0, Math.min(target, validDuration)),
+              });
+            }
           } catch (e) {}
         }
       };
@@ -4609,11 +4612,14 @@ export default function GymMusicPlayer() {
           const target = Math.max(0, currentSec - 10);
           youtubePlayerRef.current.seekTo(target, "seconds");
           try {
-            navigator.mediaSession.setPositionState({
-              duration: (durationRef.current || 0) / 1000,
-              playbackRate: 1,
-              position: target,
-            });
+            const validDuration = Math.max(0, (durationRef.current || 0) / 1000);
+            if (validDuration > 0 && !isNaN(validDuration)) {
+              navigator.mediaSession.setPositionState({
+                duration: validDuration,
+                playbackRate: 1,
+                position: Math.max(0, Math.min(target, validDuration)),
+              });
+            }
           } catch (e) {}
         }
       };
@@ -4622,11 +4628,14 @@ export default function GymMusicPlayer() {
         if (details.seekTime !== undefined && youtubePlayerRef.current) {
           youtubePlayerRef.current.seekTo(details.seekTime, "seconds");
           try {
-            navigator.mediaSession.setPositionState({
-              duration: (durationRef.current || 0) / 1000,
-              playbackRate: 1,
-              position: details.seekTime,
-            });
+            const validDuration = Math.max(0, (durationRef.current || 0) / 1000);
+            if (validDuration > 0 && !isNaN(validDuration)) {
+              navigator.mediaSession.setPositionState({
+                duration: validDuration,
+                playbackRate: 1,
+                position: Math.max(0, Math.min(details.seekTime, validDuration)),
+              });
+            }
           } catch (e) {}
         }
       };
@@ -4659,20 +4668,25 @@ export default function GymMusicPlayer() {
     } catch (e) {}
   }, []);
 
+  const lastMetadataRef = useRef<string>("");
+
   const registerMediaSession = useCallback(() => {
     if (!("mediaSession" in navigator)) return;
 
-    // Update Metadata
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: displayTitle,
-      artist: displayArtist,
-      album: selectedPlaylist?.name || "Flux Music",
-      artwork: [
-        { src: displayArtwork, sizes: "512x512", type: "image/jpeg" },
-        { src: displayArtwork, sizes: "256x256", type: "image/jpeg" },
-        { src: displayArtwork, sizes: "96x96", type: "image/jpeg" },
-      ],
-    });
+    const metadataKey = `${displayTitle}-${displayArtist}-${displayArtwork}`;
+    if (lastMetadataRef.current !== metadataKey) {
+      lastMetadataRef.current = metadataKey;
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: displayTitle,
+        artist: displayArtist,
+        album: selectedPlaylist?.name || "Flux Music",
+        artwork: [
+          { src: displayArtwork, sizes: "512x512", type: "image/jpeg" },
+          { src: displayArtwork, sizes: "256x256", type: "image/jpeg" },
+          { src: displayArtwork, sizes: "96x96", type: "image/jpeg" },
+        ],
+      });
+    }
 
     enforceActionHandlers();
   }, [

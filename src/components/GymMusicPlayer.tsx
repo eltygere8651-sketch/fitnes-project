@@ -6,6 +6,7 @@ import React, {
   useMemo,
 } from "react";
 import { Carousel } from "./Carousel";
+import { flushSync } from "react-dom";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -1790,35 +1791,15 @@ export default function GymMusicPlayer() {
   const fallbackSilentAudioRef = useRef<HTMLAudioElement>(null);
 
   useEffect(() => {
-    if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.srcObject) {
-      try {
-        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-          const ctx = new AudioContextClass();
-          const osc = ctx.createOscillator();
-          const dst = ctx.createMediaStreamDestination();
-          osc.type = "sine";
-          osc.frequency.value = 0; // Pure silence
-          osc.connect(dst);
-          osc.start();
-          fallbackSilentAudioRef.current.srcObject = dst.stream;
-
-          const resumeAudio = () => {
-            if (ctx.state === "suspended") ctx.resume();
-          };
-          document.addEventListener("click", resumeAudio, { once: true });
-          document.addEventListener("touchstart", resumeAudio, { once: true });
-        }
-      } catch (e) {
-        console.warn("Web Audio API not supported, falling back to blob", e);
-      }
-    }
+    // Only use the blob source which is set in the audio tag
   }, []);
 
   const expectedPlayingRef = useRef(false);
   const initialLoadRef = useRef(true);
   const lastPosSaveRef = useRef(0);
   const wasUnexpectedlyPausedRef = useRef(false);
+  const isBufferingRef = useRef(false);
+  const hasStolenLockForTrackRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
 
   const pendingSeekPosRef = useRef<number | null>(
@@ -2142,6 +2123,7 @@ export default function GymMusicPlayer() {
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
   useEffect(() => {
+    hasStolenLockForTrackRef.current = false;
     if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
     skipTimeoutRef.current = null;
     sponsorBlockSegmentsRef.current = [];
@@ -2208,15 +2190,6 @@ export default function GymMusicPlayer() {
           ],
         });
       } catch (e) {}
-    }
-    const nextUrl = (targetTrack.url || "").replace("music.youtube.com", "www.youtube.com");
-    const match = nextUrl.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
-    if (match && match[1] && document.hidden) {
-       const videoId = match[1];
-       const intPlayer = youtubePlayerRef.current?.getInternalPlayer();
-       if (intPlayer && typeof intPlayer.loadVideoById === "function") {
-           intPlayer.loadVideoById(videoId);
-       }
     }
   };
 
@@ -4693,10 +4666,22 @@ export default function GymMusicPlayer() {
       };
 
       sessionHandlersRef.current.nextHandler = () => {
-        handlersRef.current.handleNext();
+        try {
+          flushSync(() => {
+            handlersRef.current.handleNext();
+          });
+        } catch (e) {
+          handlersRef.current.handleNext();
+        }
       };
       sessionHandlersRef.current.prevHandler = () => {
-        handlersRef.current.handlePrev();
+        try {
+          flushSync(() => {
+            handlersRef.current.handlePrev();
+          });
+        } catch (e) {
+          handlersRef.current.handlePrev();
+        }
       };
 
       sessionHandlersRef.current.seekforwardHandler = () => {
@@ -4916,7 +4901,20 @@ export default function GymMusicPlayer() {
             url={currentUrl}
             playing={isPlaying}
             volume={volume / 100}
-            progressInterval={5000}
+            progressInterval={1000}
+            config={{
+              youtube: {
+                playerVars: {
+                  autoplay: 1,
+                  playsinline: 1,
+                  controls: 0,
+                  disablekb: 1,
+                  rel: 0,
+                  modestbranding: 1,
+                  iv_load_policy: 3
+                }
+              }
+            }}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
               // Auto-recovery mechanism when experiencing network drops
@@ -4956,20 +4954,35 @@ export default function GymMusicPlayer() {
               }
             }}
             onBuffer={() => {
-              // We do not play silent audio here anymore to avoid stealing audio focus from YouTube iframe
-              // which causes a 2-3 second delay in sound resuming. The pre-activation in onProgress is enough.
+              isBufferingRef.current = true;
             }}
             onBufferEnd={() => {
-              // Do not recreate action handlers so it doesn't cause a micro-cut
+              isBufferingRef.current = false;
+              if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                try {
+                  const intPlayer = youtubePlayerRef.current.getInternalPlayer();
+                  if (intPlayer) {
+                    if (typeof intPlayer.playVideo === "function") {
+                      intPlayer.playVideo();
+                    } else if (typeof intPlayer.play === "function") {
+                      intPlayer.play();
+                    }
+                  }
+                } catch (e) {}
+              }
             }}
             onPlay={() => {
+              isBufferingRef.current = false;
               wasUnexpectedlyPausedRef.current = false;
               setIsPlaying(true);
 
-              // Steal Media Session lock from iframe
-              if (fallbackSilentAudioRef.current) {
-                fallbackSilentAudioRef.current.pause();
-                fallbackSilentAudioRef.current.play().catch(() => {});
+              // Steal Media Session lock from iframe only once per track to avoid micro-cuts after buffering
+              if (!hasStolenLockForTrackRef.current) {
+                hasStolenLockForTrackRef.current = true;
+                if (fallbackSilentAudioRef.current) {
+                  fallbackSilentAudioRef.current.pause();
+                  fallbackSilentAudioRef.current.play().catch(() => {});
+                }
               }
 
               enforceActionHandlers();
@@ -4990,7 +5003,11 @@ export default function GymMusicPlayer() {
 
                 // Immediately counter react-player pause SYNCHRONOUSLY for iOS lock screen bypass
                 // Done only once to avoid conflicting with YouTube's internal buffering state machine
-                if (expectedPlayingRef.current && youtubePlayerRef.current) {
+                if (
+                  expectedPlayingRef.current &&
+                  youtubePlayerRef.current &&
+                  !isBufferingRef.current
+                ) {
                   try {
                     const intPlayer =
                       youtubePlayerRef.current.getInternalPlayer();

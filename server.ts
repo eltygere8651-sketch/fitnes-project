@@ -1025,8 +1025,9 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
         if (playlistId.startsWith("MPRE")) {
           const album = await yt.music.getAlbum(playlistId);
           if (album && album.header) {
-            title = album.header.title?.toString() || "Álbum Recomendado";
-            thumbnail = album.header.thumbnails?.[0]?.url || "";
+            const head = album.header as any;
+            title = head.title?.toString() || "Álbum Recomendado";
+            thumbnail = head.thumbnails?.[0]?.url || "";
           }
         } else {
           try {
@@ -1039,8 +1040,9 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
             // fallback to music playlist
             const mPlaylist = await yt.music.getPlaylist(playlistId);
             if (mPlaylist && mPlaylist.header) {
-              title = mPlaylist.header.title?.toString() || "Lista Recomendada";
-              thumbnail = mPlaylist.header.thumbnails?.[0]?.url || "";
+              const head = mPlaylist.header as any;
+              title = head.title?.toString() || "Lista Recomendada";
+              thumbnail = head.thumbnails?.[0]?.url || "";
             }
           }
         }

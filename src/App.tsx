@@ -19,13 +19,14 @@ import {
   MessageSquare,
   MessageCircle,
   Send,
-  Loader2
+  Loader2,
+  Trash2
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
@@ -354,6 +355,30 @@ function AppContent() {
       console.error("Error sending support message:", err);
     } finally {
       setIsSendingSupport(false);
+    }
+  };
+
+  const handleCloseCase = async () => {
+    if (!selectedThreadId) return;
+    
+    // Optional: confirm before closing
+    if (!window.confirm("¿Estás seguro de que quieres cerrar y eliminar este caso? Todo el historial de chat con este usuario se borrará.")) {
+      return;
+    }
+
+    try {
+      const msgsToDelete = allSupportMessages.filter(m => m.userId === selectedThreadId);
+      
+      for (const msg of msgsToDelete) {
+        if (msg.id) {
+          await deleteDoc(doc(db, "support_messages", msg.id));
+        }
+      }
+      
+      setSelectedThreadId(null);
+    } catch (e) {
+      console.error("Error closing case:", e);
+      alert("No se pudo cerrar el caso. Inténtalo de nuevo.");
     }
   };
 
@@ -981,6 +1006,14 @@ function AppContent() {
                           </div>
 
                           <div className="flex items-center gap-2">
+                            <button
+                              onClick={handleCloseCase}
+                              className="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-[8px] font-black uppercase text-rose-400 rounded-lg transition-all cursor-pointer select-none flex items-center gap-1"
+                              title="Cerrar y eliminar caso"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                              <span className="hidden sm:inline">Cerrar Caso</span>
+                            </button>
                             {/* Mobile Back Button to return to thread list */}
                             <button
                               onClick={() => setSelectedThreadId(null)}

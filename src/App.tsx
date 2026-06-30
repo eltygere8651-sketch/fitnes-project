@@ -49,7 +49,7 @@ function AppContent() {
 
   // States for Admin Support
   const [allSupportMessages, setAllSupportMessages] = useState<any[]>([]);
-  const [selectedThreadEmail, setSelectedThreadEmail] = useState<string | null>(null);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState("");
   const [isSendingReply, setIsSendingReply] = useState(false);
   const adminChatEndRef = useRef<HTMLDivElement>(null);
@@ -101,21 +101,22 @@ function AppContent() {
     const threadsMap: Record<string, any> = {};
 
     allSupportMessages.forEach((m) => {
-      const email = m.userEmail || "Anónimo";
-      if (!threadsMap[email]) {
-        threadsMap[email] = {
-          userEmail: email,
+      const uId = m.userId || "unknown";
+      if (!threadsMap[uId]) {
+        threadsMap[uId] = {
+          userId: uId,
+          userEmail: m.userEmail || "Anónimo",
           userName: m.userName || "Socio Flux",
           messages: [],
           lastMessage: null,
           unreadCount: 0,
         };
       }
-      threadsMap[email].messages.push(m);
-      threadsMap[email].lastMessage = m;
+      threadsMap[uId].messages.push(m);
+      threadsMap[uId].lastMessage = m;
 
       if (!m.isAdminReply && !m.readByAdmin) {
-        threadsMap[email].unreadCount += 1;
+        threadsMap[uId].unreadCount += 1;
       }
     });
 
@@ -257,9 +258,9 @@ function AppContent() {
   }, [isSupportModalOpen, supportChatMessages, isAdmin]);
 
   useEffect(() => {
-    if (isAdmin && selectedThreadEmail && allSupportMessages.length > 0) {
+    if (isAdmin && selectedThreadId && allSupportMessages.length > 0) {
       const threadMsgs = allSupportMessages.filter(
-        (m) => m.userEmail === selectedThreadEmail
+        (m) => m.userId === selectedThreadId
       );
       const unreadUserMsgs = threadMsgs.filter(
         (m) => !m.isAdminReply && !m.readByAdmin
@@ -275,7 +276,7 @@ function AppContent() {
         }
       });
     }
-  }, [isAdmin, selectedThreadEmail, allSupportMessages]);
+  }, [isAdmin, selectedThreadId, allSupportMessages]);
 
   useEffect(() => {
     if (isAdmin && isSupportModalOpen && adminChatEndRef.current) {
@@ -283,7 +284,7 @@ function AppContent() {
         adminChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
       }, 100);
     }
-  }, [selectedThreadEmail, allSupportMessages, isSupportModalOpen, isAdmin]);
+  }, [selectedThreadId, allSupportMessages, isSupportModalOpen, isAdmin]);
 
   const handleSendSupportMessage = async () => {
     if (!supportMessage || !supportMessage.trim()) {
@@ -312,7 +313,7 @@ function AppContent() {
       await addDoc(collection(db, "support_messages"), newMsgObj);
 
       if (isFirstMessage) {
-        // Enviar respuesta automática profesional
+        // Enviar respuesta automática profesional y notificar a Telegram (solo en el primer mensaje)
         setTimeout(async () => {
           try {
             const autoReplyMsg = {
@@ -330,22 +331,22 @@ function AppContent() {
             console.warn("Failed to send auto-reply:", e);
           }
         }, 1500);
-      }
 
-      try {
-        await fetch("/api/support/telegram", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userEmail: emailVal,
-            userName: nameVal,
-            message: `💬 [SOPORTE PREMIUM]\n\n${msgText}`,
-          }),
-        });
-      } catch (telegramErr) {
-        console.warn("Failed to notify Telegram:", telegramErr);
+        try {
+          await fetch("/api/support/telegram", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              userEmail: emailVal,
+              userName: nameVal,
+              message: `💬 [SOPORTE PREMIUM]\n\n${msgText}`,
+            }),
+          });
+        } catch (telegramErr) {
+          console.warn("Failed to notify Telegram:", telegramErr);
+        }
       }
 
       setSupportMessage("");
@@ -357,7 +358,7 @@ function AppContent() {
   };
 
   const handleSendAdminReply = async () => {
-    if (!replyText.trim() || !selectedThreadEmail) return;
+    if (!replyText.trim() || !selectedThreadId) return;
 
     try {
       setIsSendingReply(true);
@@ -366,14 +367,15 @@ function AppContent() {
 
       // Find user info from existing messages in the thread
       const threadMsgs = allSupportMessages.filter(
-        (m) => m.userEmail === selectedThreadEmail
+        (m) => m.userId === selectedThreadId
       );
       const firstUserMsg = threadMsgs.find((m) => !m.isAdminReply && m.userId && m.userId !== "unknown_user");
       const userIdVal = firstUserMsg?.userId || threadMsgs[0]?.userId || "unknown_user";
+      const userEmailVal = firstUserMsg?.userEmail || threadMsgs[0]?.userEmail || "Anónimo";
 
       const newReply = {
         userId: userIdVal,
-        userEmail: selectedThreadEmail,
+        userEmail: userEmailVal,
         userName: "Soporte FLUX",
         message: textToMsg,
         createdAt: Date.now(),
@@ -902,7 +904,7 @@ function AppContent() {
                 /* ADMIN MULTI-THREAD DASHBOARD */
                 <div className="flex-1 flex flex-col md:flex-row min-h-0 text-left bg-black/10">
                   {/* Left Column: Conversation Thread List */}
-                  <div className={`w-full md:w-1/3 border-r border-white/5 flex flex-col h-full bg-[#0a0a0c] ${selectedThreadEmail ? "hidden md:flex" : "flex"}`}>
+                  <div className={`w-full md:w-1/3 border-r border-white/5 flex flex-col h-full bg-[#0a0a0c] ${selectedThreadId ? "hidden md:flex" : "flex"}`}>
                     <div className="p-3 border-b border-white/5 shrink-0 bg-white/[0.01]">
                       <h4 className="text-[9px] font-black uppercase text-slate-400 tracking-widest">Hilos de Conversación</h4>
                       <p className="text-[7.5px] text-slate-500 uppercase font-bold mt-0.5">Soporte en tiempo real</p>
@@ -916,12 +918,12 @@ function AppContent() {
                         </div>
                       ) : (
                         computedThreads.map((thread: any) => {
-                          const isActive = selectedThreadEmail === thread.userEmail;
+                          const isActive = selectedThreadId === thread.userId;
                           const hasUnread = thread.unreadCount > 0;
                           return (
                             <button
-                              key={thread.userEmail}
-                              onClick={() => setSelectedThreadEmail(thread.userEmail)}
+                              key={thread.userId}
+                              onClick={() => setSelectedThreadId(thread.userId)}
                               className={`w-full text-left p-3.5 transition-all hover:bg-white/[0.02] flex items-start gap-2.5 select-none cursor-pointer ${
                                 isActive ? "bg-white/[0.04]" : ""
                               }`}
@@ -963,25 +965,25 @@ function AppContent() {
                   </div>
 
                   {/* Right Column: Chat Content View */}
-                  <div className={`flex-1 flex flex-col h-full bg-[#0d0d0f] ${!selectedThreadEmail ? "hidden md:flex" : "flex"}`}>
-                    {selectedThreadEmail ? (
+                  <div className={`flex-1 flex flex-col h-full bg-[#0d0d0f] ${!selectedThreadId ? "hidden md:flex" : "flex"}`}>
+                    {selectedThreadId ? (
                       <>
                         {/* Active Thread Header */}
                         <div className="p-3 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0">
                           <div className="min-w-0 text-left">
                             <div className="flex items-center gap-1.5">
                               <h4 className="text-[10px] font-black text-white leading-none">
-                                {allSupportMessages.find(m => m.userEmail === selectedThreadEmail)?.userName || "Socio Flux"}
+                                {allSupportMessages.find(m => m.userId === selectedThreadId)?.userName || "Socio Flux"}
                               </h4>
                               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_#10b981]" />
                             </div>
-                            <p className="text-[8px] font-bold text-slate-500 mt-0.5 truncate">{selectedThreadEmail}</p>
+                            <p className="text-[8px] font-bold text-slate-500 mt-0.5 truncate">{allSupportMessages.find(m => m.userId === selectedThreadId)?.userEmail || "Anónimo"}</p>
                           </div>
 
                           <div className="flex items-center gap-2">
                             {/* Mobile Back Button to return to thread list */}
                             <button
-                              onClick={() => setSelectedThreadEmail(null)}
+                              onClick={() => setSelectedThreadId(null)}
                               className="md:hidden px-2.5 py-1 bg-white/5 hover:bg-white/10 text-[8px] font-black uppercase text-slate-300 rounded-lg transition-all cursor-pointer select-none"
                             >
                               Ver Lista
@@ -995,7 +997,7 @@ function AppContent() {
                         {/* Chat Messages Log */}
                         <div className="flex-1 overflow-y-auto p-4 space-y-3.5 flex flex-col scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent bg-black/10">
                           {allSupportMessages
-                            .filter((m) => m.userEmail === selectedThreadEmail)
+                            .filter((m) => m.userId === selectedThreadId)
                             .map((msg) => {
                               const isRep = msg.isAdminReply;
                               return (

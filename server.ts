@@ -1019,15 +1019,37 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
   try {
     if (yt) {
       try {
-        const playlist = await yt.getPlaylist(playlistId);
-        if (playlist && playlist.info) {
+        let title = "";
+        let thumbnail = "";
+
+        if (playlistId.startsWith("MPRE")) {
+          const album = await yt.music.getAlbum(playlistId);
+          if (album && album.header) {
+            title = album.header.title?.toString() || "Álbum Recomendado";
+            thumbnail = album.header.thumbnails?.[0]?.url || "";
+          }
+        } else {
+          try {
+            const playlist = await yt.getPlaylist(playlistId);
+            if (playlist && playlist.info) {
+              title = playlist.info.title || "Lista Recomendada";
+              thumbnail = playlist.info.thumbnails?.[0]?.url || "";
+            }
+          } catch (e) {
+            // fallback to music playlist
+            const mPlaylist = await yt.music.getPlaylist(playlistId);
+            if (mPlaylist && mPlaylist.header) {
+              title = mPlaylist.header.title?.toString() || "Lista Recomendada";
+              thumbnail = mPlaylist.header.thumbnails?.[0]?.url || "";
+            }
+          }
+        }
+
+        if (title || thumbnail) {
           const info = {
             id: playlistId,
-            title: playlist.info.title || "Lista Recomendada",
-            thumbnail:
-              playlist.info.thumbnails && playlist.info.thumbnails.length > 0
-                ? playlist.info.thumbnails[0].url
-                : "",
+            title: title || "Lista Recomendada",
+            thumbnail: thumbnail,
           };
           playlistInfoCache.set(cacheKey, {
             data: info,
@@ -1035,8 +1057,8 @@ app.get("/api/youtube/playlist-info", async (req, res) => {
           });
           return res.json(info);
         }
-      } catch (err) {
-        console.warn("Innertube getPlaylist info failed:", err);
+      } catch (err: any) {
+        console.log(`Innertube getPlaylist info failed for ${playlistId}`);
       }
     }
 

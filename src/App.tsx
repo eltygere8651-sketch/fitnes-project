@@ -59,26 +59,38 @@ function AppContent() {
   const adminMessageIdsRef = useRef<Set<string>>(new Set());
   const userMessageIdsRef = useRef<Set<string>>(new Set());
 
-  const playNotificationSound = () => {
+  const playNotificationSound = async () => {
     try {
-      // Short, pleasant notification chime in base64
-      const audio = new Audio("data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq");
-      // Fallback to web audio api if base64 fails
-      audio.play().catch(() => {
-        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-        const now = audioCtx.currentTime;
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        osc.type = "sine";
-        osc.frequency.setValueAtTime(880, now);
-        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
-        gain.gain.setValueAtTime(0.1, now);
-        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
-        osc.connect(gain);
-        gain.connect(audioCtx.destination);
-        osc.start(now);
-        osc.stop(now + 0.3);
-      });
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      if (audioCtx.state === 'suspended') {
+        await audioCtx.resume();
+      }
+      const now = audioCtx.currentTime;
+      
+      // Tone 1: principal chime tone
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(880, now);
+      osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Tone 2: secondary harmonious tone
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1046.50, now);
+      gain2.gain.setValueAtTime(0.08, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now);
+      osc2.stop(now + 0.45);
     } catch (err) {
       console.warn("Audio notification failed:", err);
     }
@@ -128,18 +140,21 @@ function AppContent() {
     return () => window.removeEventListener("open-support", handleOpenSupport);
   }, []);
 
+  const [guestId, setGuestId] = useState<string>(() => {
+    const saved = localStorage.getItem("flux_guest_id");
+    if (saved) return saved;
+    const newId = "guest_" + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem("flux_guest_id", newId);
+    return newId;
+  });
+
+  const currentUserId = user?.uid || guestId;
+  
   useEffect(() => {
     isInitialAdminLoad.current = true;
     isInitialUserLoad.current = true;
     adminMessageIdsRef.current.clear();
     userMessageIdsRef.current.clear();
-
-    if (!user) {
-      setSupportChatMessages([]);
-      setAllSupportMessages([]);
-      setUnreadRepliesCount(0);
-      return;
-    }
 
     if (isAdmin) {
       const q = query(
@@ -183,8 +198,7 @@ function AppContent() {
     } else {
       const q = query(
         collection(db, "support_messages"),
-        where("userId", "==", user.uid),
-        orderBy("createdAt", "asc")
+        where("userId", "==", currentUserId)
       );
 
       const unsubscribe = onSnapshot(
@@ -193,7 +207,7 @@ function AppContent() {
           const msgs = snapshot.docs.map((doc) => ({
             id: doc.id,
             ...(doc.data() as any),
-          }));
+          })).sort((a: any, b: any) => a.createdAt - b.createdAt);
 
           // Check if there is any new message sent by support/admin
           const hasNewIncoming = msgs.some(
@@ -223,10 +237,10 @@ function AppContent() {
 
       return () => unsubscribe();
     }
-  }, [user, isAdmin]);
+  }, [isAdmin, currentUserId]);
 
   useEffect(() => {
-    if (!isAdmin && isSupportModalOpen && user && supportChatMessages.length > 0) {
+    if (!isAdmin && isSupportModalOpen && supportChatMessages.length > 0) {
       const unreadReplies = supportChatMessages.filter(
         (m) => m.isAdminReply && !m.readByUser
       );
@@ -240,7 +254,7 @@ function AppContent() {
         }
       });
     }
-  }, [isSupportModalOpen, user, supportChatMessages, isAdmin]);
+  }, [isSupportModalOpen, supportChatMessages, isAdmin]);
 
   useEffect(() => {
     if (isAdmin && selectedThreadEmail && allSupportMessages.length > 0) {
@@ -281,9 +295,10 @@ function AppContent() {
       const emailVal = user?.email || "Anónimo";
       const nameVal = user?.displayName || "Socio Contigo";
       const msgText = supportMessage.trim();
+      const currentUserId = user?.uid || "guest_uid";
 
       const newMsgObj = {
-        userId: user?.uid || "guest_uid",
+        userId: currentUserId,
         userEmail: emailVal,
         userName: nameVal,
         message: msgText,
@@ -292,7 +307,30 @@ function AppContent() {
         readByAdmin: false,
         readByUser: true,
       };
+      
+      const isFirstMessage = supportChatMessages.length === 0;
       await addDoc(collection(db, "support_messages"), newMsgObj);
+
+      if (isFirstMessage) {
+        // Enviar respuesta automática profesional
+        setTimeout(async () => {
+          try {
+            const autoReplyMsg = {
+              userId: currentUserId,
+              userEmail: emailVal,
+              userName: "Soporte Automático",
+              message: "¡Hola! Hemos recibido tu mensaje. Nuestro equipo de soporte lo revisará y se pondrá en contacto contigo lo antes posible. Gracias por escribirnos.",
+              createdAt: Date.now(),
+              isAdminReply: true,
+              readByAdmin: true,
+              readByUser: false,
+            };
+            await addDoc(collection(db, "support_messages"), autoReplyMsg);
+          } catch (e) {
+            console.warn("Failed to send auto-reply:", e);
+          }
+        }, 1500);
+      }
 
       try {
         await fetch("/api/support/telegram", {

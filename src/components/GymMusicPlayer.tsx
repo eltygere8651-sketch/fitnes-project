@@ -693,7 +693,7 @@ const getPlaylistImage = (pl?: any): string | null => {
 const createSilentAudioBlobURL = (): string => {
   if (typeof window === "undefined") return "";
   const sampleRate = 44100;
-  const duration = 10;
+  const duration = 0.5; // Short burst to steal focus without causing Bluetooth stuttering
   const numSamples = sampleRate * duration;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
@@ -4744,7 +4744,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         <audio
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}
-          loop
           playsInline
         />
         {currentUrl && (

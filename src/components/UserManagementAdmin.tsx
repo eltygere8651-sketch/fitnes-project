@@ -607,8 +607,9 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         setTelegramToken(bToken);
         setTelegramChatId(cId);
 
-        // Warm up backend cache with these credentials
+        // Warm up backend cache with these credentials (disabled for Vercel)
         if (bToken && cId) {
+          /*
           fetch("/api/support/register-telegram", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -618,6 +619,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               adminEmail: "eltygere8651@gmail.com"
             })
           }).catch(err => console.error("Error warming up backend Telegram parameters:", err));
+          */
         }
       }
     } catch (e) {
@@ -638,7 +640,8 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
         updatedAt: Date.now()
       });
 
-      // Synchronize directly with the backend server as well
+      // Synchronize directly with the backend server as well (disabled for Vercel static hosting)
+      /*
       await fetch("/api/support/register-telegram", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -648,6 +651,7 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
           adminEmail: "eltygere8651@gmail.com"
         })
       });
+      */
 
       alert("¡Configuración de Telegram guardada y sincronizada correctamente!");
     } catch (e) {

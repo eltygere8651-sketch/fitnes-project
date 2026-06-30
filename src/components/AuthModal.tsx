@@ -124,16 +124,16 @@ export const AuthModal: React.FC = () => {
 
           const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
           const _tgData = _tgDoc.data();
-          await fetch("/api/support/telegram-trial", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              userEmail: cleanEmail,
-              userName: nickname.trim() || cleanEmail,
-              botTokenOverride: _tgData?.botToken,
-              chatIdOverride: _tgData?.chatId
-            })
-          });
+          if (_tgData?.botToken && _tgData?.chatId) {
+            const title = `🎁 Nueva Solicitud de Prueba de 7 Días 🎁`;
+            const text = `${title}\n\n👤 Usuario: ${nickname.trim() || cleanEmail}\n📧 Email: ${cleanEmail}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
+            
+            await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: _tgData.chatId, text: text }),
+            });
+          }
         } catch(e) {
           console.warn("Could not auto-request trial:", e);
         }

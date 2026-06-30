@@ -341,17 +341,29 @@ function AppContent() {
       // 2. Notificar a Telegram en el primer contacto O si el usuario responde después del admin (evitar spam)
       if (isFirstContact) {
         try {
-          await fetch("/api/support/telegram", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              userEmail: emailVal,
-              userName: nameVal,
-              message: `💬 [SOPORTE PREMIUM]\n\n${msgText}`,
-            }),
+          // Fetch telegram config directly from Firestore to support Vercel static hosting
+          const tgDoc = await getDocs(query(collection(db, "system_settings"), limit(1)));
+          let botToken = "";
+          let chatId = "";
+          tgDoc.forEach(doc => {
+            if (doc.id === "telegram") {
+              botToken = doc.data().botToken;
+              chatId = doc.data().chatId;
+            }
           });
+
+          if (botToken && chatId) {
+            const title = `🚨 Nuevo Mensaje de Soporte 🚨`;
+            const userLine = `👤 Usuario: ${nameVal || "Anónimo"} (${emailVal || "Sin email"})`;
+            const messageLine = `💬 Mensaje:\n[SOPORTE PREMIUM]\n\n${msgText}`;
+            const text = `${title}\n\n${userLine}\n\n${messageLine}`;
+
+            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: chatId, text: text }),
+            });
+          }
         } catch (telegramErr) {
           console.warn("Failed to notify Telegram:", telegramErr);
         }

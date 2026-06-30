@@ -6,7 +6,6 @@ import React, {
   useMemo,
 } from "react";
 import { Carousel } from "./Carousel";
-import { flushSync } from "react-dom";
 import ReactPlayer from "react-player";
 import { motion, AnimatePresence } from "motion/react";
 import {
@@ -2173,6 +2172,7 @@ export default function GymMusicPlayer() {
   const lastSkipTimeRef = useRef<number>(0);
 
   const loadIframeVideoDirectly = (targetTrack: any) => {
+    hasStolenLockForTrackRef.current = false;
     if (!targetTrack) return;
     if ("mediaSession" in navigator) {
       try {
@@ -2190,6 +2190,15 @@ export default function GymMusicPlayer() {
           ],
         });
       } catch (e) {}
+    }
+    const nextUrl = (targetTrack.url || "").replace("music.youtube.com", "www.youtube.com");
+    const match = nextUrl.match(/(?:v=|\/)([\w-]{11})(?:\?|&|\/|$)/);
+    if (match && match[1] && document.hidden) {
+       const videoId = match[1];
+       const intPlayer = youtubePlayerRef.current?.getInternalPlayer();
+       if (intPlayer && typeof intPlayer.loadVideoById === "function") {
+           intPlayer.loadVideoById(videoId);
+       }
     }
   };
 
@@ -4667,20 +4676,16 @@ export default function GymMusicPlayer() {
 
       sessionHandlersRef.current.nextHandler = () => {
         try {
-          flushSync(() => {
-            handlersRef.current.handleNext();
-          });
-        } catch (e) {
           handlersRef.current.handleNext();
+        } catch (e) {
+          console.warn(e);
         }
       };
       sessionHandlersRef.current.prevHandler = () => {
         try {
-          flushSync(() => {
-            handlersRef.current.handlePrev();
-          });
-        } catch (e) {
           handlersRef.current.handlePrev();
+        } catch (e) {
+          console.warn(e);
         }
       };
 

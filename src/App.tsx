@@ -310,11 +310,15 @@ function AppContent() {
         readByUser: true,
       };
       
-      const isFirstMessage = supportChatMessages.length === 0;
+      const lastMsg = supportChatMessages[supportChatMessages.length - 1];
+      const isFirstContact = supportChatMessages.length === 0 || (lastMsg && lastMsg.isAdminReply);
+      
+      const isFirstMessageEver = supportChatMessages.length === 0;
+      
       await addDoc(collection(db, "support_messages"), newMsgObj);
 
-      if (isFirstMessage) {
-        // Enviar respuesta automática profesional y notificar a Telegram (solo en el primer mensaje)
+      // 1. Enviar respuesta automática SOLO en el primer mensaje absoluto (cuando no hay historial)
+      if (isFirstMessageEver) {
         setTimeout(async () => {
           try {
             const autoReplyMsg = {
@@ -332,7 +336,10 @@ function AppContent() {
             console.warn("Failed to send auto-reply:", e);
           }
         }, 1500);
+      }
 
+      // 2. Notificar a Telegram en el primer contacto O si el usuario responde después del admin (evitar spam)
+      if (isFirstContact) {
         try {
           await fetch("/api/support/telegram", {
             method: "POST",

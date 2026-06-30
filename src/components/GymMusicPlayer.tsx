@@ -7493,7 +7493,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                         <MessageSquare className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform duration-300" />
                         <span>Soporte en Vivo</span>
                         {unreadRepliesCount > 0 && (
-                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+                          <span className="absolute -top-2 -right-2 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-bounce">
+                            {unreadRepliesCount}
+                          </span>
                         )}
                       </button>
                     </div>
@@ -7737,7 +7739,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             Soporte
           </span>
           {unreadRepliesCount > 0 && (
-            <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 text-white text-[9px] font-bold flex items-center justify-center rounded-full shadow-[0_0_10px_rgba(244,63,94,0.5)] animate-bounce">
+              {unreadRepliesCount}
+            </span>
           )}
         </button>
       </div>

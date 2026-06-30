@@ -1711,16 +1711,26 @@ async function getTelegramConfig() {
     // ignore
   }
 
-  // 4. Try Firestore system_settings/telegram (and suppress permission errors cleanly so they don't block the response flow)
+  // 4. Try Firestore via REST API (bypasses Admin SDK auth issues in preview environment)
   try {
-    const db = getFirestoreDb();
-    if (db) {
-      const doc = await db.collection("system_settings").doc("telegram").get();
-      if (doc.exists) {
-        const data = doc.data();
-        if (data?.botToken && data?.chatId) {
-          const configObj = { botToken: data.botToken, chatId: data.chatId };
-          // Cache it locally too
+    const configPath = path.join(
+      process.cwd(),
+      "firebase-applet-config.json",
+    );
+    if (fs.existsSync(configPath)) {
+      const config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      const dbId = config.firestoreDatabaseId || "(default)";
+      const url = `https://firestore.googleapis.com/v1/projects/${config.projectId}/databases/${dbId}/documents/system_settings/telegram`;
+      
+      const res = await fetch(url);
+      if (res.ok) {
+        const doc = await res.json();
+        if (doc.fields && doc.fields.botToken?.stringValue && doc.fields.chatId?.stringValue) {
+          const configObj = {
+            botToken: doc.fields.botToken.stringValue,
+            chatId: doc.fields.chatId.stringValue
+          };
+          
           cachedTelegramConfig = configObj;
           try {
             fs.writeFileSync(
@@ -1740,7 +1750,7 @@ async function getTelegramConfig() {
     }
   } catch (err: any) {
     console.warn(
-      "Notice: Firestore Admin SDK lookup failed (likely permission/IAM issue). Using fallback settings:",
+      "Notice: Firestore REST lookup failed. Using fallback settings:",
       err?.message || err,
     );
   }

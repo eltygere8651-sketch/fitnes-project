@@ -1791,9 +1791,9 @@ app.post("/api/support/telegram", async (req, res) => {
       });
     }
 
-    const title = `🚨 <b>Nuevo Mensaje de Soporte</b> 🚨`;
-    const userLine = `👤 <b>Usuario:</b> ${escapeTelegramHtml(userName || "Anónimo")} (${escapeTelegramHtml(userEmail || "Sin email")})`;
-    const messageLine = `💬 <b>Mensaje:</b>\n<i>${escapeTelegramHtml(message.trim())}</i>`;
+    const title = `🚨 Nuevo Mensaje de Soporte 🚨`;
+    const userLine = `👤 Usuario: ${userName || "Anónimo"} (${userEmail || "Sin email"})`;
+    const messageLine = `💬 Mensaje:\n${message.trim()}`;
     const text = `${title}\n\n${userLine}\n\n${messageLine}`;
 
     const tgRes = await fetch(
@@ -1804,7 +1804,6 @@ app.post("/api/support/telegram", async (req, res) => {
         body: JSON.stringify({
           chat_id: config.chatId,
           text: text,
-          parse_mode: "HTML",
         }),
       },
     );
@@ -1838,8 +1837,8 @@ app.post("/api/support/telegram-trial", async (req, res) => {
       });
     }
 
-    const title = `🎁 <b>Nueva Solicitud de Prueba de 7 Días</b> 🎁`;
-    const text = `${title}\n\n👤 <b>Usuario:</b> ${escapeTelegramHtml(userName || "Socio Premium")}\n📧 <b>Email:</b> ${escapeTelegramHtml(userEmail || "Sin email")}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
+    const title = `🎁 Nueva Solicitud de Prueba de 7 Días 🎁`;
+    const text = `${title}\n\n👤 Usuario: ${userName || "Socio Premium"}\n📧 Email: ${userEmail || "Sin email"}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
 
     const tgRes = await fetch(
       `https://api.telegram.org/bot${config.botToken}/sendMessage`,
@@ -1849,7 +1848,6 @@ app.post("/api/support/telegram-trial", async (req, res) => {
         body: JSON.stringify({
           chat_id: config.chatId,
           text: text,
-          parse_mode: "HTML",
         }),
       },
     );

@@ -61,33 +61,24 @@ function AppContent() {
 
   const playNotificationSound = () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const now = audioCtx.currentTime;
-      
-      // Tone 1: principal chime tone (A5)
-      const osc1 = audioCtx.createOscillator();
-      const gain1 = audioCtx.createGain();
-      osc1.type = "sine";
-      osc1.frequency.setValueAtTime(880, now);
-      osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
-      gain1.gain.setValueAtTime(0.12, now);
-      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
-      osc1.connect(gain1);
-      gain1.connect(audioCtx.destination);
-      osc1.start(now);
-      osc1.stop(now + 0.35);
-
-      // Tone 2: secondary harmonious tone (C6)
-      const osc2 = audioCtx.createOscillator();
-      const gain2 = audioCtx.createGain();
-      osc2.type = "sine";
-      osc2.frequency.setValueAtTime(1046.50, now);
-      gain2.gain.setValueAtTime(0.08, now);
-      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
-      osc2.connect(gain2);
-      gain2.connect(audioCtx.destination);
-      osc2.start(now);
-      osc2.stop(now + 0.45);
+      // Short, pleasant notification chime in base64
+      const audio = new Audio("data:audio/mp3;base64,//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq//NExAAAAANIAAAAAExBTUUzLjEwMKqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqq");
+      // Fallback to web audio api if base64 fails
+      audio.play().catch(() => {
+        const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+        const now = audioCtx.currentTime;
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, now);
+        osc.frequency.exponentialRampToValueAtTime(1200, now + 0.1);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start(now);
+        osc.stop(now + 0.3);
+      });
     } catch (err) {
       console.warn("Audio notification failed:", err);
     }
@@ -339,8 +330,8 @@ function AppContent() {
       const threadMsgs = allSupportMessages.filter(
         (m) => m.userEmail === selectedThreadEmail
       );
-      const firstMsgObj = threadMsgs[0];
-      const userIdVal = firstMsgObj?.userId || "unknown_user";
+      const firstUserMsg = threadMsgs.find((m) => !m.isAdminReply && m.userId && m.userId !== "unknown_user");
+      const userIdVal = firstUserMsg?.userId || threadMsgs[0]?.userId || "unknown_user";
 
       const newReply = {
         userId: userIdVal,

@@ -54,6 +54,45 @@ function AppContent() {
   const [isSendingReply, setIsSendingReply] = useState(false);
   const adminChatEndRef = useRef<HTMLDivElement>(null);
 
+  const isInitialAdminLoad = useRef(true);
+  const isInitialUserLoad = useRef(true);
+  const adminMessageIdsRef = useRef<Set<string>>(new Set());
+  const userMessageIdsRef = useRef<Set<string>>(new Set());
+
+  const playNotificationSound = () => {
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const now = audioCtx.currentTime;
+      
+      // Tone 1: principal chime tone (A5)
+      const osc1 = audioCtx.createOscillator();
+      const gain1 = audioCtx.createGain();
+      osc1.type = "sine";
+      osc1.frequency.setValueAtTime(880, now);
+      osc1.frequency.exponentialRampToValueAtTime(1200, now + 0.12);
+      gain1.gain.setValueAtTime(0.12, now);
+      gain1.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+      osc1.connect(gain1);
+      gain1.connect(audioCtx.destination);
+      osc1.start(now);
+      osc1.stop(now + 0.35);
+
+      // Tone 2: secondary harmonious tone (C6)
+      const osc2 = audioCtx.createOscillator();
+      const gain2 = audioCtx.createGain();
+      osc2.type = "sine";
+      osc2.frequency.setValueAtTime(1046.50, now);
+      gain2.gain.setValueAtTime(0.08, now);
+      gain2.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+      osc2.connect(gain2);
+      gain2.connect(audioCtx.destination);
+      osc2.start(now);
+      osc2.stop(now + 0.45);
+    } catch (err) {
+      console.warn("Audio notification failed:", err);
+    }
+  };
+
   const computedThreads = useMemo(() => {
     if (!isAdmin) return [];
     const threadsMap: Record<string, any> = {};
@@ -99,6 +138,11 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
+    isInitialAdminLoad.current = true;
+    isInitialUserLoad.current = true;
+    adminMessageIdsRef.current.clear();
+    userMessageIdsRef.current.clear();
+
     if (!user) {
       setSupportChatMessages([]);
       setAllSupportMessages([]);
@@ -118,6 +162,21 @@ function AppContent() {
             id: doc.id,
             ...(doc.data() as any),
           }));
+
+          // Check if there is any new message sent by a user (not admin reply)
+          const hasNewIncoming = msgs.some(
+            (m: any) => !m.isAdminReply && !adminMessageIdsRef.current.has(m.id)
+          );
+
+          // Update cache of seen IDs
+          msgs.forEach((m: any) => adminMessageIdsRef.current.add(m.id));
+
+          // If it is not the initial snapshot load, play the notification sound
+          if (hasNewIncoming && !isInitialAdminLoad.current) {
+            playNotificationSound();
+          }
+          isInitialAdminLoad.current = false;
+
           setAllSupportMessages(msgs);
 
           const unreadCount = msgs.filter(
@@ -144,6 +203,21 @@ function AppContent() {
             id: doc.id,
             ...(doc.data() as any),
           }));
+
+          // Check if there is any new message sent by support/admin
+          const hasNewIncoming = msgs.some(
+            (m: any) => m.isAdminReply && !userMessageIdsRef.current.has(m.id)
+          );
+
+          // Update cache of seen IDs
+          msgs.forEach((m: any) => userMessageIdsRef.current.add(m.id));
+
+          // If it is not the initial snapshot load, play the notification sound
+          if (hasNewIncoming && !isInitialUserLoad.current) {
+            playNotificationSound();
+          }
+          isInitialUserLoad.current = false;
+
           setSupportChatMessages(msgs);
 
           const unreadCount = msgs.filter(

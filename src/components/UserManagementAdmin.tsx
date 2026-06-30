@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc } from "firebase/firestore";
+import React, { useState, useEffect, useRef } from "react";
+import { collection, getDocs, doc, updateDoc, deleteDoc, getDoc, setDoc, onSnapshot, query, orderBy, where, addDoc } from "firebase/firestore";
 import { db } from "../lib/firebase";
 import { X, UserX, Shield, CheckCircle, AlertTriangle, Trash, Send, Save, Key, MessageSquare, Download, ChevronDown, ChevronUp, Sparkles, Bug } from "lucide-react";
 import { jsPDF } from "jspdf";
@@ -16,8 +16,118 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
   const [isSavingTelegram, setIsSavingTelegram] = useState(false);
   const [isTestingTelegram, setIsTestingTelegram] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor">("users");
+  const [activeTab, setActiveTab] = useState<"users" | "notifications" | "monitor" | "support">("users");
   const [isTelegramConfigExpanded, setIsTelegramConfigExpanded] = useState(false);
+
+  // Support chat state variables
+  const [supportMessages, setSupportMessages] = useState<any[]>([]);
+  const [unreadSupportCount, setUnreadSupportCount] = useState(0);
+  const [selectedThreadEmail, setSelectedThreadEmail] = useState<string | null>(null);
+  const [replyText, setReplyText] = useState("");
+  const [isSendingReply, setIsSendingReply] = useState(false);
+  const adminChatEndRef = useRef<HTMLDivElement>(null);
+
+  const computedThreads = React.useMemo(() => {
+    const threadsMap: Record<string, any> = {};
+
+    supportMessages.forEach((m) => {
+      const email = m.userEmail || "Anónimo";
+      if (!threadsMap[email]) {
+        threadsMap[email] = {
+          userEmail: email,
+          userName: m.userName || "Socio Flux",
+          messages: [],
+          lastMessage: null,
+          unreadCount: 0,
+        };
+      }
+      threadsMap[email].messages.push(m);
+      threadsMap[email].lastMessage = m;
+
+      if (!m.isAdminReply && !m.readByAdmin) {
+        threadsMap[email].unreadCount += 1;
+      }
+    });
+
+    return Object.values(threadsMap).sort((a: any, b: any) => {
+      const timeA = a.lastMessage?.createdAt || 0;
+      const timeB = b.lastMessage?.createdAt || 0;
+      return timeB - timeA;
+    });
+  }, [supportMessages]);
+
+  useEffect(() => {
+    const q = query(collection(db, "support_messages"), orderBy("createdAt", "asc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setSupportMessages(msgs);
+
+      // Unread support count: user messages that aren't read by admin
+      const unread = msgs.filter((m: any) => !m.isAdminReply && !m.readByAdmin).length;
+      setUnreadSupportCount(unread);
+    }, (error) => {
+      console.warn("Error listening to support messages in admin:", error);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === "support" && adminChatEndRef.current) {
+      setTimeout(() => {
+        adminChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [selectedThreadEmail, supportMessages, activeTab]);
+
+  useEffect(() => {
+    if (selectedThreadEmail && supportMessages.length > 0) {
+      const threadMsgs = supportMessages.filter(m => m.userEmail === selectedThreadEmail);
+      const unreadUserMsgs = threadMsgs.filter(m => !m.isAdminReply && !m.readByAdmin);
+      
+      unreadUserMsgs.forEach(async (m) => {
+        try {
+          await updateDoc(doc(db, "support_messages", m.id), { readByAdmin: true });
+        } catch (e) {
+          console.warn("Could not mark support message as read by admin:", e);
+        }
+      });
+    }
+  }, [selectedThreadEmail, supportMessages]);
+
+  const handleSendAdminReply = async () => {
+    if (!replyText.trim() || !selectedThreadEmail) return;
+
+    try {
+      setIsSendingReply(true);
+      const textToMsg = replyText.trim();
+      setReplyText("");
+
+      // Find user info from existing messages in the thread
+      const threadMsgs = supportMessages.filter(m => m.userEmail === selectedThreadEmail);
+      const firstMsgObj = threadMsgs[0];
+      const userIdVal = firstMsgObj?.userId || "unknown_user";
+      const userNameVal = firstMsgObj?.userName || "Socio Flux";
+
+      const newReply = {
+        userId: userIdVal,
+        userEmail: selectedThreadEmail,
+        userName: "Soporte FLUX",
+        message: textToMsg,
+        createdAt: Date.now(),
+        isAdminReply: true,
+        readByAdmin: true,
+        readByUser: false
+      };
+
+      await addDoc(collection(db, "support_messages"), newReply);
+    } catch (e) {
+      console.error("Error sending admin reply:", e);
+      alert("No se pudo enviar la respuesta: " + e);
+    } finally {
+      setIsSendingReply(false);
+    }
+  };
 
   // Announcement composition states
   const [annTitle, setAnnTitle] = useState("");
@@ -818,6 +928,23 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
               </span>
             )}
           </button>
+
+          <button
+            onClick={() => setActiveTab("support")}
+            className={`shrink-0 flex-1 sm:flex-initial flex items-center justify-center gap-1 sm:gap-2 px-1.5 sm:px-4 py-2 sm:py-2.5 rounded-xl text-[9px] sm:text-xs font-black uppercase tracking-wider transition-all cursor-pointer select-none ${
+              activeTab === "support"
+                ? "bg-rose-500/15 text-rose-400 border border-rose-500/20"
+                : "text-slate-400 hover:text-slate-200 hover:bg-white/5 border border-transparent"
+            }`}
+          >
+            <MessageSquare className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+            <span>Chat Soporte</span>
+            {unreadSupportCount > 0 && (
+              <span className="ml-1 bg-rose-500 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full animate-bounce">
+                {unreadSupportCount}
+              </span>
+            )}
+          </button>
         </div>
 
         <div className="overflow-y-auto p-6 flex-1 space-y-4 scrollbar-thin scrollbar-thumb-white/5">
@@ -1265,6 +1392,181 @@ export const UserManagementAdmin = ({ onClose }: { onClose: () => void }) => {
                   Información no disponible. Pulsa Verificar Ahora.
                 </div>
               )}
+            </div>
+          )}
+
+          {activeTab === "support" && (
+            <div className="flex flex-col md:flex-row h-[500px] border border-white/5 rounded-3xl bg-[#121214] overflow-hidden text-left">
+              {/* Left Column: Conversation Thread List */}
+              <div className={`w-full md:w-1/3 border-r border-white/5 flex flex-col h-full bg-[#0a0a0c] ${selectedThreadEmail ? "hidden md:flex" : "flex"}`}>
+                <div className="p-4 border-b border-white/5 shrink-0 bg-white/[0.01]">
+                  <h4 className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Hilos de Conversación</h4>
+                  <p className="text-[8px] text-slate-500 uppercase font-bold mt-1">Soporte en tiempo real</p>
+                </div>
+
+                <div className="flex-1 overflow-y-auto divide-y divide-white/5 scrollbar-thin scrollbar-thumb-white/5">
+                  {computedThreads.length === 0 ? (
+                    <div className="text-center py-12 px-4 space-y-2">
+                      <MessageSquare className="w-5 h-5 text-slate-600 mx-auto" />
+                      <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">No hay mensajes aún</p>
+                    </div>
+                  ) : (
+                    computedThreads.map((thread: any) => {
+                      const isActive = selectedThreadEmail === thread.userEmail;
+                      const hasUnread = thread.unreadCount > 0;
+                      return (
+                        <button
+                          key={thread.userEmail}
+                          onClick={() => setSelectedThreadEmail(thread.userEmail)}
+                          className={`w-full text-left p-4 transition-all hover:bg-white/[0.02] flex items-start gap-3 select-none cursor-pointer ${
+                            isActive ? "bg-white/[0.04]" : ""
+                          }`}
+                        >
+                          <div className="relative shrink-0 mt-0.5">
+                            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500/10 to-emerald-500/10 border border-white/10 flex items-center justify-center font-black text-[10px] uppercase text-white">
+                              {thread.userName.substring(0, 2)}
+                            </div>
+                            {hasUnread && (
+                              <span className="absolute -top-1 -right-1 bg-rose-500 text-white text-[8px] font-black px-1.5 py-0.5 rounded-full shadow-[0_0_8px_rgba(239,68,68,0.5)]">
+                                {thread.unreadCount}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between">
+                              <h5 className="text-[10.5px] font-black truncate text-white leading-none">
+                                {thread.userName}
+                              </h5>
+                              <span className="text-[7.5px] font-bold text-slate-600 uppercase shrink-0">
+                                {thread.lastMessage?.createdAt
+                                  ? new Date(thread.lastMessage.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+                                  : ""}
+                              </span>
+                            </div>
+                            <p className="text-[8px] font-bold text-slate-500 truncate mt-1">
+                              {thread.userEmail}
+                            </p>
+                            <p className={`text-[10px] truncate mt-1.5 ${hasUnread ? "text-slate-200 font-bold" : "text-slate-400 font-medium"}`}>
+                              {thread.lastMessage?.isAdminReply ? "Tú: " : ""}{thread.lastMessage?.message}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              {/* Right Column: Chat Content View */}
+              <div className={`flex-1 flex flex-col h-full bg-[#121214] ${!selectedThreadEmail ? "hidden md:flex" : "flex"}`}>
+                {selectedThreadEmail ? (
+                  <>
+                    {/* Active Thread Header */}
+                    <div className="p-4 border-b border-white/5 bg-white/[0.01] flex items-center justify-between shrink-0">
+                      <div className="min-w-0 text-left">
+                        <div className="flex items-center gap-1.5">
+                          <h4 className="text-[10.5px] font-black text-white leading-none">
+                            {supportMessages.find(m => m.userEmail === selectedThreadEmail)?.userName || "Socio Flux"}
+                          </h4>
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_6px_#10b981]" />
+                        </div>
+                        <p className="text-[8.5px] font-bold text-slate-500 mt-1 truncate">{selectedThreadEmail}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Mobile Back Button to return to thread list */}
+                        <button
+                          onClick={() => setSelectedThreadEmail(null)}
+                          className="md:hidden px-3 py-1.5 bg-white/5 hover:bg-white/10 text-[8px] font-black uppercase text-slate-300 rounded-lg transition-all cursor-pointer select-none"
+                        >
+                          Ver Lista
+                        </button>
+                        <span className="hidden md:inline px-2.5 py-1 bg-emerald-500/15 text-emerald-400 text-[8px] font-black uppercase tracking-widest rounded-full">
+                          Canal Sincronizado
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Chat Messages Log */}
+                    <div className="flex-1 overflow-y-auto p-5 space-y-4 flex flex-col scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent bg-black/10">
+                      {supportMessages
+                        .filter((m) => m.userEmail === selectedThreadEmail)
+                        .map((msg) => {
+                          const isRep = msg.isAdminReply;
+                          return (
+                            <div
+                              key={msg.id}
+                              className={`flex flex-col max-w-[80%] ${isRep ? "self-end items-end" : "self-start items-start"}`}
+                            >
+                              {!isRep && (
+                                <span className="text-[8px] font-black uppercase text-slate-500 tracking-widest mb-1 pl-1">
+                                  {msg.category ? `[${msg.category.toUpperCase()}]` : "[USUARIO]"}
+                                </span>
+                              )}
+                              <div
+                                className={`p-3.5 rounded-[18px] text-[11px] font-semibold leading-relaxed text-left ${
+                                  isRep
+                                    ? "bg-gradient-to-r from-purple-600 to-indigo-600 text-white rounded-tr-none shadow-[0_4px_12px_rgba(147,51,234,0.15)]"
+                                    : "bg-white/[0.04] border border-white/5 text-slate-200 rounded-tl-none"
+                                }`}
+                              >
+                                {msg.message}
+                              </div>
+                              <span className="text-[7.5px] font-bold text-slate-600 uppercase tracking-widest mt-1 px-1">
+                                {new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      <div ref={adminChatEndRef} />
+                    </div>
+
+                    {/* Chat Input Area */}
+                    <div className="p-4 border-t border-white/5 bg-[#121214] shrink-0">
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="text"
+                          value={replyText}
+                          onChange={(e) => setReplyText(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !isSendingReply && replyText.trim()) {
+                              handleSendAdminReply();
+                            }
+                          }}
+                          placeholder="Escribe una respuesta para el cliente..."
+                          disabled={isSendingReply}
+                          className="flex-1 bg-white/[0.02] border border-white/5 rounded-xl px-4 py-3 text-[11px] text-white placeholder-slate-600 outline-none focus:border-purple-500/30 focus:bg-white/[0.04] transition-all font-semibold"
+                        />
+                        <button
+                          disabled={isSendingReply || !replyText.trim()}
+                          onClick={handleSendAdminReply}
+                          className="p-3 bg-purple-600 disabled:opacity-30 text-white hover:bg-purple-500 transition-all rounded-xl cursor-pointer flex items-center justify-center shrink-0 shadow-[0_4px_10px_rgba(168,85,247,0.25)]"
+                        >
+                          {isSendingReply ? (
+                            <div className="w-4 h-4 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+                          ) : (
+                            <Send className="w-4 h-4 stroke-[2.5px]" />
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-4">
+                    <div className="p-4 bg-purple-500/5 rounded-full border border-purple-500/10 animate-pulse">
+                      <MessageSquare className="w-8 h-8 text-purple-400" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Flux Live Support</p>
+                      <p className="text-[9px] text-slate-500 font-bold uppercase tracking-widest mt-1">Panel de Control</p>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
+                      Selecciona una conversación de la lista de la izquierda para responder en tiempo real al usuario.
+                    </p>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>

@@ -82,7 +82,9 @@ service cloud.firestore {
     // 4. Support Messages (Cualquier usuario puede enviar soporte, solo Admin puede leer/gestionar)
     match /support_messages/{messageId} {
       allow create: if true;
-      allow read, update, delete: if isAdmin();
+      allow read: if isAdmin() || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userEmail == request.auth.token.email));
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
     }
 
     // 4. Trial Requests (Solicitudes de Prueba)

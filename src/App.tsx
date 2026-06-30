@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   Music,
@@ -15,13 +15,17 @@ import {
   ChevronDown,
   PlusSquare,
   ArrowDown,
-  Bell
+  Bell,
+  MessageSquare,
+  MessageCircle,
+  Send,
+  Loader2
 } from "lucide-react";
 import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
@@ -34,6 +38,127 @@ function AppContent() {
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [hasUnread, setHasUnread] = useState(false);
   const [globalBanner, setGlobalBanner] = useState<{title: string, content: string, category?: string} | null>(null);
+
+  // States for Live Premium Support
+  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
+  const [supportMessage, setSupportMessage] = useState("");
+  const [isSendingSupport, setIsSendingSupport] = useState(false);
+  const [supportChatMessages, setSupportChatMessages] = useState<any[]>([]);
+  const [unreadRepliesCount, setUnreadRepliesCount] = useState(0);
+  const supportChatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (isSupportModalOpen && supportChatEndRef.current) {
+      setTimeout(() => {
+        supportChatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      }, 100);
+    }
+  }, [supportChatMessages, isSupportModalOpen]);
+
+  useEffect(() => {
+    const handleOpenSupport = () => setIsSupportModalOpen(true);
+    window.addEventListener("open-support", handleOpenSupport);
+    return () => window.removeEventListener("open-support", handleOpenSupport);
+  }, []);
+
+  useEffect(() => {
+    if (!user) {
+      setSupportChatMessages([]);
+      setUnreadRepliesCount(0);
+      return;
+    }
+
+    const q = query(
+      collection(db, "support_messages"),
+      where("userId", "==", user.uid),
+      orderBy("createdAt", "asc")
+    );
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        const msgs = snapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...(doc.data() as any),
+        }));
+        setSupportChatMessages(msgs);
+
+        const unreadCount = msgs.filter(
+          (m: any) => m.isAdminReply && !m.readByUser
+        ).length;
+        setUnreadRepliesCount(unreadCount);
+      },
+      (error) => {
+        console.warn("Error in support messages listener:", error);
+      }
+    );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (isSupportModalOpen && user && supportChatMessages.length > 0) {
+      const unreadReplies = supportChatMessages.filter(
+        (m) => m.isAdminReply && !m.readByUser
+      );
+      unreadReplies.forEach(async (m) => {
+        try {
+          await updateDoc(doc(db, "support_messages", m.id), {
+            readByUser: true,
+          });
+        } catch (e) {
+          console.warn("Could not mark support message as read:", e);
+        }
+      });
+    }
+  }, [isSupportModalOpen, user, supportChatMessages]);
+
+  const handleSendSupportMessage = async () => {
+    if (!supportMessage || !supportMessage.trim()) {
+      return;
+    }
+
+    try {
+      setIsSendingSupport(true);
+      const emailVal = user?.email || "Anónimo";
+      const nameVal = user?.displayName || "Socio Contigo";
+      const msgText = supportMessage.trim();
+
+      const newMsgObj = {
+        userId: user?.uid || "guest_uid",
+        userEmail: emailVal,
+        userName: nameVal,
+        message: msgText,
+        createdAt: Date.now(),
+        isAdminReply: false,
+        readByAdmin: false,
+        readByUser: true,
+      };
+      await addDoc(collection(db, "support_messages"), newMsgObj);
+
+      try {
+        await fetch("/api/support/telegram", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userEmail: emailVal,
+            userName: nameVal,
+            message: `💬 [SOPORTE PREMIUM]\n\n${msgText}`,
+          }),
+        });
+      } catch (telegramErr) {
+        console.warn("Failed to notify Telegram:", telegramErr);
+      }
+
+      setSupportMessage("");
+    } catch (err) {
+      console.error("Error sending support message:", err);
+    } finally {
+      setIsSendingSupport(false);
+    }
+  };
 
   useEffect(() => {
     const handleOpen = () => setIsNotificationsOpen(true);
@@ -287,14 +412,6 @@ function AppContent() {
                     <span>Perfil</span>
                   </button>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { setIsMobileMenuOpen(false); window.dispatchEvent(new Event('open-support')); }}
-                  className="flex-1 min-w-[90px] h-8 bg-[#121212] border border-[#1ED760]/15 hover:border-[#1ED760]/30 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1 active:scale-[0.98]"
-                >
-                  <Headphones className="w-3 h-3 stroke-[2.5px]" />
-                  <span>Soporte</span>
-                </button>
                 {isAdmin && (
                   <button
                     type="button"
@@ -377,14 +494,6 @@ function AppContent() {
                   <span>Mi Perfil</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => { setIsDesktopMenuOpen(false); window.dispatchEvent(new Event('open-support')); }}
-                className="h-8 bg-[#121212] border border-[#1ED760]/15 hover:border-[#1ED760]/30 text-emerald-400 font-extrabold uppercase text-[9px] tracking-wider rounded-lg transition-all cursor-pointer flex items-center justify-center gap-1.5 active:scale-95"
-              >
-                <Headphones className="w-3.5 h-3.5 stroke-[2.5px]" />
-                <span>Soporte</span>
-              </button>
               {isAdmin && (
                 <button
                   type="button"
@@ -423,7 +532,7 @@ function AppContent() {
         <section className="flex flex-col gap-6 flex-1 min-h-0 overflow-hidden">
           <div className="rounded-2xl sm:rounded-[32px] flex-1 bg-transparent border-transparent min-h-0 flex flex-col overflow-hidden">
             <div className="flex-1 w-full min-h-0 relative overflow-hidden">
-              <GymMusicPlayer />
+              <GymMusicPlayer unreadRepliesCount={unreadRepliesCount} />
             </div>
           </div>
         </section>
@@ -510,6 +619,155 @@ function AppContent() {
         onClose={() => setIsNotificationsOpen(false)} 
         isAdmin={isAdmin}
       />
+
+      {/* SUPPORT DIALOG MODAL */}
+      <AnimatePresence>
+        {isSupportModalOpen && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="w-full max-w-md bg-[#0d0d0f] border border-white/10 rounded-3xl overflow-hidden shadow-[0_20px_50px_rgba(0,0,0,0.8)] flex flex-col h-[520px]"
+            >
+              {/* Header */}
+              <div className="p-4.5 flex items-center justify-between border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent text-left shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="p-2 bg-gradient-to-br from-[#1ED760]/10 to-emerald-500/5 rounded-xl border border-[#1ED760]/15 relative">
+                    <MessageSquare className="w-4 h-4 text-[#1ED760]" />
+                    <span className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-emerald-400 rounded-full animate-pulse shadow-[0_0_8px_#1ED760]" />
+                  </div>
+                  <div>
+                    <h3 className="text-xs font-black uppercase text-white tracking-[0.15em]">
+                      Soporte Premium Flux
+                    </h3>
+                    <p className="text-[8px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">
+                      Canal de Asistencia en Directo
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    setIsSupportModalOpen(false);
+                    setSupportMessage("");
+                  }}
+                  className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all cursor-pointer"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              {/* Chat Message Area */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-4 flex flex-col bg-black/10 scrollbar-thin scrollbar-thumb-white/5 scrollbar-track-transparent">
+                {!user ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-4">
+                    <div className="p-4 bg-emerald-500/5 rounded-full border border-emerald-500/10 animate-pulse">
+                      <MessageSquare className="w-8 h-8 text-[#1ED760]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium</p>
+                      <p className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest mt-1">Identificación Requerida</p>
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-semibold leading-relaxed max-w-[260px]">
+                      Para garantizar un canal de soporte premium en tiempo real y poder dar seguimiento a tus consultas, por favor inicia sesión.
+                    </p>
+                    <button
+                      onClick={() => {
+                        setIsSupportModalOpen(false);
+                        setAuthModalOpen(true);
+                      }}
+                      className="px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-[#1ED760] text-black font-extrabold uppercase text-[10px] tracking-wider rounded-xl transition-all hover:scale-105 active:scale-95 shadow-[0_4px_15px_rgba(30,215,96,0.2)] cursor-pointer select-none"
+                    >
+                      Iniciar Sesión
+                    </button>
+                  </div>
+                ) : supportChatMessages.length === 0 ? (
+                  <div className="flex-1 flex flex-col items-center justify-center text-center p-6 space-y-3.5">
+                    <div className="p-4 bg-emerald-500/5 rounded-full border border-emerald-500/10 animate-pulse">
+                      <MessageSquare className="w-8 h-8 text-[#1ED760]" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-black text-white uppercase tracking-[0.2em]">Soporte Premium en Vivo</p>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mt-1">Canal Sincronizado</p>
+                    </div>
+                    <p className="text-[10.5px] text-slate-400 font-semibold leading-relaxed max-w-[280px]">
+                      👋 ¡Hola! Escribe tu consulta o duda abajo. El equipo administrativo te responderá directamente aquí en tiempo real.
+                    </p>
+                  </div>
+                ) : (
+                  supportChatMessages.map((msg: any) => {
+                    const isReply = msg.isAdminReply;
+                    return (
+                      <div
+                        key={msg.id}
+                        className={`flex flex-col max-w-[82%] ${isReply ? "self-start items-start" : "self-end items-end"}`}
+                      >
+                        {isReply && (
+                          <div className="flex items-center gap-1.5 mb-1 pl-1">
+                            <span className="text-[8px] font-black uppercase text-emerald-400 tracking-widest">Soporte Flux</span>
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_6px_#1ED760]" />
+                          </div>
+                        )}
+                        <div
+                          className={`p-3.5 rounded-[20px] text-xs font-semibold leading-relaxed ${
+                            isReply
+                              ? "bg-white/[0.04] border border-white/5 text-slate-200 rounded-tl-none text-left"
+                              : "bg-gradient-to-r from-emerald-600 to-emerald-500 text-white rounded-tr-none text-left shadow-[0_4px_15px_rgba(16,185,129,0.1)]"
+                          }`}
+                        >
+                          {msg.message}
+                        </div>
+                        <span className="text-[8px] font-bold text-slate-600 uppercase tracking-widest mt-1 px-1">
+                          {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "N/A"}
+                        </span>
+                      </div>
+                    );
+                  })
+                )}
+                <div ref={supportChatEndRef} />
+              </div>
+
+              {/* Chat Input Footer */}
+              {user && (
+                <div className="p-4.5 border-t border-white/5 bg-[#121214] shrink-0">
+                  <div className="flex gap-2 items-center">
+                    <input
+                      type="text"
+                      value={supportMessage}
+                      onChange={(e) => setSupportMessage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !isSendingSupport && supportMessage.trim()) {
+                          handleSendSupportMessage();
+                        }
+                      }}
+                      placeholder="Escribe tu consulta para soporte..."
+                      maxLength={1000}
+                      disabled={isSendingSupport}
+                      className="flex-1 bg-white/[0.02] border border-white/5 rounded-2xl px-4 py-3.5 text-xs text-white placeholder-slate-600 outline-none focus:border-[#1ED760]/30 focus:bg-white/[0.04] transition-all font-semibold"
+                    />
+                    <button
+                      disabled={isSendingSupport || !supportMessage.trim()}
+                      onClick={handleSendSupportMessage}
+                      className="p-3 bg-[#1ED760] disabled:opacity-30 text-black hover:bg-emerald-400 transition-all rounded-2xl cursor-pointer flex items-center justify-center shrink-0 hover:scale-105 active:scale-95 shadow-[0_4px_10px_rgba(30,215,96,0.2)] animate-none"
+                    >
+                      {isSendingSupport ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Send className="w-4 h-4 stroke-[2.5px]" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

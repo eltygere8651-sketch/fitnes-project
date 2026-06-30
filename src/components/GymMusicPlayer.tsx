@@ -32,6 +32,7 @@ import {
   Radio,
   Send,
   MessageSquare,
+  MessageCircle,
   Shuffle,
   Repeat,
   Shield,
@@ -80,6 +81,7 @@ import {
   where,
   setDoc,
   limit,
+  onSnapshot,
 } from "firebase/firestore";
 import { db, loginWithGoogle, logout } from "../lib/firebase";
 import { useFirebase } from "./FirebaseProvider";
@@ -721,7 +723,11 @@ const createSilentAudioBlobURL = (): string => {
 
 const silentAudioBlobSrc = createSilentAudioBlobURL();
 
-export default function GymMusicPlayer() {
+interface GymMusicPlayerProps {
+  unreadRepliesCount?: number;
+}
+
+export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlayerProps = {}) {
   const isIOS =
     typeof window !== "undefined" &&
     (/iPad|iPhone|iPod/.test(navigator.userAgent) ||
@@ -1009,11 +1015,7 @@ export default function GymMusicPlayer() {
     }
   }, [user, authLoading]);
 
-  useEffect(() => {
-    const handleOpenSupport = () => setIsSupportModalOpen(true);
-    window.addEventListener("open-support", handleOpenSupport);
-    return () => window.removeEventListener("open-support", handleOpenSupport);
-  }, []);
+
 
   useEffect(() => {
     const handleOpenAdmin = () => setIsAdminPanelOpen(true);
@@ -1021,6 +1023,8 @@ export default function GymMusicPlayer() {
     return () =>
       window.removeEventListener("open-admin-panel", handleOpenAdmin);
   }, []);
+
+
 
   useEffect(() => {
     const handleOpenProfile = () => setIsProfileModalOpen(true);
@@ -1533,13 +1537,6 @@ export default function GymMusicPlayer() {
     useState<string>("new");
   const [isProcessingModalAdd, setIsProcessingModalAdd] = useState(false);
 
-  // States for Telegram Support integration
-  const [isSupportModalOpen, setIsSupportModalOpen] = useState(false);
-  const [supportMessage, setSupportMessage] = useState("");
-  const [supportCategory, setSupportCategory] = useState<
-    "soporte" | "fallo" | "feedback"
-  >("soporte");
-  const [isSendingSupport, setIsSendingSupport] = useState(false);
 
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
@@ -3160,156 +3157,6 @@ export default function GymMusicPlayer() {
     setShowLibrary(false);
   };
 
-  const handleSendSupportMessage = async () => {
-    if (!supportMessage || !supportMessage.trim()) {
-      showNotification("Por favor, escribe un mensaje primero.");
-      return;
-    }
-
-    try {
-      setIsSendingSupport(true);
-      const emailVal = user?.email || "Anónimo";
-      const nameVal = user?.displayName || "Socio Contigo";
-      const msgText = supportMessage.trim();
-
-      const categoryLabels: Record<string, string> = {
-        soporte: "💬 [SOPORTE GENERAL]",
-        fallo: "🛠️ [REPORTE DE FALLO TÉCNICO]",
-        feedback: "💡 [FEEDBACK / PROPUESTA]",
-      };
-      const categoryPrefix = categoryLabels[supportCategory] || "💬 [SOPORTE]";
-      const fullMessageText = `${categoryPrefix}\n\n${msgText}`;
-
-      // 1. Guardar en Firestore fue removido a petición (solo usamos Telegram)
-      let storedInDb = false;
-
-      // 2. Intentar enviar a Telegram a través del backend servidor /api/support/telegram
-      let sentToTelegram = false;
-      try {
-        const res = await fetch("/api/support/telegram", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userEmail: emailVal,
-            userName: nameVal,
-            message: fullMessageText,
-          }),
-        });
-
-        if (res.ok) {
-          const contentType = res.headers.get("content-type");
-          if (contentType && contentType.includes("application/json")) {
-            const data = await res.json();
-            if (data?.success) {
-              sentToTelegram = true;
-            }
-          }
-        } else {
-          // El backend falló o es una página 404 estática (como en Vercel)
-          let errorText = `Error ${res.status}`;
-          try {
-            const contentType = res.headers.get("content-type");
-            if (contentType && contentType.includes("application/json")) {
-              const errData = await res.json();
-              errorText = errData.error || errorText;
-            }
-          } catch (_) {
-            // Ignorar para evitar fallos de parseo
-          }
-          console.warn(
-            "Backend Telegram dispatch skipped or failed:",
-            errorText,
-          );
-        }
-      } catch (backendErr) {
-        console.warn(
-          "Backend API not reachable (standard on Vercel dynamic endpoints):",
-          backendErr,
-        );
-      }
-
-      // 3. Fallback: Si el backend no respondió, intentar obtener la configuración de Telegram directamente desde Firestore y enviar
-      if (!sentToTelegram) {
-        let directBotToken = "";
-        let directChatId = "";
-
-        try {
-          const teleSnap = await getDoc(doc(db, "system_settings", "telegram"));
-          if (teleSnap.exists()) {
-            const data = teleSnap.data();
-            directBotToken = (data?.botToken || "").trim();
-            directChatId = (data?.chatId || "").trim();
-          }
-        } catch (dbErr) {
-          console.warn(
-            "Could not retrieve Telegram config from Firestore directly (falling back to VITE envs):",
-            dbErr,
-          );
-        }
-
-        if (!directBotToken || !directChatId) {
-          // Fallback to VITE env variables built into the bundle
-          directBotToken =
-            (import.meta as any).env?.VITE_TELEGRAM_BOT_TOKEN || "";
-          directChatId = (import.meta as any).env?.VITE_TELEGRAM_CHAT_ID || "";
-        }
-
-        if (directBotToken && directChatId) {
-          try {
-            const formattedText = `💬 *ATENCIÓN FLUX MUSIC*\n\n*Usuario:* ${nameVal}\n*Email:* ${emailVal}\n\n*Mensaje:*\n${fullMessageText}`;
-            const teleRes = await fetch(
-              `https://api.telegram.org/bot${directBotToken}/sendMessage`,
-              {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                  chat_id: directChatId,
-                  text: formattedText,
-                  parse_mode: "Markdown",
-                }),
-              },
-            );
-            if (teleRes.ok) {
-              sentToTelegram = true;
-            } else {
-              const teleErrText = await teleRes.text();
-              console.error(
-                "Direct Telegram endpoint returned error:",
-                teleErrText,
-              );
-            }
-          } catch (teleErr) {
-            console.error("Direct client Telegram dispatch failed:", teleErr);
-          }
-        }
-      }
-
-      // 4. Feedback final al usuario sin detalles internos de Telegram
-      if (supportCategory === "feedback") {
-        showNotification(
-          "¡Muchas gracias por tus comentarios! Tu feedback se ha guardado y nuestro equipo lo revisará para seguir mejorando FLUX Music.",
-        );
-      } else if (supportCategory === "fallo") {
-        showNotification(
-          "¡Reporte de fallo recibido! Nuestro departamento de ingeniería revisará el informe técnico para solventarlo de inmediato.",
-        );
-      } else {
-        showNotification(
-          "¡Mensaje enviado con éxito! Tu solicitud ha sido registrada en nuestro canal de atención prioritaria y te responderemos lo antes posible.",
-        );
-      }
-
-      setSupportMessage("");
-      setIsSupportModalOpen(false);
-    } catch (err: any) {
-      console.error("Support submit error:", err);
-      showNotification(err.message || "Error al procesar la solicitud.");
-    } finally {
-      setIsSendingSupport(false);
-    }
-  };
 
   const startEditing = (pl: MusicPlaylist) => {
     setEditingId(pl.id);
@@ -4907,19 +4754,6 @@ export default function GymMusicPlayer() {
             playing={isPlaying}
             volume={volume / 100}
             progressInterval={1000}
-            config={{
-              youtube: {
-                playerVars: {
-                  autoplay: 1,
-                  playsinline: 1,
-                  controls: 0,
-                  disablekb: 1,
-                  rel: 0,
-                  modestbranding: 1,
-                  iv_load_policy: 3
-                }
-              }
-            }}
             onError={async (e) => {
               console.warn("ReactPlayer Error:", e);
               // Auto-recovery mechanism when experiencing network drops
@@ -5788,7 +5622,6 @@ export default function GymMusicPlayer() {
                       </p>
                     </div>
 
-                    {/* Dropdown Items */}
                     <button
                       onClick={() => {
                         setIsProfileModalOpen(true);
@@ -5798,17 +5631,6 @@ export default function GymMusicPlayer() {
                     >
                       <User className="w-4 h-4 text-[#1ED760]" />
                       <span>Mi Perfil (Editar Datos)</span>
-                    </button>
-
-                    <button
-                      onClick={() => {
-                        setIsSupportModalOpen(true);
-                        setIsMembershipDropdownOpen(false);
-                      }}
-                      className="w-full text-left flex items-center gap-2.5 px-3 py-2 rounded-xl text-slate-300 hover:text-white hover:bg-white/[0.05] transition-colors cursor-pointer text-[11px] font-bold"
-                    >
-                      <MessageSquare className="w-4 h-4 text-emerald-400" />
-                      <span>Soporte Técnico</span>
                     </button>
 
                     {isAdmin && (
@@ -7662,9 +7484,23 @@ export default function GymMusicPlayer() {
                 </div>
 
                 {trackListTab !== "entertainment" && (
-                  <div className="px-3 py-0.5 bg-[#050505] border-t border-white/5 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest shrink-0">
-                    <span>Total: {viewedTracks.length || 0} canciones</span>
-                    <span className="text-emerald-500/80">Flux Premium</span>
+                  <div className="bg-[#050505] border-t border-white/5 flex flex-col shrink-0">
+                    <div className="flex justify-center py-2 border-b border-white/[0.03]">
+                      <button
+                        onClick={() => window.dispatchEvent(new Event("open-support"))}
+                        className="relative group flex items-center gap-1.5 px-3 py-1 bg-emerald-500/5 hover:bg-emerald-500/10 border border-emerald-500/20 hover:border-emerald-500/40 text-[9px] font-black text-emerald-400 hover:text-emerald-300 uppercase tracking-widest rounded-full transition-all duration-300 active:scale-95 shadow-[0_2px_10px_rgba(30,215,96,0.05)] hover:shadow-[0_4px_15px_rgba(30,215,96,0.1)] cursor-pointer select-none"
+                      >
+                        <MessageSquare className="w-3 h-3 text-emerald-400 group-hover:scale-110 transition-transform duration-300" />
+                        <span>Soporte en Vivo</span>
+                        {unreadRepliesCount > 0 && (
+                          <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+                        )}
+                      </button>
+                    </div>
+                    <div className="px-3 py-1 flex justify-between items-center text-[7.5px] font-black uppercase text-slate-500 tracking-widest">
+                      <span>Total: {viewedTracks.length || 0} canciones</span>
+                      <span className="text-emerald-500/80">Flux Premium</span>
+                    </div>
                   </div>
                 )}
               </div>
@@ -7887,6 +7723,22 @@ export default function GymMusicPlayer() {
           <span className="text-[8px] font-black uppercase tracking-widest text-[#1ED760]">
             Activo
           </span>
+        </button>
+
+        {/* Soporte */}
+        <button
+          onClick={() => {
+            window.dispatchEvent(new Event("open-support"));
+          }}
+          className="relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all text-slate-500 hover:text-emerald-400 active:scale-95 cursor-pointer"
+        >
+          <MessageSquare className="w-5 h-5" />
+          <span className="text-[8px] font-black uppercase tracking-widest">
+            Soporte
+          </span>
+          {unreadRepliesCount > 0 && (
+            <span className="absolute top-1 right-2 w-2 h-2 rounded-full bg-rose-500 animate-pulse shadow-[0_0_6px_#f43f5e]" />
+          )}
         </button>
       </div>
 
@@ -9200,159 +9052,6 @@ export default function GymMusicPlayer() {
           <LazyUserManagementAdmin onClose={() => setIsAdminPanelOpen(false)} />
         </React.Suspense>
       )}
-      <AnimatePresence>
-        {isSupportModalOpen && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/80 "
-          >
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="w-full max-w-sm bg-[#121212] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col"
-            >
-              {/* Header */}
-              <div className="p-4.5 flex items-center justify-between border-b border-white/5 bg-gradient-to-b from-white/[0.02] to-transparent text-left">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-gradient-to-br from-purple-500/10 to-emerald-500/5 rounded-xl border border-white/5">
-                    <MessageSquare className="w-4 h-4 text-[#1ED760]" />
-                  </div>
-                  <div>
-                    <h3 className="text-xs font-black uppercase text-white tracking-[0.15em]">
-                      Atención y Soporte Flux
-                    </h3>
-                    <p className="text-[8px] text-slate-500 uppercase font-bold tracking-wider mt-0.5">
-                      Canal de Asistencia Premium
-                    </p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => {
-                    setIsSupportModalOpen(false);
-                    setSupportMessage("");
-                  }}
-                  className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-
-              {/* Content */}
-              <div className="p-5 space-y-4">
-                <p className="text-[11px] text-slate-400 leading-relaxed font-semibold text-left">
-                  Escribe tu consulta, reporta una anomalía técnica o comparte
-                  tus ideas para hacernos llegar tu propuesta directamente al
-                  departamento de servicio.
-                </p>
-
-                {/* Category Selectors */}
-                <div className="space-y-2 text-left">
-                  <label className="text-[9px] font-black uppercase tracking-wider text-slate-400 block pl-1">
-                    Tipo de Solicitud / Mensaje
-                  </label>
-                  <div className="grid grid-cols-3 gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setSupportCategory("soporte")}
-                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                        supportCategory === "soporte"
-                          ? "bg-purple-500/10 text-purple-400 border-purple-500/30 font-black shadow-[0_2px_10px_rgba(168,85,247,0.1)]"
-                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <MessageSquare className="w-3.5 h-3.5" />
-                      <span>Soporte</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSupportCategory("fallo")}
-                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                        supportCategory === "fallo"
-                          ? "bg-rose-500/10 text-rose-400 border-rose-500/30 font-black shadow-[0_2px_10px_rgba(244,63,94,0.1)]"
-                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <Bug className="w-3.5 h-3.5" />
-                      <span>Fallo</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSupportCategory("feedback")}
-                      className={`py-2 px-1 flex flex-col items-center justify-center gap-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider transition-all cursor-pointer ${
-                        supportCategory === "feedback"
-                          ? "bg-[#1ED760]/10 text-[#1ED760] border-[#1ED760]/20 font-black shadow-[0_2px_10px_rgba(30,215,96,0.1)]"
-                          : "bg-white/[0.01] hover:bg-white/[0.04] border-white/5 text-slate-400 hover:text-white"
-                      }`}
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      <span>Feedback</span>
-                    </button>
-                  </div>
-                </div>
-
-                <div className="space-y-1.5 text-left">
-                  <label className="text-[8.5px] font-black uppercase tracking-widest text-[#1ED760] pl-1">
-                    Tu mensaje
-                  </label>
-                  <textarea
-                    value={supportMessage}
-                    onChange={(e) => setSupportMessage(e.target.value)}
-                    placeholder={
-                      supportCategory === "feedback"
-                        ? "Escribe aquí sugerencias o qué te gustaría mejorar de Flux Music..."
-                        : supportCategory === "fallo"
-                          ? "Por favor, explica detalladamente el fallo o comportamiento que has notado..."
-                          : "Escribe detalladamente tu consulta para que podamos ayudarte..."
-                    }
-                    rows={5}
-                    maxLength={1000}
-                    className="w-full bg-white/[0.03] border border-white/5 rounded-2xl p-4 text-xs text-white outline-none focus:border-purple-500/30 focus:border-solid focus:bg-white/[0.05] transition-all font-medium resize-none shadow-inner"
-                  />
-                  <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold px-1">
-                    <span>Máximo 1000 caracteres</span>
-                    <span>{supportMessage.length}/1000</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Footer */}
-              <div className="p-5 flex items-center justify-between border-t border-white/5 bg-white/[0.02]">
-                <button
-                  onClick={() => {
-                    setIsSupportModalOpen(false);
-                    setSupportMessage("");
-                  }}
-                  className="text-[10px] font-black uppercase text-slate-500 hover:text-white transition-colors tracking-widest cursor-pointer px-4 py-2"
-                >
-                  Cancelar
-                </button>
-                <button
-                  disabled={isSendingSupport || !supportMessage.trim()}
-                  onClick={handleSendSupportMessage}
-                  className="relative overflow-hidden group bg-gradient-to-r from-emerald-500 via-[#1ED760] to-emerald-600 hover:shadow-[0_0_20px_rgba(30,215,96,0.4)] text-black px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 active:scale-95 transition-all disabled:opacity-30 disabled:grayscale cursor-pointer border border-[#1ED760]/20"
-                >
-                  <span className="relative z-10 flex items-center gap-2">
-                    {isSendingSupport ? (
-                      <>
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        <span>Enviando...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5 stroke-[2.5px]" />
-                        <span>Enviar Mensaje</span>
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
 
       {/* OVERLAY: SPOTIFY-STYLE MULTI-OPTION PLAYLIST COPIER */}
       <AnimatePresence>

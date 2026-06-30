@@ -285,19 +285,23 @@ export const NotificationsModal: React.FC<NotificationsModalProps> = ({ isOpen, 
         });
 
         setAnnouncements(combined);
-        
-        if (isOpen && combined.length > 0) {
-          localStorage.setItem("flux_last_viewed_announcement_id", combined[0].id);
-          window.dispatchEvent(new Event("notifications-read"));
-        }
         setLoading(false);
       }).catch((err) => {
         console.error("Error al cargar comunicados:", err);
+        setAnnouncements(COMPILED_UPDATES);
         setLoading(false);
       });
     });
 
   }, [isOpen]);
+
+  // Handle marking as read whenever the modal is open and we have announcements
+  useEffect(() => {
+    if (isOpen && announcements.length > 0) {
+      localStorage.setItem("flux_last_viewed_announcement_id", announcements[0].id);
+      window.dispatchEvent(new Event("notifications-read"));
+    }
+  }, [isOpen, announcements]);
 
   const handleDeleteAnnouncement = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();

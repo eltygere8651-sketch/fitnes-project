@@ -26,7 +26,7 @@ import GymMusicPlayer from "./components/GymMusicPlayer";
 import { FluxLogo, FluxLogoLarge } from "./components/FluxLogo";
 import { FirebaseProvider, useFirebase } from "./components/FirebaseProvider";
 import { logout, db } from "./lib/firebase";
-import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc } from "firebase/firestore";
+import { collection, getDocs, query, orderBy, limit, where, onSnapshot, addDoc, updateDoc, doc, deleteDoc, getDoc } from "firebase/firestore";
 import { AuthErrorModal } from "./components/AuthErrorModal";
 import { AuthModal } from "./components/AuthModal";
 import { NotificationsModal, COMPILED_UPDATES } from "./components/NotificationsModal";
@@ -242,23 +242,31 @@ function AppContent() {
   }, [isAdmin, currentUserId]);
 
   useEffect(() => {
-    if (!isAdmin && isSupportModalOpen && supportChatMessages.length > 0) {
-      const unreadReplies = supportChatMessages.filter(
-        (m) => m.isAdminReply && !m.readByUser
-      );
-      unreadReplies.forEach(async (m) => {
-        try {
-          await updateDoc(doc(db, "support_messages", m.id), {
-            readByUser: true,
-          });
-        } catch (e) {
-          console.warn("Could not mark support message as read:", e);
-        }
-      });
+    if (!isAdmin && isSupportModalOpen) {
+      setUnreadRepliesCount(0); // Immediately clear the dot visually
+      
+      if (supportChatMessages.length > 0) {
+        const unreadReplies = supportChatMessages.filter(
+          (m) => m.isAdminReply && !m.readByUser
+        );
+        unreadReplies.forEach(async (m) => {
+          try {
+            await updateDoc(doc(db, "support_messages", m.id), {
+              readByUser: true,
+            });
+          } catch (e) {
+            console.warn("Could not mark support message as read:", e);
+          }
+        });
+      }
     }
   }, [isSupportModalOpen, supportChatMessages, isAdmin]);
 
   useEffect(() => {
+    if (isAdmin && isSupportModalOpen) {
+      setUnreadRepliesCount(0); // Immediately clear the dot visually on the global button
+    }
+    
     if (isAdmin && selectedThreadId && allSupportMessages.length > 0) {
       const threadMsgs = allSupportMessages.filter(
         (m) => m.userId === selectedThreadId
@@ -310,9 +318,6 @@ function AppContent() {
         readByUser: true,
       };
       
-      const lastMsg = supportChatMessages[supportChatMessages.length - 1];
-      const isFirstContact = supportChatMessages.length === 0 || (lastMsg && lastMsg.isAdminReply);
-      
       const isFirstMessageEver = supportChatMessages.length === 0;
       
       await addDoc(collection(db, "support_messages"), newMsgObj);
@@ -338,36 +343,32 @@ function AppContent() {
         }, 1500);
       }
 
-      // 2. Notificar a Telegram en el primer contacto O si el usuario responde después del admin (evitar spam)
-      if (isFirstContact) {
-        try {
-          // Fetch telegram config directly from Firestore to support Vercel static hosting
-          const tgDoc = await getDocs(query(collection(db, "system_settings"), limit(1)));
-          let botToken = "";
-          let chatId = "";
-          tgDoc.forEach(doc => {
-            if (doc.id === "telegram") {
-              botToken = doc.data().botToken;
-              chatId = doc.data().chatId;
+      // 2. Notificar a Telegram SIEMPRE
+      try {
+        // Fetch telegram config directly from Firestore to support Vercel static hosting
+        const tgDocRef = doc(db, "system_settings", "telegram");
+        const tgDocSnap = await getDoc(tgDocRef);
+          
+          if (tgDocSnap.exists()) {
+            const botToken = tgDocSnap.data().botToken;
+            const chatId = tgDocSnap.data().chatId;
+
+            if (botToken && chatId) {
+              const title = `🚨 Nuevo Mensaje de Soporte 🚨`;
+              const userLine = `👤 Usuario: ${nameVal || "Anónimo"} (${emailVal || "Sin email"})`;
+              const messageLine = `💬 Mensaje:\n[SOPORTE PREMIUM]\n\n${msgText}`;
+              const text = `${title}\n\n${userLine}\n\n${messageLine}`;
+
+              await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, text: text }),
+              });
             }
-          });
-
-          if (botToken && chatId) {
-            const title = `🚨 Nuevo Mensaje de Soporte 🚨`;
-            const userLine = `👤 Usuario: ${nameVal || "Anónimo"} (${emailVal || "Sin email"})`;
-            const messageLine = `💬 Mensaje:\n[SOPORTE PREMIUM]\n\n${msgText}`;
-            const text = `${title}\n\n${userLine}\n\n${messageLine}`;
-
-            await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ chat_id: chatId, text: text }),
-            });
           }
         } catch (telegramErr) {
           console.warn("Failed to notify Telegram:", telegramErr);
         }
-      }
 
       setSupportMessage("");
     } catch (err) {
@@ -450,46 +451,47 @@ function AppContent() {
   useEffect(() => {
     // Check for unread announcements using getDocs (replaces onSnapshot for scale)
     const q = query(collection(db, "announcements"), orderBy("createdAt", "desc"), limit(1));
-    const checkUnread = () => {
-      getDocs(q).then((snapshot) => {
-        try {
-          const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
-          let hasUnreadDb = false;
+    const checkUnread = async () => {
+      try {
+        const snapshot = await getDocs(q);
+        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
+        let hasUnreadDb = false;
 
-          let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
-          let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
+        let newestId = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].id : null;
+        let staticDate = COMPILED_UPDATES.length > 0 ? COMPILED_UPDATES[0].createdAt : new Date(0);
 
-          if (!snapshot.empty) {
-            const newestDoc = snapshot.docs[0];
-            const data = newestDoc.data();
-            const createdAt = data.createdAt;
-            const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
-            
-            if (dbDate > staticDate) {
-              newestId = newestDoc.id;
-            }
+        if (!snapshot.empty) {
+          const newestDoc = snapshot.docs[0];
+          const data = newestDoc.data();
+          const createdAt = data.createdAt;
+          const dbDate = createdAt ? (typeof createdAt.toDate === 'function' ? createdAt.toDate() : new Date(createdAt)) : new Date(0);
+          
+          if (dbDate > staticDate) {
+            newestId = newestDoc.id;
+          }
 
-            // Check for active global banner (within last 24h)
-            if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
-               setGlobalBanner({ title: data.title, content: data.content, category: data.category });
-            } else {
-               setGlobalBanner(null);
-            }
+          if (Date.now() - dbDate.getTime() < 86400000 && data.active !== false) {
+             setGlobalBanner({ title: data.title, content: data.content, category: data.category });
           } else {
              setGlobalBanner(null);
           }
-
-          if (newestId && newestId !== lastViewed) {
-            hasUnreadDb = true;
-          }
-
-          setHasUnread(hasUnreadDb);
-        } catch (err) {
-          console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
+        } else {
+           setGlobalBanner(null);
         }
-      }).catch((error) => {
-        console.warn("Error en getDocs de anuncios:", error);
-      });
+
+        if (newestId && newestId !== lastViewed) {
+          hasUnreadDb = true;
+        }
+
+        setHasUnread(hasUnreadDb);
+      } catch (err) {
+        console.warn("No se pudo revisar anuncios de Firebase en tiempo real:", err);
+        // Fallback to local compiled updates
+        const lastViewed = localStorage.getItem("flux_last_viewed_announcement_id");
+        if (COMPILED_UPDATES.length > 0 && COMPILED_UPDATES[0].id !== lastViewed) {
+          setHasUnread(true);
+        }
+      }
     };
 
     checkUnread();
@@ -638,7 +640,10 @@ function AppContent() {
           <div className="flex items-center justify-end">
             <button
               type="button"
-              onClick={() => setIsNotificationsOpen(true)}
+              onClick={() => {
+                setIsNotificationsOpen(true);
+                setHasUnread(false);
+              }}
               className="relative flex items-center justify-center p-2 rounded-full border border-white/10 text-white bg-white/5 hover:bg-white/10 hover:border-amber-500/30 transition-all duration-300 active:scale-95 cursor-pointer shadow-[0_2px_10px_rgba(0,0,0,0.4)] group"
               title="Avisos e importantes"
             >

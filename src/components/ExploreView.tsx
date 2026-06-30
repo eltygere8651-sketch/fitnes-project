@@ -909,7 +909,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                 : `/api/youtube/video-info?id=${item.id}`;
                               
                               fetch(endpoint)
-                                .then(res => res.json())
+                                .then(res => {
+                                  if (!res.ok) throw new Error("Backend error");
+                                  return res.json();
+                                })
                                 .then(data => {
                                   if (data.thumbnail) {
                                     img.src = data.thumbnail;
@@ -918,7 +921,14 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                   }
                                 })
                                 .catch(() => {
-                                  img.style.display = 'none';
+                                  fetch(`https://noembed.com/embed?dataType=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + item.id)}`)
+                                    .then(r => r.json())
+                                    .then(d => {
+                                      if (d && d.thumbnail_url) img.src = d.thumbnail_url;
+                                      else img.style.display = 'none';
+                                    }).catch(() => {
+                                      img.style.display = 'none';
+                                    });
                                 });
                             } else {
                               img.style.display = 'none';

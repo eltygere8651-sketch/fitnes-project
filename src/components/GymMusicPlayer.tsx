@@ -904,16 +904,25 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       try {
         const _tgDoc = await getDoc(doc(db, "system_settings", "telegram"));
         const _tgData = _tgDoc.data();
-        await fetch("/api/support/telegram-trial", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            userEmail: user.email,
-            userName: user.displayName,
-            botTokenOverride: _tgData?.botToken,
-            chatIdOverride: _tgData?.chatId,
-          }),
-        });
+        if (_tgData?.botToken && _tgData?.chatId) {
+            const title = `🎁 Nueva Solicitud de Prueba de 7 Días (Desde Player) 🎁`;
+            const text = `${title}\n\n👤 Usuario: ${user.displayName || user.email}\n📧 Email: ${user.email}\n\n🔔 Accede al panel de administración para aprobar el acceso al usuario al instante.`;
+            
+            await fetch(`https://api.telegram.org/bot${_tgData.botToken}/sendMessage`, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ chat_id: _tgData.chatId, text: text }),
+            }).catch(() => {});
+        } else {
+            await fetch("/api/support/telegram-trial", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                userEmail: user.email,
+                userName: user.displayName,
+              }),
+            });
+        }
       } catch (e) {
         console.error("Failed to notify admin via telegram:", e);
       }
@@ -959,7 +968,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             }
           }
         } catch (err) {
-          console.error(
+          console.warn(
             "Auto-syncing Telegram specs with backend failed (expected if non-admin or disconnected):",
             err,
           );
@@ -1467,9 +1476,36 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       const endpoint = isPlaylist
         ? `/api/youtube/playlist-info?id=${id}`
         : `/api/youtube/video-info?id=${id}`;
-      const res = await fetch(endpoint);
-      if (!res.ok) throw new Error("No se pudo obtener la información");
-      const data = await res.json();
+        
+      let data: any = { title: "", thumbnail: "", artist: "" };
+      
+      try {
+        const res = await fetch(endpoint);
+        if (!res.ok) throw new Error("Backend error");
+        data = await res.json();
+      } catch (err) {
+        // Fallback for Vercel static hosting (no backend)
+        try {
+          const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
+          const fallbackRes = await fetch(`https://noembed.com/embed?dataType=json&url=${encodeURIComponent(standardUrl)}`);
+          if (!fallbackRes.ok) throw new Error("Fallback error");
+          const fallbackData = await fallbackRes.json();
+          if (fallbackData.error) throw new Error("No encontrado");
+          
+          data = {
+            title: fallbackData.title || "",
+            thumbnail: fallbackData.thumbnail_url || (isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
+            artist: fallbackData.author_name || ""
+          };
+        } catch (e) {
+          // If all APIs fail, just use default title but add it anyway
+          data = {
+             title: isPlaylist ? "Lista de YouTube" : "Video de YouTube",
+             thumbnail: isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+             artist: "YouTube"
+          };
+        }
+      }
 
       await addDoc(collection(db, "explore_custom_playlists"), {
         id: id,
@@ -1708,10 +1744,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         }
       } else if (document.hidden) {
         if (isPlaying) {
-          if (
-            fallbackSilentAudioRef.current &&
-            fallbackSilentAudioRef.current.paused
-          ) {
+          if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
             fallbackSilentAudioRef.current.play().catch(() => {});
           }
           if (youtubePlayerRef.current) {
@@ -1786,6 +1819,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const youtubePlayerRef = useRef<any>(null);
   const fallbackSilentAudioRef = useRef<HTMLAudioElement>(null);
 
+
   useEffect(() => {
     // Only use the blob source which is set in the audio tag
   }, []);
@@ -1805,27 +1839,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       : null,
   );
 
-  const reactPlayerConfig = useMemo(() => {
-    const vars: any = {
-      origin: typeof window !== "undefined" ? window.location.origin : "",
-      playsinline: 1,
-      controls: 0,
-      disablekb: 1,
-      fs: 0,
-      modestbranding: 1,
-      rel: 0,
-      iv_load_policy: 3,
-      hl: "en",
-      vq: "tiny",
-    };
-    return {
-      youtube: { playerVars: vars },
-      file: {
-        forceAudio: true,
-        attributes: { playsInline: true, id: "native-audio" },
-      },
-    };
-  }, []);
+
 
   const sponsorBlockSegmentsRef = useRef<
     { start: number; end: number; actionType: string }[]
@@ -2116,6 +2130,56 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const currentUrlRaw = currentTrack.url || "";
   const currentUrl = currentUrlRaw.replace("music.youtube.com", "www.youtube.com");
 
+  const reactPlayerConfig = useMemo(() => {
+    const vars: any = {
+      origin: typeof window !== "undefined" ? window.location.origin : "",
+      playsinline: 1,
+      controls: 0,
+      disablekb: 1,
+      fs: 0,
+      modestbranding: 1,
+      rel: 0,
+      iv_load_policy: 3,
+      hl: "en",
+      vq: "tiny",
+    };
+
+    // Build the playlist to allow YouTube iframe to hold MediaSession lock and enable Next button
+    try {
+      const getVidId = (u: string) => {
+        try {
+          const urlObj = new URL(u.replace("music.youtube.com", "www.youtube.com"));
+          return urlObj.searchParams.get("v");
+        } catch {
+          return null;
+        }
+      };
+
+      const upcomingTracks = trackQueue.length > 0
+        ? trackQueue
+        : displayTracks.slice(currentTrackIndex + 1, currentTrackIndex + 40);
+
+      const nextIds = upcomingTracks
+        .map(t => getVidId(t.url))
+        .filter(Boolean)
+        .join(",");
+
+      if (nextIds) {
+        vars.playlist = nextIds;
+      }
+    } catch (e) {
+      console.warn("Could not build YouTube playlist param:", e);
+    }
+
+    return {
+      youtube: { playerVars: vars },
+      file: {
+        forceAudio: true,
+        attributes: { playsInline: true, id: "native-audio" },
+      },
+    };
+  }, [displayTracks, currentTrackIndex, trackQueue]);
+
   const isNativeMode = false; // Never use native mode, it's blocked by YouTube
 
   useEffect(() => {
@@ -2156,11 +2220,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     expectedPlayingRef.current = nextPlaying;
 
     if (nextPlaying) {
-      if (fallbackSilentAudioRef.current)
+      if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
+      }
     } else {
-      if (fallbackSilentAudioRef.current)
+      if (fallbackSilentAudioRef.current) {
         fallbackSilentAudioRef.current.pause();
+      }
     }
 
     setIsPlaying(nextPlaying);
@@ -2205,10 +2271,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
-    if (
-      fallbackSilentAudioRef.current &&
-      fallbackSilentAudioRef.current.paused
-    ) {
+    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -2321,10 +2384,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
-    if (
-      fallbackSilentAudioRef.current &&
-      fallbackSilentAudioRef.current.paused
-    ) {
+    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -4488,8 +4548,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       sessionHandlersRef.current.playHandler = () => {
         expectedPlayingRef.current = true;
         handlersRef.current.setIsPlaying(true);
-        if (fallbackSilentAudioRef.current)
+        if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
           fallbackSilentAudioRef.current.play().catch(() => {});
+        }
         if (youtubePlayerRef.current) {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -4507,8 +4568,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       sessionHandlersRef.current.pauseHandler = () => {
         expectedPlayingRef.current = false;
         handlersRef.current.setIsPlaying(false);
-        if (fallbackSilentAudioRef.current)
+        if (fallbackSilentAudioRef.current) {
           fallbackSilentAudioRef.current.pause();
+        }
         if (youtubePlayerRef.current) {
           try {
             const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -4745,6 +4807,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           ref={fallbackSilentAudioRef}
           src={silentAudioBlobSrc}
           playsInline
+          loop
         />
         {currentUrl && (
           <ReactPlayer
@@ -4814,13 +4877,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               wasUnexpectedlyPausedRef.current = false;
               setIsPlaying(true);
 
-              // Steal Media Session lock from iframe only once per track to avoid micro-cuts after buffering
-              if (!hasStolenLockForTrackRef.current) {
-                hasStolenLockForTrackRef.current = true;
-                if (fallbackSilentAudioRef.current) {
-                  fallbackSilentAudioRef.current.pause();
-                  fallbackSilentAudioRef.current.play().catch(() => {});
-                }
+              if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                fallbackSilentAudioRef.current.play().catch(() => {});
               }
 
               enforceActionHandlers();
@@ -4861,10 +4919,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   // Steal Media Session lock from YouTube AFTER it resumes
                   // Guarantees Bluetooth wheel controls work in Brave browser + No Micro-cuts
                   setTimeout(() => {
-                    if (fallbackSilentAudioRef.current) {
                       enforceActionHandlers();
                       registerMediaSession();
-                    }
                   }, 500);
                 }
 
@@ -4874,15 +4930,37 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setIsPlaying(false);
             }}
             onEnded={() => {
-              if (
-                fallbackSilentAudioRef.current &&
-                fallbackSilentAudioRef.current.paused
-              ) {
-                fallbackSilentAudioRef.current.play().catch(() => {});
-              }
               handleNext();
             }}
             onProgress={(state) => {
+              try {
+                const intPlayer = youtubePlayerRef.current?.getInternalPlayer();
+                if (intPlayer && typeof intPlayer.getVideoData === "function") {
+                  const currentVideoData = intPlayer.getVideoData();
+                  let expectedVideoId = null;
+                  try {
+                     expectedVideoId = new URL(currentUrl.replace("music.youtube.com", "www.youtube.com")).searchParams.get("v");
+                  } catch(e) {}
+                  
+                  if (currentVideoData?.video_id && expectedVideoId && currentVideoData.video_id !== expectedVideoId) {
+                    const actualVideoId = currentVideoData.video_id;
+                    const getVidId = (u: string) => { try { return new URL((u || "").replace("music.youtube.com", "www.youtube.com")).searchParams.get("v"); } catch { return null; } };
+                    
+                    if (trackQueueRef.current.length > 0 && getVidId(trackQueueRef.current[0].url) === actualVideoId) {
+                       handleNextRef.current();
+                       return;
+                    }
+                    
+                    const nextIndex = displayTracks.findIndex((t) => getVidId(t.url) === actualVideoId);
+                    
+                    if (nextIndex !== -1 && nextIndex !== currentTrackIndex) {
+                       setCurrentTrackIndex(nextIndex);
+                       return; // Exit onProgress to prevent state clashes before reload
+                    }
+                  }
+                }
+              } catch (e) {}
+
               if (
                 pendingSeekPosRef.current !== null &&
                 pendingSeekPosRef.current > 0
@@ -4934,13 +5012,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
               // Pre-activar el audio de respaldo 1.5 segundos antes del final para que iOS no suspenda la app
               if (durationCurrent > 3 && played >= durationCurrent - 1.5) {
-                if (
-                  fallbackSilentAudioRef.current &&
-                  fallbackSilentAudioRef.current.paused
-                ) {
+                if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
                   fallbackSilentAudioRef.current.play().catch(() => {});
                 }
-                
                 // Gapless early skip to mask YouTube loading delay
                 handleNextRef.current();
                 return;

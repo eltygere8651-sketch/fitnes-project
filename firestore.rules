@@ -83,7 +83,13 @@ service cloud.firestore {
     match /support_messages/{messageId} {
       allow create: if true;
       allow read: if isAdmin() || (isSignedIn() && (resource.data.userId == request.auth.uid || resource.data.userEmail == request.auth.token.email)) || resource.data.userId.matches('^guest_.*');
-      allow update: if isAdmin() || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readByUser'])) && (resource.data.userId == request.auth.uid || resource.data.userId.matches('^guest_.*'));
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readByUser']) && 
+        (
+          (request.auth != null && resource.data.userId == request.auth.uid) || 
+          resource.data.userId.matches('^guest_.*')
+        )
+      );
       allow delete: if isAdmin();
     }
 

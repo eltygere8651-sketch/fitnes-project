@@ -12,8 +12,11 @@ import {
   updateProfile,
   sendPasswordResetEmail
 } from 'firebase/auth';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, setLogLevel } from 'firebase/firestore';
 import firebaseConfig from '../../firebase-applet-config.json';
+
+// Silence Firestore network connection warnings
+setLogLevel('silent');
 
 const app = initializeApp(firebaseConfig);
 export const db = initializeFirestore(app, {

@@ -647,13 +647,21 @@ const getPlaylistSaves = (
   return finalSaves;
 };
 
+const cleanUrl = (url: string) => {
+  if (!url) return "";
+  if (url.includes("i.ytimg.com")) {
+    return url.split("?")[0];
+  }
+  return url;
+};
+
 const getTrackImage = (track?: any): string | null => {
   if (!track) return null;
-  if (track.thumbnail) return track.thumbnail;
-  if (track.thumbnail_url) return track.thumbnail_url;
-  if (track.imageUrl) return track.imageUrl;
-  if (track.artwork_url) return track.artwork_url;
-  if (track.artwork) return track.artwork;
+  if (track.thumbnail) return cleanUrl(track.thumbnail);
+  if (track.thumbnail_url) return cleanUrl(track.thumbnail_url);
+  if (track.imageUrl) return cleanUrl(track.imageUrl);
+  if (track.artwork_url) return cleanUrl(track.artwork_url);
+  if (track.artwork) return cleanUrl(track.artwork);
   if (
     track.url &&
     (track.url.includes("youtube.com") || track.url.includes("youtu.be"))
@@ -676,13 +684,13 @@ const getTrackImage = (track?: any): string | null => {
 
 const getPlaylistImage = (pl?: any): string | null => {
   if (!pl) return null;
-  if (pl.imageUrl) return pl.imageUrl;
-  if (pl.thumbnail_url) return pl.thumbnail_url;
-  if (pl.thumbnail) return pl.thumbnail;
-  if (pl.artwork_url) return pl.artwork_url;
-  if (pl.artwork) return pl.artwork;
+  if (pl.imageUrl) return cleanUrl(pl.imageUrl);
+  if (pl.thumbnail_url) return cleanUrl(pl.thumbnail_url);
+  if (pl.thumbnail) return cleanUrl(pl.thumbnail);
+  if (pl.artwork_url) return cleanUrl(pl.artwork_url);
+  if (pl.artwork) return cleanUrl(pl.artwork);
   if (pl.tracks && pl.tracks.length > 0) {
-    return getTrackImage(pl.tracks[0]);
+    return cleanUrl(getTrackImage(pl.tracks[0]) || "");
   }
   return null;
 };
@@ -1487,16 +1495,13 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         // Fallback for Vercel static hosting (no backend)
         try {
           if (isPlaylist) {
-             const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
-             const fallbackRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(standardUrl)}`);
+             const fallbackRes = await fetch(`https://pipedapi.kavin.rocks/playlists/${id}`);
              if (!fallbackRes.ok) throw new Error("Fallback error");
-             const html = await fallbackRes.text();
-             const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
-             const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+             const fallbackData = await fallbackRes.json();
              
              data = {
-               title: ogTitleMatch ? ogTitleMatch[1].replace(" - YouTube", "") : "Lista de YouTube",
-               thumbnail: ogImageMatch ? ogImageMatch[1].replace(/&amp;/g, "&") : "",
+               title: fallbackData.name || "Lista Recomendada",
+               thumbnail: fallbackData.thumbnailUrl || (fallbackData.relatedStreams && fallbackData.relatedStreams.length > 0 ? `https://i.ytimg.com/vi/${fallbackData.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg` : ""),
                artist: "YouTube"
              };
           } else {
@@ -3880,13 +3885,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               url: defaultUrl,
               duration: trackToAddDestination.duration || "N/A",
               bpm: 120,
-              thumbnail:
+              thumbnail: cleanUrl(
                 trackToAddDestination.thumbnail ||
                 trackToAddDestination.artwork_url ||
                 trackToAddDestination.artwork ||
                 (trackToAddDestination.id
                   ? `https://i.ytimg.com/vi/${trackToAddDestination.id}/mqdefault.jpg`
-                  : ""),
+                  : "")
+              ),
             },
           ];
         }
@@ -3958,7 +3964,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             trackToAddDestination.artwork
           : null;
 
-        let generatedCoverUrl = firstTrackCover || trackDestCover || "";
+        let generatedCoverUrl = cleanUrl(firstTrackCover || trackDestCover || "");
 
         if (!generatedCoverUrl) {
           const songsInPlaylist = finalTracksToAdd
@@ -4525,7 +4531,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const displayTitle = currentTrack?.title || "Waiting...";
   const displayArtist = currentTrack?.artist || "Original Arch";
   const displayArtwork =
-    currentTrackMeta?.thumbnail_url ||
+    cleanUrl(currentTrackMeta?.thumbnail_url) ||
     getTrackImage(currentTrack) ||
     "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 
@@ -6793,7 +6799,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                 }}
                               >
                                 <img
-                                  src={ytTrack.thumbnail}
+                                  src={cleanUrl(ytTrack.thumbnail)}
                                   alt=""
                                   className="w-full h-full object-cover group-hover/yt:scale-110 transition-transform duration-500"
                                   referrerPolicy="no-referrer"
@@ -9001,7 +9007,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                   <div className="p-3 bg-white/[0.02] border border-white/5 rounded-2xl flex items-center gap-3">
                     {trackToAddDestination.thumbnail ? (
                       <img
-                        src={trackToAddDestination.thumbnail}
+                        src={cleanUrl(trackToAddDestination.thumbnail)}
                         alt={trackToAddDestination.title}
                         referrerPolicy="no-referrer"
                         className="w-14 h-14 rounded-xl object-cover"

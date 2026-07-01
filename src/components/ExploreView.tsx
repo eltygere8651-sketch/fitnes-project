@@ -68,25 +68,33 @@ const getTrackImage = (track?: any): string | null => {
   return null;
 };
 
+const cleanUrl = (url: string) => {
+  if (!url) return "";
+  if (url.includes("i.ytimg.com")) {
+    return url.split("?")[0];
+  }
+  return url;
+};
+
 const getItemImage = (item: any): string => {
-  if (item.thumbnail) return item.thumbnail;
-  if (item.thumbnail_url) return item.thumbnail_url;
-  if (item.imageUrl) return item.imageUrl;
-  if (item.artwork_url) return item.artwork_url;
-  if (item.artwork) return item.artwork;
+  if (item.thumbnail) return cleanUrl(item.thumbnail);
+  if (item.thumbnail_url) return cleanUrl(item.thumbnail_url);
+  if (item.imageUrl) return cleanUrl(item.imageUrl);
+  if (item.artwork_url) return cleanUrl(item.artwork_url);
+  if (item.artwork) return cleanUrl(item.artwork);
   
   if (item.isPlaylist && item.data && item.data.tracks && item.data.tracks.length > 0) {
     const trackImg = getTrackImage(item.data.tracks[0]);
-    if (trackImg) return trackImg;
+    if (trackImg) return cleanUrl(trackImg);
   }
   
   if (item.tracks && item.tracks.length > 0) {
     const trackImg = getTrackImage(item.tracks[0]);
-    if (trackImg) return trackImg;
+    if (trackImg) return cleanUrl(trackImg);
   }
   
   const selfImg = getTrackImage(item);
-  if (selfImg) return selfImg;
+  if (selfImg) return cleanUrl(selfImg);
   
   return "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
 };
@@ -921,13 +929,14 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                 })
                                 .catch(() => {
                                   if (isPlaylist) {
-                                    const fallbackUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent("https://www.youtube.com/playlist?list=" + item.id)}`;
+                                    const fallbackUrl = `https://pipedapi.kavin.rocks/playlists/${item.id}`;
                                     fetch(fallbackUrl)
-                                      .then(r => r.text())
-                                      .then(html => {
-                                        const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
-                                        if (ogImageMatch && ogImageMatch[1]) {
-                                          setSrc(ogImageMatch[1].replace(/&amp;/g, "&"));
+                                      .then(r => r.json())
+                                      .then(d => {
+                                        if (d && d.thumbnailUrl) {
+                                           setSrc(d.thumbnailUrl);
+                                        } else if (d && d.relatedStreams && d.relatedStreams.length > 0) {
+                                           setSrc(`https://i.ytimg.com/vi/${d.relatedStreams[0].url.replace("/watch?v=", "")}/mqdefault.jpg`);
                                         }
                                       })
                                       .catch(() => {});

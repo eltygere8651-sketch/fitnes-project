@@ -18,6 +18,7 @@ import {
   Check,
 } from "lucide-react";
 import { MusicTrack } from "../types";
+import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import { Carousel } from "./Carousel";
 
 import { LazyImage } from "./LazyImage";
@@ -68,6 +69,7 @@ const getTrackImage = (track?: any): string | null => {
   return null;
 };
 
+
 const cleanUrl = (url: string) => {
   if (!url) return "";
   if (url.includes("i.ytimg.com")) {
@@ -96,7 +98,7 @@ const getItemImage = (item: any): string => {
   const selfImg = getTrackImage(item);
   if (selfImg) return cleanUrl(selfImg);
   
-  return "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+  return DEFAULT_MUSIC_COVER;
 };
 
 export const ExploreView: React.FC<ExploreViewProps> = React.memo(
@@ -161,6 +163,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       sectionId: string;
       index: number;
     } | null>(null);
+    const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
 
     const COUNTRIES = [
       { code: "GLOBAL", label: "Global", flag: "🌎" },
@@ -360,8 +363,6 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
       newLayout[index].visible = !newLayout[index].visible;
       await onUpdateExploreLayout(newLayout);
     };
-
-    const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
 
     const handleRenameSection = async (sectionId: string) => {
       if (!onUpdateExploreLayout || !editingSectionTitle.trim()) return;

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { DEFAULT_MUSIC_COVER } from '../lib/constants';
 
 interface LazyImageProps extends React.ImgHTMLAttributes<HTMLImageElement> {
   fallbackSrc?: string;
@@ -44,7 +45,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({ src, fallbackSrc, classNam
       )}
       {isVisible && (
         <img
-          src={error ? (fallbackSrc || "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop") : currentSrc}
+          src={error ? (fallbackSrc || DEFAULT_MUSIC_COVER) : currentSrc}
           alt={alt}
           className={`${className || ''} ${isLoaded ? 'opacity-100' : 'opacity-0'} transition-opacity duration-300`}
           onLoad={() => setIsLoaded(true)}

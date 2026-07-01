@@ -66,6 +66,7 @@ import {
   Tv,
   GripVertical,
 } from "lucide-react";
+import { DEFAULT_MUSIC_COVER } from "../lib/constants";
 import {
   collection,
   query,
@@ -2308,7 +2309,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             {
               src:
                 targetTrack.thumbnail_url ||
-                "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17",
+                DEFAULT_MUSIC_COVER,
               sizes: "512x512",
               type: "image/jpeg",
             },
@@ -4533,7 +4534,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const displayArtwork =
     cleanUrl(currentTrackMeta?.thumbnail_url) ||
     getTrackImage(currentTrack) ||
-    "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+    DEFAULT_MUSIC_COVER;
 
   // USE STABLE HANDLERS FOR MEDIA SESSION TO PREVENT LOCK SCREEN LAG/RE-REGISTRATION ISSUES
   const handlersRef = useRef({

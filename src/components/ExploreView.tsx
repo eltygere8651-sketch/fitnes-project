@@ -904,22 +904,55 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                             const img = e.target as HTMLImageElement;
                             if (!img.dataset.retried && item.id) {
                               img.dataset.retried = "true";
-                              const endpoint = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE") 
+                              const isPlaylist = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE");
+                              const endpoint = isPlaylist 
                                 ? `/api/youtube/playlist-info?id=${item.id}`
                                 : `/api/youtube/video-info?id=${item.id}`;
                               
                               fetch(endpoint)
-                                .then(res => res.json())
+                                .then(res => {
+                                  if (!res.ok) throw new Error("Backend error");
+                                  return res.json();
+                                })
                                 .then(data => {
                                   if (data.thumbnail) {
                                     img.src = data.thumbnail;
+                                  } else {
+                                    throw new Error("No thumbnail");
                                   }
                                 })
                                 .catch(() => {
-                                  img.style.display = 'none';
+                                  // Fallback for Vercel static hosting
+                                  if (isPlaylist) {
+                                    const fallbackUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent("https://www.youtube.com/playlist?list=" + item.id)}`;
+                                    fetch(fallbackUrl)
+                                      .then(r => r.text())
+                                      .then(html => {
+                                        const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+                                        if (ogImageMatch && ogImageMatch[1]) {
+                                          img.src = ogImageMatch[1].replace(/&amp;/g, "&");
+                                        } else {
+                                          img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+                                        }
+                                      })
+                                      .catch(() => {
+                                        img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+                                      });
+                                  } else {
+                                    const fallbackUrl = `https://noembed.com/embed?dataType=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + item.id)}`;
+                                    fetch(fallbackUrl)
+                                      .then(r => r.json())
+                                      .then(d => {
+                                        if (d && d.thumbnail_url) img.src = d.thumbnail_url;
+                                        else img.src = `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+                                      })
+                                      .catch(() => {
+                                        img.src = `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+                                      });
+                                  }
                                 });
                             } else {
-                              img.style.display = 'none';
+                              img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
                             }
                           }}
                         />

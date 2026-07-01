@@ -10,15 +10,6 @@ export function useDraggable(ref: RefObject<HTMLElement | null>) {
     let hasDragged = false;
 
     const mouseDownHandler = (e: MouseEvent) => {
-      // Ignore if clicking on the scrollbar
-      const rect = ele.getBoundingClientRect();
-      if (
-        e.clientY - rect.top >= ele.clientHeight || 
-        e.clientX - rect.left >= ele.clientWidth
-      ) {
-        return;
-      }
-
       isDragging = true;
       hasDragged = false;
       ele.style.cursor = 'grabbing';
@@ -65,34 +56,13 @@ export function useDraggable(ref: RefObject<HTMLElement | null>) {
       }
     };
 
-    const wheelHandler = (e: WheelEvent) => {
-      // Allow vertical scroll if holding shift or if it's explicitly a horizontal wheel scroll
-      // Actually, standard behavior: if the user scrolls the mouse wheel up/down (deltaY)
-      // let's translate that to horizontal scrolling (scrollLeft) if there is room to scroll.
-      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
-        // We only want to intercept if there's horizontal overflow
-        if (ele.scrollWidth > ele.clientWidth) {
-          // Check if we are at the edges
-          if (
-            (e.deltaY < 0 && ele.scrollLeft > 0) ||
-            (e.deltaY > 0 && ele.scrollLeft + ele.clientWidth < ele.scrollWidth - 1)
-          ) {
-            e.preventDefault();
-            ele.scrollLeft += e.deltaY;
-          }
-        }
-      }
-    };
-
     ele.addEventListener('mousedown', mouseDownHandler);
     ele.addEventListener('click', clickCaptureHandler, true);
-    ele.addEventListener('wheel', wheelHandler, { passive: false });
     ele.style.cursor = 'grab';
 
     return () => {
       ele.removeEventListener('mousedown', mouseDownHandler);
       ele.removeEventListener('click', clickCaptureHandler, true);
-      ele.removeEventListener('wheel', wheelHandler);
     };
   }, [ref]);
 }

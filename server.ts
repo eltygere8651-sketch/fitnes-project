@@ -650,37 +650,18 @@ app.get("/api/youtube/explore", async (req, res) => {
       }
 
       let thumbnail = "";
-      const getOptimalThumb = (list: any[]) => {
-        if (!list || list.length === 0) return "";
-        let optimal = list[0];
-        let diff = Infinity;
-        for (const t of list) {
-          if (t.width) {
-            const currentDiff = Math.abs(t.width - 400);
-            if (currentDiff < diff) {
-              diff = currentDiff;
-              optimal = t;
-            }
-          }
-        }
-        if (diff === Infinity) {
-          if (list.length >= 3) return list[Math.floor(list.length / 2)].url;
-          if (list.length === 2) return list[0].url; // prefer smaller for lists
-          return list[0].url;
-        }
-        return optimal.url;
-      };
-
       if (p.content_image?.primary_thumbnail?.image?.length > 0) {
-        thumbnail = getOptimalThumb(p.content_image.primary_thumbnail.image);
+        const thumbList = p.content_image.primary_thumbnail.image;
+        thumbnail = thumbList[thumbList.length - 1].url || thumbList[0].url || "";
       } else if (
         p.thumbnail &&
         p.thumbnail.contents &&
         p.thumbnail.contents.length > 0
       ) {
-        thumbnail = getOptimalThumb(p.thumbnail.contents);
+        const thumbList = p.thumbnail.contents;
+        thumbnail = thumbList[thumbList.length - 1].url || thumbList[0].url || "";
       } else if (p.thumbnails && p.thumbnails.length > 0) {
-        thumbnail = getOptimalThumb(p.thumbnails);
+        thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
       } else if (Array.isArray(p.thumbnail) && p.thumbnail.length > 0) {
         thumbnail = p.thumbnail[0].url;
       } else if (p.thumbnail && typeof p.thumbnail === "string") {

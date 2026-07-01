@@ -780,7 +780,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
             </div>
             <Carousel
               title={null}
-              className="gap-4 pb-4 snap-x px-3 sm:px-1 min-h-[140px]"
+              className="gap-4 pb-2 snap-x px-3 sm:px-1 min-h-[140px]"
             >
               {(!section.data || section.data.length === 0) && (
                 <div className="w-full flex items-center justify-center p-8 border border-dashed border-white/10 rounded-xl text-slate-400 text-xs">
@@ -898,7 +898,7 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                         <img
                           src={getItemImage(item)}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          loading={idx < 2 && songIdx < 5 ? undefined : "lazy"}
+                          loading="lazy"
                           referrerPolicy="no-referrer"
                           onError={(e) => {
                             const img = e.target as HTMLImageElement;

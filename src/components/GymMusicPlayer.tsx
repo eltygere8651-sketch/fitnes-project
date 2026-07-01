@@ -5149,7 +5149,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       </div>
 
       {/* GLOBAL TABS / PILLS HEADER */}
-      <Carousel hideScrollbar={true} className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+      <Carousel className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
         <button
           onClick={() => {
             setSearchQuery("");

@@ -1,42 +1,38 @@
 import React, { useRef, useState, useEffect, ReactNode } from 'react';
 import { useDraggable } from '../hooks/useDraggable';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface CarouselProps {
   children: React.ReactNode;
   className?: string;
   title?: ReactNode;
-  hideScrollbar?: boolean;
 }
 
-export const Carousel: React.FC<CarouselProps> = React.memo(({ children, className = "", title, hideScrollbar = false }) => {
+export const Carousel: React.FC<CarouselProps> = React.memo(({ children, className = "", title }) => {
   const ref = useRef<HTMLDivElement>(null);
   useDraggable(ref);
-  const [showLeft, setShowLeft] = useState(false);
-  const [showRight, setShowRight] = useState(false);
+  const [scrollProgress, setScrollProgress] = useState(0);
+  const [isScrollable, setIsScrollable] = useState(false);
 
-  const checkArrows = () => {
+  const checkScroll = () => {
     if (!ref.current) return;
     const { scrollLeft, scrollWidth, clientWidth } = ref.current;
-    setShowLeft(scrollLeft > 0);
-    setShowRight(scrollLeft + clientWidth < scrollWidth - 1);
+    if (scrollWidth <= clientWidth) {
+      setScrollProgress(0);
+      setIsScrollable(false);
+    } else {
+      setIsScrollable(true);
+      setScrollProgress((scrollLeft / (scrollWidth - clientWidth)) * 100);
+    }
   };
 
   useEffect(() => {
-    // Initial check
-    const timer = setTimeout(checkArrows, 150);
-    window.addEventListener('resize', checkArrows);
+    const timer = setTimeout(checkScroll, 150);
+    window.addEventListener('resize', checkScroll);
     return () => {
       clearTimeout(timer);
-      window.removeEventListener('resize', checkArrows);
+      window.removeEventListener('resize', checkScroll);
     };
   }, [children]);
-
-  const scrollBy = (offset: number) => {
-    if (ref.current) {
-      ref.current.scrollBy({ left: offset, behavior: 'smooth' });
-    }
-  };
 
   return (
     <div className="relative group/carousel w-full flex flex-col mb-4">
@@ -45,33 +41,36 @@ export const Carousel: React.FC<CarouselProps> = React.memo(({ children, classNa
           <div className="flex-1">{title}</div>
         </div>
       )}
-      
-      {!title && (
-         <>
-           <button 
-             onClick={() => scrollBy(-400)}
-             className={`absolute left-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/80 hover:bg-black border border-white/10 text-white backdrop-blur-md opacity-0 md:hidden sm:group-hover/carousel:opacity-100 transition-all shadow-lg ${showLeft ? '' : 'hidden pointer-events-none'}`}
-             aria-label="Anterior"
-           >
-              <ChevronLeft className="w-6 h-6 -ml-0.5" />
-           </button>
-           <button 
-             onClick={() => scrollBy(400)}
-             className={`absolute right-2 top-1/2 -translate-y-1/2 z-20 w-10 h-10 flex items-center justify-center rounded-full bg-black/80 hover:bg-black border border-white/10 text-white backdrop-blur-md opacity-0 md:hidden sm:group-hover/carousel:opacity-100 transition-all shadow-lg ${showRight ? '' : 'hidden pointer-events-none'}`}
-             aria-label="Siguiente"
-           >
-              <ChevronRight className="w-6 h-6 ml-0.5" />
-           </button>
-         </>
-      )}
 
       <div 
         ref={ref} 
-        onScroll={checkArrows}
-        className={`flex overflow-x-auto ${hideScrollbar ? 'no-scrollbar' : 'max-md:no-scrollbar md:premium-scrollbar md:pb-3'} snap-x ${className}`}
+        onScroll={checkScroll}
+        className={`flex overflow-x-auto scrollbar-none snap-x ${className}`}
       >
         {children}
       </div>
+
+      {/* Premium Custom Scrollbar for PC */}
+      {isScrollable && (
+        <div className="hidden md:flex absolute -bottom-2 left-2 right-2 h-3 items-center opacity-0 group-hover/carousel:opacity-100 transition-opacity duration-300">
+          <input 
+            type="range"
+            min="0"
+            max="100"
+            value={scrollProgress || 0}
+            onChange={(e) => {
+              if (ref.current) {
+                const maxScroll = ref.current.scrollWidth - ref.current.clientWidth;
+                ref.current.scrollLeft = (Number(e.target.value) / 100) * maxScroll;
+              }
+            }}
+            className="w-full h-1 rounded-lg appearance-none cursor-pointer focus:outline-none custom-slider"
+            style={{
+              background: `linear-gradient(to right, rgba(16, 185, 129, 0.6) ${scrollProgress}%, rgba(255, 255, 255, 0.1) ${scrollProgress}%)`
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 });

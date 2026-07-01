@@ -1486,17 +1486,32 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       } catch (err) {
         // Fallback for Vercel static hosting (no backend)
         try {
-          const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
-          const fallbackRes = await fetch(`https://noembed.com/embed?dataType=json&url=${encodeURIComponent(standardUrl)}`);
-          if (!fallbackRes.ok) throw new Error("Fallback error");
-          const fallbackData = await fallbackRes.json();
-          if (fallbackData.error) throw new Error("No encontrado");
-          
-          data = {
-            title: fallbackData.title || "",
-            thumbnail: fallbackData.thumbnail_url || (isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`),
-            artist: fallbackData.author_name || ""
-          };
+          if (isPlaylist) {
+             const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
+             const fallbackRes = await fetch(`https://api.allorigins.win/raw?url=${encodeURIComponent(standardUrl)}`);
+             if (!fallbackRes.ok) throw new Error("Fallback error");
+             const html = await fallbackRes.text();
+             const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
+             const ogTitleMatch = html.match(/<meta property="og:title" content="([^"]+)"/);
+             
+             data = {
+               title: ogTitleMatch ? ogTitleMatch[1].replace(" - YouTube", "") : "Lista de YouTube",
+               thumbnail: ogImageMatch ? ogImageMatch[1].replace(/&amp;/g, "&") : "",
+               artist: "YouTube"
+             };
+          } else {
+             const standardUrl = url.replace("music.youtube.com", "www.youtube.com");
+             const fallbackRes = await fetch(`https://noembed.com/embed?dataType=json&url=${encodeURIComponent(standardUrl)}`);
+             if (!fallbackRes.ok) throw new Error("Fallback error");
+             const fallbackData = await fallbackRes.json();
+             if (fallbackData.error) throw new Error("No encontrado");
+             
+             data = {
+               title: fallbackData.title || "",
+               thumbnail: fallbackData.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+               artist: fallbackData.author_name || ""
+             };
+          }
         } catch (e) {
           // If all APIs fail, just use default title but add it anyway
           data = {

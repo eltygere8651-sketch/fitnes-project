@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+// Triggering an update for GitHub export
 import { motion, AnimatePresence } from "motion/react";
 import {
   Music,

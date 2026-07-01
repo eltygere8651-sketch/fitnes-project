@@ -1606,6 +1606,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const [trackListTab, setTrackListTab] = useState<
     "playlist" | "search" | "queue" | "entertainment"
   >(() => (localStorage.getItem("gym_music_last_tab") as any) || "search");
+  
+  const [hasNewExplore, setHasNewExplore] = useState(false);
+  const [hasNewCommunity, setHasNewCommunity] = useState(false);
+
   useEffect(() => {
     localStorage.setItem("gym_music_last_tab", trackListTab);
   }, [trackListTab]);
@@ -2118,10 +2122,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         }
       }
     }
-    return Array.from(map.values()).sort(
-      (a: any, b: any) =>
-        (b.isAdminContent ? 1 : 0) - (a.isAdminContent ? 1 : 0),
-    );
+    return Array.from(map.values()).sort((a: any, b: any) => {
+      const getTimestamp = (pl: any) => {
+        if (!pl.createdAt) return 0;
+        if (pl.createdAt.toMillis) return pl.createdAt.toMillis();
+        return new Date(pl.createdAt).getTime() || 0;
+      };
+      return getTimestamp(b) - getTimestamp(a);
+    });
   }, [userPlaylists]);
 
   const communitySearchResults = React.useMemo(() => {
@@ -2133,6 +2141,40 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         (pl.genre && pl.genre.toLowerCase().includes(query)),
     );
   }, [searchQuery, communityPlaylists, trackListTab]);
+
+  useEffect(() => {
+    if (!customExplorePlaylists.length) return;
+    const maxCustomCreatedAt = Math.max(...customExplorePlaylists.map(pl => {
+      if (!pl.createdAt) return 0;
+      return pl.createdAt.toMillis ? pl.createdAt.toMillis() : new Date(pl.createdAt).getTime() || 0;
+    }));
+    
+    const lastViewed = parseInt(localStorage.getItem("last_viewed_explore") || "0", 10);
+    
+    if (trackListTab === "search") {
+      localStorage.setItem("last_viewed_explore", maxCustomCreatedAt.toString());
+      setHasNewExplore(false);
+    } else if (maxCustomCreatedAt > lastViewed) {
+      setHasNewExplore(true);
+    }
+  }, [customExplorePlaylists, trackListTab]);
+
+  useEffect(() => {
+    if (!communityPlaylists.length) return;
+    const maxCommunityCreatedAt = Math.max(...communityPlaylists.map(pl => {
+      if (!pl.createdAt) return 0;
+      return pl.createdAt.toMillis ? pl.createdAt.toMillis() : new Date(pl.createdAt).getTime() || 0;
+    }));
+    
+    const lastViewed = parseInt(localStorage.getItem("last_viewed_community") || "0", 10);
+    
+    if (showLibrary) {
+      localStorage.setItem("last_viewed_community", maxCommunityCreatedAt.toString());
+      setHasNewCommunity(false);
+    } else if (maxCommunityCreatedAt > lastViewed) {
+      setHasNewCommunity(true);
+    }
+  }, [communityPlaylists, showLibrary]);
 
   const displayTrackIndex = overrideCurrentTrack ? -1 : currentTrackIndex;
 
@@ -5107,7 +5149,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       </div>
 
       {/* GLOBAL TABS / PILLS HEADER */}
-      <Carousel className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
+      <Carousel hideScrollbar={true} className="px-3 py-2.5 gap-2 bg-[#050505]/95 select-none z-10 shrink-0 border-b border-white/5 snap-x w-full">
         <button
           onClick={() => {
             setSearchQuery("");
@@ -5121,7 +5163,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setMobileView("player");
             }
           }}
-          className={`shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
+          className={`relative shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
             searchQuery === "" &&
             trackListTab === "search" &&
             !showLibrary &&
@@ -5132,6 +5174,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           }`}
         >
           Explorar
+          {hasNewExplore && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
         </button>
         <button
           onClick={() => {
@@ -5202,13 +5245,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               }
             }
           }}
-          className={`hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
+          className={`relative hidden md:flex shrink-0 px-4 py-1.5 rounded-full text-[11px] sm:text-[12px] font-bold transition-all cursor-pointer border snap-start ${
             showLibrary
               ? "bg-[#1ED760] text-black border-[#1ED760] shadow-[0_0_15px_rgba(30,215,96,0.2)]"
               : "bg-white/5 border-white/10 text-white hover:bg-white/10"
           }`}
         >
           Comunidad
+          {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full animate-pulse border border-[#050505] shadow-[0_0_8px_rgba(239,68,68,0.8)]" />}
         </button>
         {[
           {
@@ -7724,7 +7768,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
             setShowLibrary(false);
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
-          className={`flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
             mobileView === "player" &&
             trackListTab === "search" &&
             !selectedPlaylist &&
@@ -7733,7 +7777,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               : "text-slate-500 hover:text-emerald-400"
           }`}
         >
-          <Compass className="w-5 h-5" />
+          <div className="relative">
+            <Compass className="w-5 h-5" />
+            {hasNewExplore && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+          </div>
           <span className="text-[8px] font-black uppercase tracking-widest">
             Explorar
           </span>
@@ -7751,13 +7798,16 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setPreviewPlaylist(null);
             }
           }}
-          className={`flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
+          className={`relative flex flex-col items-center gap-0.5 p-1 rounded-lg transition-all ${
             showLibrary
               ? "text-emerald-400 font-bold"
               : "text-slate-500 hover:text-emerald-400"
           }`}
         >
-          <Users className="w-5 h-5" />
+          <div className="relative">
+            <Users className="w-5 h-5" />
+            {hasNewCommunity && <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse border border-[#0c0c0d] shadow-[0_0_5px_rgba(239,68,68,0.8)]" />}
+          </div>
           <span className="text-[8px] font-black uppercase tracking-widest">
             Comunidad
           </span>

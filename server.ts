@@ -652,16 +652,16 @@ app.get("/api/youtube/explore", async (req, res) => {
       let thumbnail = "";
       if (p.content_image?.primary_thumbnail?.image?.length > 0) {
         const thumbList = p.content_image.primary_thumbnail.image;
-        thumbnail = thumbList[thumbList.length - 1].url || thumbList[0].url || "";
+        thumbnail = thumbList[0].url || thumbList[thumbList.length - 1].url || "";
       } else if (
         p.thumbnail &&
         p.thumbnail.contents &&
         p.thumbnail.contents.length > 0
       ) {
         const thumbList = p.thumbnail.contents;
-        thumbnail = thumbList[thumbList.length - 1].url || thumbList[0].url || "";
+        thumbnail = thumbList[0].url || thumbList[thumbList.length - 1].url || "";
       } else if (p.thumbnails && p.thumbnails.length > 0) {
-        thumbnail = p.thumbnails[p.thumbnails.length - 1].url || p.thumbnails[0].url || "";
+        thumbnail = p.thumbnails[0].url || p.thumbnails[p.thumbnails.length - 1].url || "";
       } else if (Array.isArray(p.thumbnail) && p.thumbnail.length > 0) {
         thumbnail = p.thumbnail[0].url;
       } else if (p.thumbnail && typeof p.thumbnail === "string") {

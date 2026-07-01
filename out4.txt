@@ -1,0 +1,371 @@
+[
+  'type',
+  'content_image',
+  'metadata',
+  'content_id',
+  'content_type',
+  'renderer_context'
+]
+{
+  "type": "LockupView",
+  "content_image": {
+    "type": "CollectionThumbnailView",
+    "primary_thumbnail": {
+      "type": "ThumbnailView",
+      "image": [
+        {
+          "url": "https://i.ytimg.com/vi/fcnDmrtj6Sk/hq720.jpg?sqp=-oaymwEXCNAFEJQDSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLBh8GhLGGRn7EtfFowOfFjWuAylTQ",
+          "width": 720,
+          "height": 404
+        },
+        {
+          "url": "https://i.ytimg.com/vi/fcnDmrtj6Sk/hq720.jpg?sqp=-oaymwEXCOgCEMoBSFryq4qpAwkIARUAAIhCGAE=&rs=AOn4CLCQdWtPzS9opddzNT9cdP0DtpZNhQ",
+          "width": 360,
+          "height": 202
+        }
+      ],
+      "overlays": [
+        {
+          "type": "ThumbnailOverlayBadgeView",
+          "badges": [
+            {
+              "type": "ThumbnailBadgeView",
+              "text": "100 vídeos",
+              "badge_style": "THUMBNAIL_OVERLAY_BADGE_STYLE_DEFAULT",
+              "background_color": {
+                "light_theme": 3355443,
+                "dark_theme": 3355443
+              }
+            }
+          ],
+          "position": "THUMBNAIL_OVERLAY_BADGE_POSITION_BOTTOM_END"
+        },
+        {
+          "type": "ThumbnailHoverOverlayView",
+          "icon_name": "PLAY_ALL",
+          "text": {
+            "text": "Reproducir todo",
+            "runs": [
+              {
+                "text": "Reproducir todo",
+                "bold": false,
+                "bracket": false,
+                "deemphasize": false,
+                "italics": false,
+                "strikethrough": false,
+                "error_underline": false,
+                "underline": false
+              }
+            ],
+            "rtl": false
+          },
+          "style": "THUMBNAIL_HOVER_OVERLAY_STYLE_COVER"
+        }
+      ],
+      "background_color": {
+        "light_theme": 4144959,
+        "dark_theme": 4144959
+      }
+    },
+    "stack_color": {
+      "light_theme": 10066329,
+      "dark_theme": 9211020
+    }
+  },
+  "metadata": {
+    "type": "LockupMetadataView",
+    "title": {
+      "text": "Los 100 vídeos musicales más populares en España",
+      "runs": [
+        {
+          "text": "Los 100 vídeos musicales más populares en España",
+          "bold": false,
+          "bracket": false,
+          "deemphasize": false,
+          "italics": false,
+          "strikethrough": false,
+          "error_underline": false,
+          "underline": false
+        }
+      ],
+      "rtl": false
+    },
+    "metadata": {
+      "type": "ContentMetadataView",
+      "metadata_rows": [
+        {
+          "metadata_parts": [
+            {
+              "text": {
+                "text": "YouTube Music Global Charts",
+                "runs": [
+                  {
+                    "text": "YouTube Music Global Charts",
+                    "endpoint": {
+                      "type": "NavigationEndpoint",
+                      "name": "browseEndpoint",
+                      "payload": {
+                        "browseId": "UCrKZcyOJVWnJ60zM1XWllNw",
+                        "canonicalBaseUrl": "/channel/UCrKZcyOJVWnJ60zM1XWllNw"
+                      },
+                      "metadata": {
+                        "url": "/channel/UCrKZcyOJVWnJ60zM1XWllNw",
+                        "page_type": "WEB_PAGE_TYPE_CHANNEL",
+                        "api_url": "browse"
+                      },
+                      "command": {
+                        "type": "BrowseEndpoint"
+                      }
+                    },
+                    "bold": false,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "endpoint": {
+                  "type": "NavigationEndpoint",
+                  "name": "browseEndpoint",
+                  "payload": {
+                    "browseId": "UCrKZcyOJVWnJ60zM1XWllNw",
+                    "canonicalBaseUrl": "/channel/UCrKZcyOJVWnJ60zM1XWllNw"
+                  },
+                  "metadata": {
+                    "url": "/channel/UCrKZcyOJVWnJ60zM1XWllNw",
+                    "page_type": "WEB_PAGE_TYPE_CHANNEL",
+                    "api_url": "browse"
+                  },
+                  "command": {
+                    "type": "BrowseEndpoint"
+                  }
+                },
+                "rtl": false
+              },
+              "avatar_stack": null
+            },
+            {
+              "text": {
+                "text": "Lista de reproducción",
+                "runs": [
+                  {
+                    "text": "Lista de reproducción",
+                    "endpoint": {
+                      "type": "NavigationEndpoint",
+                      "name": "browseEndpoint",
+                      "payload": {
+                        "browseId": "UCrKZcyOJVWnJ60zM1XWllNw",
+                        "canonicalBaseUrl": "/channel/UCrKZcyOJVWnJ60zM1XWllNw"
+                      },
+                      "metadata": {
+                        "url": "/channel/UCrKZcyOJVWnJ60zM1XWllNw",
+                        "page_type": "WEB_PAGE_TYPE_CHANNEL",
+                        "api_url": "browse"
+                      },
+                      "command": {
+                        "type": "BrowseEndpoint"
+                      }
+                    },
+                    "bold": false,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "endpoint": {
+                  "type": "NavigationEndpoint",
+                  "name": "browseEndpoint",
+                  "payload": {
+                    "browseId": "UCrKZcyOJVWnJ60zM1XWllNw",
+                    "canonicalBaseUrl": "/channel/UCrKZcyOJVWnJ60zM1XWllNw"
+                  },
+                  "metadata": {
+                    "url": "/channel/UCrKZcyOJVWnJ60zM1XWllNw",
+                    "page_type": "WEB_PAGE_TYPE_CHANNEL",
+                    "api_url": "browse"
+                  },
+                  "command": {
+                    "type": "BrowseEndpoint"
+                  }
+                },
+                "rtl": false
+              },
+              "avatar_stack": null
+            },
+            {
+              "text": {
+                "text": "Actualizada hoy",
+                "runs": [
+                  {
+                    "text": "Actualizada hoy",
+                    "bold": false,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "rtl": false
+              },
+              "avatar_stack": null
+            }
+          ],
+          "badges": []
+        },
+        {
+          "badges": []
+        },
+        {
+          "metadata_parts": [
+            {
+              "text": {
+                "text": "Shakira, Burna Boy - Dai Dai (Official Video) · 4:01",
+                "runs": [
+                  {
+                    "text": "Shakira, Burna Boy - Dai Dai (Official Video) · 4:01",
+                    "bold": false,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "rtl": false
+              },
+              "avatar_stack": null
+            }
+          ],
+          "badges": []
+        },
+        {
+          "metadata_parts": [
+            {
+              "text": {
+                "text": "LA GRACIOSA - Quevedo ft. Elvis Crespo (Official Video) | EL BAIFO · 4:43",
+                "runs": [
+                  {
+                    "text": "LA GRACIOSA - Quevedo ft. Elvis Crespo (Official Video) | EL BAIFO · 4:43",
+                    "bold": false,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "rtl": false
+              },
+              "avatar_stack": null
+            }
+          ],
+          "badges": []
+        },
+        {
+          "badges": []
+        },
+        {
+          "metadata_parts": [
+            {
+              "text": {
+                "text": "Ver lista de reproducción completa",
+                "runs": [
+                  {
+                    "text": "Ver lista de reproducción completa",
+                    "endpoint": {
+                      "type": "NavigationEndpoint",
+                      "name": "browseEndpoint",
+                      "payload": {
+                        "browseId": "VLPL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T"
+                      },
+                      "metadata": {
+                        "url": "/playlist?list=PL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T",
+                        "page_type": "WEB_PAGE_TYPE_PLAYLIST",
+                        "api_url": "browse"
+                      },
+                      "command": {
+                        "type": "BrowseEndpoint"
+                      }
+                    },
+                    "bold": true,
+                    "bracket": false,
+                    "deemphasize": false,
+                    "italics": false,
+                    "strikethrough": false,
+                    "error_underline": false,
+                    "underline": false
+                  }
+                ],
+                "endpoint": {
+                  "type": "NavigationEndpoint",
+                  "name": "browseEndpoint",
+                  "payload": {
+                    "browseId": "VLPL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T"
+                  },
+                  "metadata": {
+                    "url": "/playlist?list=PL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T",
+                    "page_type": "WEB_PAGE_TYPE_PLAYLIST",
+                    "api_url": "browse"
+                  },
+                  "command": {
+                    "type": "BrowseEndpoint"
+                  }
+                },
+                "rtl": false
+              },
+              "avatar_stack": null
+            }
+          ],
+          "badges": []
+        }
+      ],
+      "delimiter": " • "
+    },
+    "image": null,
+    "menu_button": null
+  },
+  "content_id": "PL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T",
+  "content_type": "PLAYLIST",
+  "renderer_context": {
+    "command_context": {
+      "on_tap": {
+        "type": "NavigationEndpoint",
+        "name": "watchEndpoint",
+        "payload": {
+          "videoId": "fcnDmrtj6Sk",
+          "playlistId": "PL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T",
+          "params": "OAI%3D",
+          "loggingContext": {
+            "vssLoggingContext": {
+              "serializedContextData": "GiJQTDRmR1NJMXBESm40amhRQjRrYjlNMzZkdlZtSlFQdDRU"
+            }
+          },
+          "watchEndpointSupportedOnesieConfig": {
+            "html5PlaybackOnesieConfig": {
+              "commonConfig": {
+                "url": "https://rr3---sn-aigl6nsr.googlevideo.com/initplayback?source=youtube&oeis=1&c=WEB&oad=3200&ovd=3200&oaad=11000&oavd=11000&ocs=700&oewis=1&oputc=1&ofpcc=1&msp=1&odepv=1&id=7dc9c39abb63e929&ip=2600%3A1900%3A0%3A4a02%3A%3Ab00&mt=1782923312&oweuc=&pxtags=Cg4KAnR4Egg1MTgyODk3MQ&rxtags=Cg4KAnR4Egg1MTgyODk2OQ%2CCg4KAnR4Egg1MTgyODk3MA%2CCg4KAnR4Egg1MTgyODk3MQ"
+              }
+            }
+          }
+        },
+        "metadata": {
+          "url": "/watch?v=fcnDmrtj6Sk&list=PL4fGSI1pDJn4jhQB4kb9M36dvVmJQPt4T",
+          "page_type": "WEB_PAGE_TYPE_WATCH",
+          "api_url": "/player"
+        },
+        "command": {
+          "type": "WatchEndpoint"
+        }
+      }
+    }
+  }
+}

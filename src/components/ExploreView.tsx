@@ -20,6 +20,8 @@ import {
 import { MusicTrack } from "../types";
 import { Carousel } from "./Carousel";
 
+import { LazyImage } from "./LazyImage";
+
 interface ExploreViewProps {
   exploreData: any;
   customPlaylists?: any[];
@@ -895,15 +897,13 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                       }}
                     >
                       <div className="w-full aspect-[4/3] rounded-xl overflow-hidden bg-[#111113] border border-white/5 relative mb-2.5">
-                        <img
+                        <LazyImage
                           src={getItemImage(item)}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          loading="lazy"
+                          wrapperClassName="absolute inset-0"
                           referrerPolicy="no-referrer"
-                          onError={(e) => {
-                            const img = e.target as HTMLImageElement;
-                            if (!img.dataset.retried && item.id) {
-                              img.dataset.retried = "true";
+                          onImageError={(e, setSrc) => {
+                            if (item.id) {
                               const isPlaylist = item.isPlaylist || item.id.startsWith("PL") || item.id.startsWith("MPRE");
                               const endpoint = isPlaylist 
                                 ? `/api/youtube/playlist-info?id=${item.id}`
@@ -915,14 +915,11 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                   return res.json();
                                 })
                                 .then(data => {
-                                  if (data.thumbnail) {
-                                    img.src = data.thumbnail;
-                                  } else {
-                                    throw new Error("No thumbnail");
+                                  if (data.thumbnail && data.thumbnail !== getItemImage(item)) {
+                                    setSrc(data.thumbnail);
                                   }
                                 })
                                 .catch(() => {
-                                  // Fallback for Vercel static hosting
                                   if (isPlaylist) {
                                     const fallbackUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent("https://www.youtube.com/playlist?list=" + item.id)}`;
                                     fetch(fallbackUrl)
@@ -930,29 +927,23 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                       .then(html => {
                                         const ogImageMatch = html.match(/<meta property="og:image" content="([^"]+)"/);
                                         if (ogImageMatch && ogImageMatch[1]) {
-                                          img.src = ogImageMatch[1].replace(/&amp;/g, "&");
-                                        } else {
-                                          img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
+                                          setSrc(ogImageMatch[1].replace(/&amp;/g, "&"));
                                         }
                                       })
-                                      .catch(() => {
-                                        img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
-                                      });
+                                      .catch(() => {});
                                   } else {
                                     const fallbackUrl = `https://noembed.com/embed?dataType=json&url=${encodeURIComponent("https://www.youtube.com/watch?v=" + item.id)}`;
                                     fetch(fallbackUrl)
                                       .then(r => r.json())
                                       .then(d => {
-                                        if (d && d.thumbnail_url) img.src = d.thumbnail_url;
-                                        else img.src = `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+                                        if (d && d.thumbnail_url) setSrc(d.thumbnail_url);
+                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
                                       })
                                       .catch(() => {
-                                        img.src = `https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`;
+                                        setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
                                       });
                                   }
                                 });
-                            } else {
-                              img.src = "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?q=80&w=2070&auto=format&fit=crop";
                             }
                           }}
                         />

@@ -947,10 +947,10 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                       .then(r => r.json())
                                       .then(d => {
                                         if (d && d.thumbnail_url) setSrc(d.thumbnail_url);
-                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
+                                        else setSrc(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`);
                                       })
                                       .catch(() => {
-                                        setSrc(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`);
+                                        setSrc(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`);
                                       });
                                   }
                                 });

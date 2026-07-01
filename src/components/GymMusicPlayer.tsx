@@ -685,13 +685,14 @@ const getTrackImage = (track?: any): string | null => {
 
 const getPlaylistImage = (pl?: any): string | null => {
   if (!pl) return null;
-  if (pl.imageUrl) return cleanUrl(pl.imageUrl);
-  if (pl.thumbnail_url) return cleanUrl(pl.thumbnail_url);
-  if (pl.thumbnail) return cleanUrl(pl.thumbnail);
-  if (pl.artwork_url) return cleanUrl(pl.artwork_url);
-  if (pl.artwork) return cleanUrl(pl.artwork);
+  if (pl.imageUrl && !pl.imageUrl.includes("pollinations")) return cleanUrl(pl.imageUrl);
+  if (pl.thumbnail_url && !pl.thumbnail_url.includes("pollinations")) return cleanUrl(pl.thumbnail_url);
+  if (pl.thumbnail && !pl.thumbnail.includes("pollinations")) return cleanUrl(pl.thumbnail);
+  if (pl.artwork_url && !pl.artwork_url.includes("pollinations")) return cleanUrl(pl.artwork_url);
+  if (pl.artwork && !pl.artwork.includes("pollinations")) return cleanUrl(pl.artwork);
   if (pl.tracks && pl.tracks.length > 0) {
-    return cleanUrl(getTrackImage(pl.tracks[0]) || "");
+    const tImg = getTrackImage(pl.tracks[0]);
+    if (tImg) return cleanUrl(tImg);
   }
   return null;
 };
@@ -1514,7 +1515,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
              
              data = {
                title: fallbackData.title || "",
-               thumbnail: fallbackData.thumbnail_url || `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+               thumbnail: fallbackData.thumbnail_url || `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
                artist: fallbackData.author_name || ""
              };
           }
@@ -1522,7 +1523,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
           // If all APIs fail, just use default title but add it anyway
           data = {
              title: isPlaylist ? "Lista de YouTube" : "Video de YouTube",
-             thumbnail: isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/hqdefault.jpg`,
+             thumbnail: isPlaylist ? "" : `https://i.ytimg.com/vi/${id}/mqdefault.jpg`,
              artist: "YouTube"
           };
         }
@@ -5512,7 +5513,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                               src={getPlaylistImage(pl)!}
                               alt={pl.name}
                               className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f]"
-                              loading="lazy"
+                              
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display =
@@ -8015,7 +8016,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                     src={getPlaylistImage(pl)!}
                                     alt={pl.name}
                                     className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f] transition-transform duration-500 ease-out group-hover:scale-110"
-                                    loading="lazy"
+                                    
                                     referrerPolicy="no-referrer"
                                     onError={(e) => {
                                       (
@@ -8197,7 +8198,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                               src={getPlaylistImage(previewPlaylist)!}
                               alt={previewPlaylist.name}
                               className="absolute inset-0 w-full h-full object-cover z-20 bg-[#0d0d0f]"
-                              loading="lazy"
+                              
                               referrerPolicy="no-referrer"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display =

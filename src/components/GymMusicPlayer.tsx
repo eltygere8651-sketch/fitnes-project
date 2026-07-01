@@ -651,7 +651,13 @@ const getPlaylistSaves = (
 const cleanUrl = (url: string) => {
   if (!url) return "";
   if (url.includes("i.ytimg.com")) {
-    return url.split("?")[0];
+    let clean = url.split("?")[0];
+    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg")) {
+      clean = clean.replace("hq720.jpg", "mqdefault.jpg")
+                   .replace("sddefault.jpg", "mqdefault.jpg")
+                   .replace("maxresdefault.jpg", "mqdefault.jpg");
+    }
+    return clean;
   }
   return url;
 };

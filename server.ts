@@ -586,6 +586,8 @@ app.get("/api/youtube/search", async (req, res) => {
 const exploreCache = new Map<string, { data: any; timestamp: number }>();
 const EXPLORE_CACHE_TTL = 1000 * 60 * 60 * 24; // 24 hours
 
+const ytClients = new Map<string, any>();
+
 app.get("/api/youtube/explore", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=86400"); // 24 hours
   const country = ((req.query.country as string) || "ES").toUpperCase();
@@ -608,11 +610,13 @@ app.get("/api/youtube/explore", async (req, res) => {
     return res.json(cached.data);
   }
 
+  let yt = ytClients.get(country);
   if (!yt) {
     try {
-      yt = await Innertube.create();
+      yt = await Innertube.create({ gl: country === 'GLOBAL' ? 'US' : country, hl: 'es' });
+      ytClients.set(country, yt);
     } catch (e) {
-      return res.status(503).json({ error: "YouTube unavailable" });
+      return res.status(503).json({ error: "YouTube unavailable for region" });
     }
   }
 

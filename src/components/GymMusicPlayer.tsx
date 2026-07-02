@@ -652,9 +652,10 @@ const cleanUrl = (url: string) => {
   if (!url) return "";
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
-    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg")) {
+    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {
       clean = clean.replace("hq720.jpg", "mqdefault.jpg")
                    .replace("sddefault.jpg", "mqdefault.jpg")
+                   .replace("hqdefault.jpg", "mqdefault.jpg")
                    .replace("maxresdefault.jpg", "mqdefault.jpg");
     }
     return clean;
@@ -709,7 +710,7 @@ const getPlaylistImage = (pl?: any): string | null => {
 const createSilentAudioBlobURL = (): string => {
   if (typeof window === "undefined") return "";
   const sampleRate = 44100;
-  const duration = 0.5; // Short burst to steal focus without causing Bluetooth stuttering
+  const duration = 10; // Longer duration to avoid loop stuttering on Bluetooth
   const numSamples = sampleRate * duration;
   const buffer = new ArrayBuffer(44 + numSamples * 2);
   const view = new DataView(buffer);
@@ -1776,9 +1777,6 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
         }
       } else if (document.hidden) {
         if (isPlaying) {
-          if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-            fallbackSilentAudioRef.current.play().catch(() => {});
-          }
           if (youtubePlayerRef.current) {
             try {
               const intPlayer = youtubePlayerRef.current.getInternalPlayer();
@@ -1833,6 +1831,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const playingPlaylistRef = useRef<MusicPlaylist | null>(null);
   const selectedPlaylistRef = useRef<MusicPlaylist | null>(null);
   const currentTrackIndexRef = useRef<number>(0);
+  
+  const shuffleIndicesRef = useRef<number[]>([]);
+  const shufflePositionRef = useRef<number>(0);
+  const lastShufflePlaylistIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     playingPlaylistRef.current = playingPlaylist;
@@ -1862,6 +1864,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
   const wasUnexpectedlyPausedRef = useRef(false);
   const isBufferingRef = useRef(false);
   const hasStolenLockForTrackRef = useRef(false);
+  const hasEarlySkippedRef = useRef(false);
   const playlistsLoadedInitiallyRef = useRef(false);
 
   const pendingSeekPosRef = useRef<number | null>(
@@ -2254,6 +2257,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
   useEffect(() => {
     hasStolenLockForTrackRef.current = false;
+    hasEarlySkippedRef.current = false;
     if (skipTimeoutRef.current) clearTimeout(skipTimeoutRef.current);
     skipTimeoutRef.current = null;
     sponsorBlockSegmentsRef.current = [];
@@ -2290,7 +2294,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     expectedPlayingRef.current = nextPlaying;
 
     if (nextPlaying) {
-      if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+      if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
         fallbackSilentAudioRef.current.play().catch(() => {});
       }
     } else {
@@ -2341,7 +2345,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+    if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -2380,14 +2384,49 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
     if (isShuffle) {
       if (tracksList.length > 1) {
-        const currentIndex = currentTrackIndex;
-        let randomIndex = Math.floor(Math.random() * tracksList.length);
-        if (randomIndex === currentIndex) {
-          randomIndex = (randomIndex + 1) % tracksList.length;
+        const pid = playingPlaylist?.id || "default";
+        if (lastShufflePlaylistIdRef.current !== pid || shuffleIndicesRef.current.length !== tracksList.length) {
+          const indices = Array.from({ length: tracksList.length }, (_, i) => i);
+          for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+          }
+          const curr = indices.indexOf(currentTrackIndex);
+          if (curr > 0) {
+            [indices[0], indices[curr]] = [indices[curr], indices[0]];
+          }
+          shuffleIndicesRef.current = indices;
+          shufflePositionRef.current = 0;
+          lastShufflePlaylistIdRef.current = pid;
+        } else {
+          // If user manually changed track, sync position
+          const expectedTrackIndex = shuffleIndicesRef.current[shufflePositionRef.current];
+          if (expectedTrackIndex !== currentTrackIndex) {
+            const actualPos = shuffleIndicesRef.current.indexOf(currentTrackIndex);
+            if (actualPos !== -1) {
+              shufflePositionRef.current = actualPos;
+            }
+          }
         }
-        nextIndex = randomIndex;
-        nextTrackTarget = tracksList[randomIndex];
-        setCurrentTrackIndex(randomIndex);
+
+        shufflePositionRef.current += 1;
+        if (shufflePositionRef.current >= shuffleIndicesRef.current.length) {
+          // Re-shuffle when reached end
+          const indices = Array.from({ length: tracksList.length }, (_, i) => i);
+          for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+          }
+          // Avoid playing the same track twice in a row if possible
+          if (indices[0] === currentTrackIndex && indices.length > 1) {
+             [indices[0], indices[1]] = [indices[1], indices[0]];
+          }
+          shuffleIndicesRef.current = indices;
+          shufflePositionRef.current = 0;
+        }
+        nextIndex = shuffleIndicesRef.current[shufflePositionRef.current];
+        nextTrackTarget = tracksList[nextIndex];
+        setCurrentTrackIndex(nextIndex);
       } else {
         const allPlaylistsWithTracks = userPlaylists.filter(
           (pl) => pl.tracks && pl.tracks.length > 0,
@@ -2454,7 +2493,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
     lastSkipTimeRef.current = now;
 
     expectedPlayingRef.current = true;
-    if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+    if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
       fallbackSilentAudioRef.current.play().catch(() => {});
     }
 
@@ -2482,10 +2521,36 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
     if (isShuffle) {
       if (tracksList.length > 1) {
-        nextIndex = Math.floor(Math.random() * tracksList.length);
-        if (nextIndex === currentTrackIndex) {
-          nextIndex = (nextIndex + 1) % tracksList.length;
+        const pid = playingPlaylist?.id || "default";
+        if (lastShufflePlaylistIdRef.current !== pid || shuffleIndicesRef.current.length !== tracksList.length) {
+          const indices = Array.from({ length: tracksList.length }, (_, i) => i);
+          for (let i = indices.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [indices[i], indices[j]] = [indices[j], indices[i]];
+          }
+          const curr = indices.indexOf(currentTrackIndex);
+          if (curr > 0) {
+            [indices[0], indices[curr]] = [indices[curr], indices[0]];
+          }
+          shuffleIndicesRef.current = indices;
+          shufflePositionRef.current = 0;
+          lastShufflePlaylistIdRef.current = pid;
+        } else {
+          // If user manually changed track, sync position
+          const expectedTrackIndex = shuffleIndicesRef.current[shufflePositionRef.current];
+          if (expectedTrackIndex !== currentTrackIndex) {
+            const actualPos = shuffleIndicesRef.current.indexOf(currentTrackIndex);
+            if (actualPos !== -1) {
+              shufflePositionRef.current = actualPos;
+            }
+          }
         }
+
+        shufflePositionRef.current -= 1;
+        if (shufflePositionRef.current < 0) {
+          shufflePositionRef.current = shuffleIndicesRef.current.length - 1;
+        }
+        nextIndex = shuffleIndicesRef.current[shufflePositionRef.current];
         nextTrackTarget = tracksList[nextIndex];
         setCurrentTrackIndex(nextIndex);
       } else {
@@ -4619,7 +4684,7 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
       sessionHandlersRef.current.playHandler = () => {
         expectedPlayingRef.current = true;
         handlersRef.current.setIsPlaying(true);
-        if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+        if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
           fallbackSilentAudioRef.current.play().catch(() => {});
         }
         if (youtubePlayerRef.current) {
@@ -4948,8 +5013,8 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               wasUnexpectedlyPausedRef.current = false;
               setIsPlaying(true);
 
-              if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-                fallbackSilentAudioRef.current.play().catch(() => {});
+              if (fallbackSilentAudioRef.current && !fallbackSilentAudioRef.current.paused) {
+                fallbackSilentAudioRef.current.pause();
               }
 
               enforceActionHandlers();
@@ -4967,6 +5032,10 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               // If we expect to be playing, never let the iframe stay paused
               if (expectedPlayingRef.current) {
                 wasUnexpectedlyPausedRef.current = true;
+
+                if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                  fallbackSilentAudioRef.current.play().catch(() => {});
+                }
 
                 // Immediately counter react-player pause SYNCHRONOUSLY for iOS lock screen bypass
                 // Done only once to avoid conflicting with YouTube's internal buffering state machine
@@ -5001,7 +5070,9 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
               setIsPlaying(false);
             }}
             onEnded={() => {
-              handleNext();
+              if (!hasEarlySkippedRef.current) {
+                handleNext();
+              }
             }}
             onProgress={(state) => {
               try {
@@ -5083,11 +5154,14 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
 
               // Pre-activar el audio de respaldo 1.5 segundos antes del final para que iOS no suspenda la app
               if (durationCurrent > 3 && played >= durationCurrent - 1.5) {
-                if (fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
-                  fallbackSilentAudioRef.current.play().catch(() => {});
+                if (!hasEarlySkippedRef.current) {
+                  hasEarlySkippedRef.current = true;
+                  if (document.hidden && fallbackSilentAudioRef.current && fallbackSilentAudioRef.current.paused) {
+                    fallbackSilentAudioRef.current.play().catch(() => {});
+                  }
+                  // Gapless early skip to mask YouTube loading delay
+                  handleNextRef.current();
                 }
-                // Gapless early skip to mask YouTube loading delay
-                handleNextRef.current();
                 return;
               }
               const segments = sponsorBlockSegmentsRef.current;
@@ -6169,12 +6243,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                     >
                                       <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-white/10 rounded overflow-hidden relative">
                                         <img
-                                          src={
+                                          src={cleanUrl(
                                             track.thumbnail ||
                                             track.artwork_url ||
                                             track.artwork ||
                                             ""
-                                          }
+                                          )}
                                           className="w-full h-full object-cover"
                                           alt=""
                                         />
@@ -6232,12 +6306,12 @@ export default function GymMusicPlayer({ unreadRepliesCount = 0 }: GymMusicPlaye
                                   >
                                     <div className="w-8 h-8 md:w-10 md:h-10 shrink-0 bg-white/10 rounded overflow-hidden">
                                       <img
-                                        src={
+                                        src={cleanUrl(
                                           track.thumbnail ||
                                           track.artwork_url ||
                                           track.artwork ||
                                           ""
-                                        }
+                                        )}
                                         className="w-full h-full object-cover"
                                         alt=""
                                       />

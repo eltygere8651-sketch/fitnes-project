@@ -74,9 +74,10 @@ const cleanUrl = (url: string) => {
   if (!url) return "";
   if (url.includes("i.ytimg.com")) {
     let clean = url.split("?")[0];
-    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg")) {
+    if (clean.endsWith("hq720.jpg") || clean.endsWith("sddefault.jpg") || clean.endsWith("maxresdefault.jpg") || clean.endsWith("hqdefault.jpg")) {
       clean = clean.replace("hq720.jpg", "mqdefault.jpg")
                    .replace("sddefault.jpg", "mqdefault.jpg")
+                   .replace("hqdefault.jpg", "mqdefault.jpg")
                    .replace("maxresdefault.jpg", "mqdefault.jpg");
     }
     return clean;
@@ -930,8 +931,9 @@ export const ExploreView: React.FC<ExploreViewProps> = React.memo(
                                   return res.json();
                                 })
                                 .then(data => {
-                                  if (data.thumbnail && data.thumbnail !== getItemImage(item)) {
-                                    setSrc(data.thumbnail);
+                                  const cUrl = cleanUrl(data.thumbnail);
+                                  if (cUrl && cUrl !== getItemImage(item)) {
+                                    setSrc(cUrl);
                                   }
                                 })
                                 .catch(() => {
